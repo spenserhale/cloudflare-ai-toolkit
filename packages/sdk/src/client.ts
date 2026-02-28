@@ -1,5 +1,6 @@
 import type {
   AuditLogListResult,
+  CloudflareAuth,
   CloudflareConfig,
   DnsRecord,
   ListAuditLogsParams,
@@ -10,9 +11,12 @@ import type {
   CreateResourceParams,
   PaginatedResponse,
   UpdateDnsRecordParams,
+  TokenVerificationResult,
 } from "./types.js";
 import {
+  AuditLogSchema,
   AuditLogListResultSchema,
+  AuditLogPaginationSchema,
   CloudflareResponseSchema,
   CloudflareConfigSchema,
   DnsRecordResultInfoSchema,
@@ -23,6 +27,7 @@ import {
   PaginatedResponseSchema,
   ErrorResponseSchema,
   UpdateDnsRecordParamsSchema,
+  TokenVerificationResultSchema,
 } from "./types.js";
 import { CloudflareError, CloudflareAuthError } from "./errors.js";
 import { z } from "zod";
@@ -34,11 +39,46 @@ interface RequestOptions {
   body?: unknown;
 }
 
+interface RoutePermissionHint {
+  readonly method: string;
+  readonly pathPattern: RegExp;
+  readonly requiredPermissions: readonly string[];
+  readonly docsUrl: string;
+}
+
+const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/logs\/audit$/u,
+    requiredPermissions: ["Account Settings Read", "Account Settings Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/accounts/subresources/logs/subresources/audit/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/dns_records$/u,
+    requiredPermissions: ["DNS Read", "DNS Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list/",
+  },
+  {
+    method: "PATCH",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/dns_records\/[^/]+$/u,
+    requiredPermissions: ["DNS Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/edit/",
+  },
+];
+
 export class CloudflareClient {
   private readonly config: CloudflareConfig;
 
-  constructor(config: Partial<CloudflareConfig> & { apiKey: string }) {
+  constructor(config: CloudflareConfig) {
     this.config = CloudflareConfigSchema.parse(config);
+  }
+
+  getAuthType(): CloudflareAuth["type"] {
+    return this.config.auth.type;
   }
 
   // -------------------------------------------------------------------------
@@ -85,6 +125,28 @@ export class CloudflareClient {
     };
   }
 
+  private findRoutePermissionHint(
+    method: string,
+    path: string
+  ): RoutePermissionHint | undefined {
+    return ROUTE_PERMISSION_HINTS.find(
+      (hint) => hint.method === method && hint.pathPattern.test(path)
+    );
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    if (this.config.auth.type === "apiToken") {
+      return {
+        Authorization: `Bearer ${this.config.auth.token}`,
+      };
+    }
+
+    return {
+      "X-Auth-Key": this.config.auth.apiKey,
+      "X-Auth-Email": this.config.auth.email,
+    };
+  }
+
   private async requestRaw<T>(
     method: string,
     path: string,
@@ -96,7 +158,7 @@ export class CloudflareClient {
       method,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
+        ...this.getAuthHeaders(),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
@@ -108,13 +170,24 @@ export class CloudflareClient {
     const body = await res.json().catch(() => null);
 
     if (!res.ok) {
-      if (res.status === 401) throw new CloudflareAuthError();
       const parsedError = this.parseCloudflareError(body, `HTTP ${res.status}`);
+      const permissionHint = this.findRoutePermissionHint(method, path);
+      const errorOptions = {
+        requiredPermissions: permissionHint?.requiredPermissions,
+        docsUrl: permissionHint?.docsUrl,
+        requestMethod: method,
+        requestPath: path,
+      };
+
+      if (res.status === 401) {
+        throw new CloudflareAuthError(parsedError.message, errorOptions);
+      }
 
       throw new CloudflareError(
         parsedError.message,
         parsedError.code,
-        res.status
+        res.status,
+        errorOptions
       );
     }
 
@@ -165,7 +238,7 @@ export class CloudflareClient {
     const parsedParams = ListAuditLogsParamsSchema.parse(params);
     const resolvedAccountId = this.resolveAccountId(accountId);
 
-    const result = await this.requestResult<AuditLogListResult>(
+    const responseBody = await this.requestRaw<unknown>(
       "GET",
       `/client/v4/accounts/${resolvedAccountId}/logs/audit`,
       {
@@ -192,7 +265,54 @@ export class CloudflareClient {
       }
     );
 
-    return AuditLogListResultSchema.parse(result);
+    const wrapped = CloudflareResponseSchema(z.unknown()).safeParse(responseBody);
+    if (wrapped.success) {
+      if (!wrapped.data.success) {
+        const first = wrapped.data.errors[0];
+        throw new CloudflareError(
+          first?.message ?? "Audit logs request failed",
+          String(first?.code ?? "API_ERROR")
+        );
+      }
+
+      const resultPayload = wrapped.data.result;
+      if (Array.isArray(resultPayload)) {
+        const parsedData = z.array(AuditLogSchema).parse(resultPayload);
+        const parsedPagination = AuditLogPaginationSchema.safeParse(
+          wrapped.data.result_info
+        );
+        return {
+          data: parsedData,
+          pagination: parsedPagination.success ? parsedPagination.data : undefined,
+        };
+      }
+
+      return AuditLogListResultSchema.parse(resultPayload);
+    }
+
+    if (Array.isArray(responseBody)) {
+      const parsedData = z.array(AuditLogSchema).parse(responseBody);
+      return {
+        data: parsedData,
+      };
+    }
+
+    return AuditLogListResultSchema.parse(responseBody);
+  }
+
+  async verifyToken(): Promise<TokenVerificationResult> {
+    if (this.config.auth.type !== "apiToken") {
+      throw new CloudflareError(
+        "Token verification is only available when using CLOUDFLARE_API_TOKEN auth.",
+        "UNSUPPORTED_AUTH"
+      );
+    }
+
+    const result = await this.requestResult<TokenVerificationResult>(
+      "GET",
+      "/client/v4/user/tokens/verify"
+    );
+    return TokenVerificationResultSchema.parse(result);
   }
 
   // -------------------------------------------------------------------------

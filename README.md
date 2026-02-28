@@ -31,7 +31,9 @@ bun run dev:mcp
 ## Environment Variables
 
 ```bash
-CLOUDFLARE_API_KEY=...         # required
+CLOUDFLARE_API_TOKEN=...       # preferred (Bearer auth)
+CLOUDFLARE_API_KEY=...         # legacy fallback (Global API Key auth)
+CLOUDFLARE_EMAIL=...           # required when using CLOUDFLARE_API_KEY
 CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit-log commands/tools
 CLOUDFLARE_BASE_URL=...        # optional override (default https://api.cloudflare.com)
 ```

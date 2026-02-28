@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "bun run src/bin.ts",
     "build": "bun build ./src/bin.ts --outdir ./dist --target node",
-    "test": "bun test",
+    "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,7 +16,8 @@
     "@stricli/core": "^1.0.0"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "typescript": "^5.7.0",
-    "@types/bun": "latest"
+    "vitest": "^4.0.18"
   }
 }

@@ -1,10 +1,16 @@
 import { buildCommand } from "@stricli/core";
-import { CloudflareClient, resolveConfig } from "@cloudflare-toolkit/sdk";
+import {
+  CloudflareAuthError,
+  CloudflareError,
+  CloudflareClient,
+  resolveConfig,
+  type TokenVerificationResult,
+} from "@cloudflare-toolkit/sdk";
 
-interface AuditListFlags {
+export interface AuditListFlags {
   readonly accountId?: string;
-  readonly since: string;
-  readonly before: string;
+  readonly since?: string;
+  readonly before?: string;
   readonly actorEmail?: string;
   readonly actorId?: string;
   readonly actionType?: string;
@@ -37,6 +43,258 @@ function parsePositiveInt(value: string): number {
   return parsed;
 }
 
+export function resolveDateRange(flags: AuditListFlags): { since: string; before: string } {
+  const before = flags.before ?? new Date().toISOString();
+  const beforeMs = Date.parse(before);
+  const since =
+    flags.since ?? new Date(beforeMs - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const sinceMs = Date.parse(since);
+
+  if (sinceMs > beforeMs) {
+    throw new Error(
+      `Invalid date range: --since (${since}) must be before --before (${before})`
+    );
+  }
+
+  return { since, before };
+}
+
+interface AuditListDeps {
+  readonly resolveConfig: typeof resolveConfig;
+  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+    CloudflareClient,
+    "listAuditLogs" | "verifyToken" | "getAuthType"
+  >;
+  readonly log: typeof console.log;
+  readonly error: typeof console.error;
+  readonly exit: (code: number) => never;
+}
+
+const defaultDeps: AuditListDeps = {
+  resolveConfig,
+  createClient: (config) => new CloudflareClient(config),
+  log: console.log,
+  error: console.error,
+  exit: (code) => process.exit(code),
+};
+
+function isCloudflareAuthError(err: unknown): boolean {
+  return (
+    err instanceof CloudflareAuthError ||
+    (typeof err === "object" &&
+      err !== null &&
+      "name" in err &&
+      (err as { name?: string }).name === "CloudflareAuthError")
+  );
+}
+
+function isLikelyAuthFailure(err: unknown): boolean {
+  if (isCloudflareAuthError(err)) return true;
+
+  if (err instanceof CloudflareError) {
+    return (
+      err.statusCode === 401 ||
+      err.statusCode === 403 ||
+      /authentication/iu.test(err.message)
+    );
+  }
+
+  if (typeof err === "object" && err !== null && "name" in err) {
+    const named = err as { name?: string; statusCode?: number; message?: string };
+    if (named.name !== "CloudflareError") return false;
+    return (
+      named.statusCode === 401 ||
+      named.statusCode === 403 ||
+      (typeof named.message === "string" && /authentication/iu.test(named.message))
+    );
+  }
+
+  return false;
+}
+
+interface ZodLikeIssue {
+  readonly path?: readonly unknown[];
+  readonly message?: string;
+}
+
+type ZodLikeError = {
+  readonly name: "ZodError";
+  readonly issues?: readonly unknown[];
+};
+
+function isZodError(err: unknown): err is ZodLikeError {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      "name" in err &&
+      err.name === "ZodError"
+  );
+}
+
+function readZodIssues(err: unknown): readonly ZodLikeIssue[] | undefined {
+  if (!isZodError(err)) return undefined;
+  if (!("issues" in err) || !Array.isArray(err.issues)) return undefined;
+  return err.issues as readonly ZodLikeIssue[];
+}
+
+function formatConfigValidationError(): string {
+  return (
+    "Invalid Cloudflare configuration. " +
+    "Set CLOUDFLARE_API_TOKEN, or set both CLOUDFLARE_API_KEY and " +
+    "CLOUDFLARE_EMAIL (or CLOUDFLARE_API_EMAIL)."
+  );
+}
+
+function formatZodValidationError(issues: readonly ZodLikeIssue[]): string {
+  const hasConfigIssue = issues.some((issue) => {
+    const firstPath = issue.path?.[0];
+    return (
+      firstPath === "auth" ||
+      firstPath === "baseUrl" ||
+      firstPath === "accountId"
+    );
+  });
+
+  if (hasConfigIssue) {
+    return formatConfigValidationError();
+  }
+
+  const firstIssue = issues[0];
+  const path =
+    firstIssue?.path && firstIssue.path.length > 0
+      ? firstIssue.path.join(".")
+      : "unknown";
+  const message = firstIssue?.message ?? "validation failed";
+
+  return `Unexpected Cloudflare API response shape (${path}): ${message}`;
+}
+
+function formatPermissionHint(err: unknown): string | undefined {
+  if (!(err instanceof CloudflareError)) return undefined;
+  if (!err.requiredPermissions || err.requiredPermissions.length === 0) return undefined;
+
+  const permissionClause =
+    err.requiredPermissions.length === 1
+      ? `'${err.requiredPermissions[0]}'`
+      : err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
+  const docsClause = err.docsUrl ? ` Docs: ${err.docsUrl}` : "";
+
+  return `Required permission for this endpoint: ${permissionClause}.${docsClause}`;
+}
+
+function formatTokenVerifyResult(result: TokenVerificationResult): string {
+  if (result.status.toLowerCase() === "active") {
+    return (
+      "Token verification succeeded via /client/v4/user/tokens/verify, " +
+      "so the token is valid. The audit log request likely lacks required " +
+      "token permissions or account access. Ensure the token can read audit logs " +
+      "for the target account."
+    );
+  }
+
+  return (
+    `Token verification returned status '${result.status}' via ` +
+    "/client/v4/user/tokens/verify. The token may be inactive or expired."
+  );
+}
+
+async function diagnoseAuthFailure(
+  err: unknown,
+  client: Pick<CloudflareClient, "verifyToken" | "getAuthType"> | undefined
+): Promise<string | undefined> {
+  if (!isLikelyAuthFailure(err) || !client) return undefined;
+  if (client.getAuthType() !== "apiToken") {
+    return (
+      "Token verification was skipped because this request used legacy Global API Key auth " +
+      "(X-Auth-Key/X-Auth-Email), not API token auth."
+    );
+  }
+
+  try {
+    const verified = await client.verifyToken();
+    return formatTokenVerifyResult(verified);
+  } catch (verifyErr) {
+    if (isLikelyAuthFailure(verifyErr)) {
+      return (
+        "Token verification via /client/v4/user/tokens/verify also failed with " +
+        "authentication. The token is invalid, revoked, or malformed."
+      );
+    }
+
+    return (
+      "Authentication failed and token verification could not be completed: " +
+      (verifyErr instanceof Error ? verifyErr.message : String(verifyErr))
+    );
+  }
+}
+
+function formatAuditError(err: unknown, authDiagnostic?: string): string {
+  if (isZodError(err)) {
+    const zodIssues = readZodIssues(err);
+    if (!zodIssues || zodIssues.length === 0) {
+      return formatConfigValidationError();
+    }
+    return formatZodValidationError(zodIssues);
+  }
+  const base = err instanceof Error ? err.message : String(err);
+  const permissionHint = formatPermissionHint(err);
+  const details = [authDiagnostic, permissionHint].filter(
+    (value): value is string => Boolean(value && value.length > 0)
+  );
+  if (details.length === 0) return base;
+  return `${base}\n${details.join("\n")}`;
+}
+
+export async function runAuditLogsList(
+  flags: AuditListFlags,
+  deps: AuditListDeps = defaultDeps
+): Promise<void> {
+  let client: Pick<CloudflareClient, "listAuditLogs" | "verifyToken" | "getAuthType"> | undefined;
+  try {
+    const config = deps.resolveConfig();
+    client = deps.createClient(config);
+    const { since, before } = resolveDateRange(flags);
+    const result = await client.listAuditLogs(
+      {
+        since,
+        before,
+        actorEmail: flags.actorEmail,
+        actorId: flags.actorId,
+        actionType: flags.actionType,
+        actionResult: flags.actionResult,
+        cursor: flags.cursor,
+        limit: flags.limit,
+        direction: flags.direction,
+      },
+      flags.accountId
+    );
+
+    if (flags.json) {
+      deps.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    deps.log(`Found ${result.data.length} audit log entries\n`);
+    for (const log of result.data) {
+      const when = log.when ?? "-";
+      const actor = log.actor?.email ?? log.actor?.id ?? "-";
+      const action = log.action?.type ?? "-";
+      const actionResult = log.action?.result ?? "-";
+      const resource = log.resource?.type ?? log.resource?.id ?? "-";
+
+      deps.log(`${when}  ${actor}  ${action} (${actionResult})  ${resource}`);
+    }
+
+    if (result.pagination?.cursor) {
+      deps.log(`\nNext cursor: ${result.pagination.cursor}`);
+    }
+  } catch (err) {
+    const authDiagnostic = await diagnoseAuthFailure(err, client);
+    deps.error(`Error: ${formatAuditError(err, authDiagnostic)}`);
+    deps.exit(1);
+  }
+}
+
 export const listAuditLogsCommand = buildCommand({
   docs: {
     brief: "List audit logs with filters",
@@ -52,11 +310,13 @@ export const listAuditLogsCommand = buildCommand({
       since: {
         kind: "parsed",
         parse: parseIsoDate,
+        optional: true,
         brief: "Start datetime (ISO-8601)",
       },
       before: {
         kind: "parsed",
         parse: parseIsoDate,
+        optional: true,
         brief: "End datetime (ISO-8601)",
       },
       actorEmail: {
@@ -109,47 +369,6 @@ export const listAuditLogsCommand = buildCommand({
     },
   },
   async func(this: void, flags: AuditListFlags) {
-    const config = resolveConfig();
-    const client = new CloudflareClient(config);
-
-    try {
-      const result = await client.listAuditLogs(
-        {
-          since: flags.since,
-          before: flags.before,
-          actorEmail: flags.actorEmail,
-          actorId: flags.actorId,
-          actionType: flags.actionType,
-          actionResult: flags.actionResult,
-          cursor: flags.cursor,
-          limit: flags.limit,
-          direction: flags.direction,
-        },
-        flags.accountId
-      );
-
-      if (flags.json) {
-        console.log(JSON.stringify(result, null, 2));
-        return;
-      }
-
-      console.log(`Found ${result.data.length} audit log entries\n`);
-      for (const log of result.data) {
-        const when = log.when ?? "-";
-        const actor = log.actor?.email ?? log.actor?.id ?? "-";
-        const action = log.action?.type ?? "-";
-        const actionResult = log.action?.result ?? "-";
-        const resource = log.resource?.type ?? log.resource?.id ?? "-";
-
-        console.log(`${when}  ${actor}  ${action} (${actionResult})  ${resource}`);
-      }
-
-      if (result.pagination?.cursor) {
-        console.log(`\nNext cursor: ${result.pagination.cursor}`);
-      }
-    } catch (err) {
-      console.error(`Error: ${err instanceof Error ? err.message : err}`);
-      process.exit(1);
-    }
+    await runAuditLogsList(flags);
   },
 });

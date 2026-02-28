@@ -25,7 +25,7 @@ Add this to your Claude Desktop config (`~/Library/Application Support/Claude/cl
       "command": "bun",
       "args": ["run", "/Users/spenser/Code/Toolkits/cloudflare-toolkit/packages/mcp/src/index.ts"],
       "env": {
-        "CLOUDFLARE_API_KEY": "your-api-key-here"
+        "CLOUDFLARE_API_TOKEN": "your-api-token-here"
       }
     }
   }

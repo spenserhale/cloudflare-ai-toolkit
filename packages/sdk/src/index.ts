@@ -4,6 +4,7 @@ export { CloudflareError, CloudflareAuthError, CloudflareNotFoundError } from ".
 export type {
   AuditLog,
   AuditLogListResult,
+  CloudflareAuth,
   CloudflareConfig,
   CloudflareResponse,
   DnsRecord,
@@ -15,6 +16,7 @@ export type {
   CreateResourceParams,
   PaginatedResponse,
   UpdateDnsRecordParams,
+  TokenVerificationResult,
   ErrorResponse,
 } from "./types.js";
 export {
@@ -28,6 +30,7 @@ export {
   ListAuditLogsParamsSchema,
   ListDnsRecordsParamsSchema,
   UpdateDnsRecordParamsSchema,
+  TokenVerificationResultSchema,
   ResourceSchema,
   ListResourcesParamsSchema,
   CreateResourceParamsSchema,

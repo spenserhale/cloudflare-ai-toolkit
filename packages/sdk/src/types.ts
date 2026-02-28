@@ -5,12 +5,23 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export const CloudflareConfigSchema = z.object({
-  apiKey: z.string().min(1, "API key is required"),
+  auth: z.discriminatedUnion("type", [
+    z.object({
+      type: z.literal("apiToken"),
+      token: z.string().min(1, "API token is required"),
+    }),
+    z.object({
+      type: z.literal("globalApiKey"),
+      apiKey: z.string().min(1, "Global API key is required"),
+      email: z.string().email("Global API key auth requires a valid email"),
+    }),
+  ]),
   baseUrl: z.string().url().default("https://api.cloudflare.com"),
   accountId: z.string().min(1).optional(),
 });
 
 export type CloudflareConfig = z.infer<typeof CloudflareConfigSchema>;
+export type CloudflareAuth = CloudflareConfig["auth"];
 
 // ---------------------------------------------------------------------------
 // Generic Cloudflare API response schemas
@@ -159,6 +170,17 @@ export const AuditLogListResultSchema = z
   .passthrough();
 
 export type AuditLogListResult = z.infer<typeof AuditLogListResultSchema>;
+
+export const TokenVerificationResultSchema = z
+  .object({
+    id: z.string().optional(),
+    status: z.string(),
+    not_before: z.string().optional(),
+    expires_on: z.string().optional(),
+  })
+  .passthrough();
+
+export type TokenVerificationResult = z.infer<typeof TokenVerificationResultSchema>;
 
 // ---------------------------------------------------------------------------
 // DNS record schemas
