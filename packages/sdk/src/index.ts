@@ -1,6 +1,16 @@
 export { CloudflareClient } from "./client.js";
 export { resolveConfig } from "./config.js";
 export { CloudflareError, CloudflareAuthError, CloudflareNotFoundError } from "./errors.js";
+export {
+  AUDIT_LOG_TABLE_COLUMNS,
+  mapAuditLogToTableRow,
+  toAuditLogTable,
+} from "./audit-table.js";
+export type {
+  AuditLogTable,
+  AuditLogTableColumn,
+  AuditLogTableRow,
+} from "./audit-table.js";
 export type {
   AuditLog,
   AuditLogListResult,

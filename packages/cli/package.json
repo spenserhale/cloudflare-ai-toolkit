@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@cloudflare-toolkit/sdk": "workspace:*",
-    "@stricli/core": "^1.0.0"
+    "@stricli/core": "^1.0.0",
+    "@toon-format/toon": "^2.1.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

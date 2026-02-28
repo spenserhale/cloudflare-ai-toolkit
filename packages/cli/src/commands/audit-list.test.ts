@@ -38,6 +38,59 @@ describe("resolveDateRange", () => {
 });
 
 describe("runAuditLogsList", () => {
+  it("renders audit logs in a TOON table with the required columns", async () => {
+    const listAuditLogs = vi.fn(async () => ({
+      data: [
+        {
+          id: "log-1",
+          action: {
+            type: "update",
+            description: "Certificate pack deployed",
+            time: "2026-02-28T01:09:52Z",
+            result: "success",
+          },
+          resource: { product: "certificates", type: "certificate_pack" },
+          actor: { context: "system" },
+        },
+      ],
+      pagination: { cursor: "next-cursor" },
+    }));
+    const verifyToken = vi.fn(async () => ({ status: "active" }));
+    const getAuthType = vi.fn(() => "apiToken" as const);
+    const deps = {
+      resolveConfig: vi.fn(() => ({
+        auth: { type: "apiToken" as const, token: "token" },
+        baseUrl: "https://api.cloudflare.com",
+      })),
+      createClient: vi.fn(() => ({ listAuditLogs, verifyToken, getAuthType })),
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(() => {
+        throw new Error("EXIT");
+      }),
+    };
+
+    await runAuditLogsList(baseFlags(), deps);
+
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "columns[6]: Action Time,Action Type,Resource,Actor Email,Actor Context,Zone Name"
+      )
+    );
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining("rows[1]"));
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining("2026-02-28T01:09:52Z"));
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.stringContaining("update Certificate pack deployed")
+    );
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.stringContaining("certificates certificate_pack")
+    );
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining("nextCursor: next-cursor"));
+    expect(deps.log).toHaveBeenCalledTimes(1);
+    expect(deps.error).not.toHaveBeenCalled();
+    expect(deps.exit).not.toHaveBeenCalled();
+  });
+
   it("uses default 30-day date range when since/before are omitted", async () => {
     const listAuditLogs = vi.fn(async () => ({ data: [], pagination: {} }));
     const verifyToken = vi.fn(async () => ({ status: "active" }));

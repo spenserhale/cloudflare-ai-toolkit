@@ -1,10 +1,36 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-toolkit/sdk";
+import { encode } from "@toon-format/toon";
+import {
+  CloudflareClient,
+  resolveConfig,
+  toAuditLogTable,
+  type AuditLogListResult,
+} from "@cloudflare-toolkit/sdk";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
   return new CloudflareClient(config);
+}
+
+const outputFormatSchema = z.enum(["json", "toon"]);
+type OutputFormat = z.infer<typeof outputFormatSchema>;
+
+function renderAuditLogs(
+  result: AuditLogListResult,
+  format: OutputFormat
+): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2);
+  }
+
+  return encode(
+    {
+      ...toAuditLogTable(result.data),
+      nextCursor: result.pagination?.cursor ?? null,
+    },
+    { keyFolding: "safe" }
+  );
 }
 
 export function registerAuditTools(server: FastMCP) {
@@ -22,6 +48,7 @@ export function registerAuditTools(server: FastMCP) {
       cursor: z.string().optional().describe("Pagination cursor"),
       limit: z.number().int().positive().max(1000).default(100).describe("Max results to return"),
       direction: z.enum(["asc", "desc"]).default("desc").describe("Sort direction"),
+      format: outputFormatSchema.default("toon").describe("Output format: toon or json"),
     }),
     execute: async (args) => {
       const client = getClient();
@@ -40,7 +67,7 @@ export function registerAuditTools(server: FastMCP) {
         args.accountId
       );
 
-      return JSON.stringify(result, null, 2);
+      return renderAuditLogs(result, args.format);
     },
   });
 }

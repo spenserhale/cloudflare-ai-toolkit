@@ -1,9 +1,12 @@
 import { buildCommand } from "@stricli/core";
+import { encode } from "@toon-format/toon";
 import {
   CloudflareAuthError,
   CloudflareError,
   CloudflareClient,
   resolveConfig,
+  toAuditLogTable,
+  type AuditLog,
   type TokenVerificationResult,
 } from "@cloudflare-toolkit/sdk";
 
@@ -245,6 +248,16 @@ function formatAuditError(err: unknown, authDiagnostic?: string): string {
   return `${base}\n${details.join("\n")}`;
 }
 
+function renderAuditLogsToon(logs: readonly AuditLog[], nextCursor?: string): string {
+  return encode(
+    {
+      ...toAuditLogTable(logs),
+      nextCursor: nextCursor ?? null,
+    },
+    { keyFolding: "safe" }
+  );
+}
+
 export async function runAuditLogsList(
   flags: AuditListFlags,
   deps: AuditListDeps = defaultDeps
@@ -274,20 +287,7 @@ export async function runAuditLogsList(
       return;
     }
 
-    deps.log(`Found ${result.data.length} audit log entries\n`);
-    for (const log of result.data) {
-      const when = log.when ?? "-";
-      const actor = log.actor?.email ?? log.actor?.id ?? "-";
-      const action = log.action?.type ?? "-";
-      const actionResult = log.action?.result ?? "-";
-      const resource = log.resource?.type ?? log.resource?.id ?? "-";
-
-      deps.log(`${when}  ${actor}  ${action} (${actionResult})  ${resource}`);
-    }
-
-    if (result.pagination?.cursor) {
-      deps.log(`\nNext cursor: ${result.pagination.cursor}`);
-    }
+    deps.log(renderAuditLogsToon(result.data, result.pagination?.cursor));
   } catch (err) {
     const authDiagnostic = await diagnoseAuthFailure(err, client);
     deps.error(`Error: ${formatAuditError(err, authDiagnostic)}`);
