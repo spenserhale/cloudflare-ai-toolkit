@@ -1,18 +1,51 @@
 {
-  "name": "@cloudflare-toolkit/cli",
-  "version": "0.1.0",
+  "name": "@cloudflare-ai-toolkit/cli",
+  "version": "0.0.0",
+  "description": "Command-line interface for the Cloudflare Toolkit.",
+  "license": "MIT",
+  "author": "Spenser Hale",
+  "homepage": "https://github.com/spenserhale/cloudflare-ai-toolkit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spenserhale/cloudflare-ai-toolkit.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/spenserhale/cloudflare-ai-toolkit/issues"
+  },
+  "keywords": [
+    "cloudflare",
+    "cli",
+    "dns",
+    "audit-logs",
+    "stricli"
+  ],
   "type": "module",
   "bin": {
-    "cloudflare": "src/bin.ts"
+    "cloudflare": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "dev": "bun run src/bin.ts",
-    "build": "bun build ./src/bin.ts --outdir ./dist --target node",
+    "build": "bun build ./src/bin.ts --outdir ./dist --target node --format esm --packages external && chmod +x ./dist/bin.js",
+    "build:binary": "bun build ./src/bin.ts --compile --minify --sourcemap --outfile ./dist/cloudflare",
+    "prepublishOnly": "bun run build",
     "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@cloudflare-toolkit/sdk": "workspace:*",
+    "@cloudflare-ai-toolkit/sdk": "workspace:*",
     "@stricli/core": "^1.0.0",
     "@toon-format/toon": "^2.1.0"
   },

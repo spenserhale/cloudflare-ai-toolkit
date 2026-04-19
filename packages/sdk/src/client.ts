@@ -6,6 +6,7 @@ import type {
   ListAuditLogsParams,
   ListDnsRecordsResult,
   ListDnsRecordsParams,
+  PurgeCacheResult,
   Resource,
   ListResourcesParams,
   CreateResourceParams,
@@ -23,6 +24,7 @@ import {
   DnsRecordSchema,
   ListAuditLogsParamsSchema,
   ListDnsRecordsParamsSchema,
+  PurgeCacheResultSchema,
   ResourceSchema,
   PaginatedResponseSchema,
   ErrorResponseSchema,
@@ -67,6 +69,13 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     requiredPermissions: ["DNS Write"],
     docsUrl:
       "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/edit/",
+  },
+  {
+    method: "POST",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/purge_cache$/u,
+    requiredPermissions: ["Cache Purge"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/cache/methods/purge/",
   },
 ];
 
@@ -227,6 +236,16 @@ export class CloudflareClient {
     );
   }
 
+  private resolveZoneId(zoneId?: string): string {
+    const resolved = zoneId ?? this.config.zoneId;
+    if (resolved) return resolved;
+
+    throw new CloudflareError(
+      "Zone ID is required. Provide zoneId or set CLOUDFLARE_ZONE_ID.",
+      "CONFIG_ERROR"
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Audit logs
   // -------------------------------------------------------------------------
@@ -250,17 +269,18 @@ export class CloudflareClient {
           limit: parsedParams.limit,
           id: parsedParams.id,
           interface: parsedParams.interface,
-          "actor.id": parsedParams.actorId,
-          "actor.email": parsedParams.actorEmail,
-          "actor.ip": parsedParams.actorIp,
-          "actor.token.id": parsedParams.actorTokenId,
-          "actor.token.name": parsedParams.actorTokenName,
-          "actor.token.type": parsedParams.actorTokenType,
-          "actor.user.email": parsedParams.actorUserEmail,
-          "actor.user.id": parsedParams.actorUserId,
-          "action.type": parsedParams.actionType,
-          "action.result": parsedParams.actionResult,
-          "zone.name": parsedParams.zoneName,
+          actor_id: parsedParams.actorId,
+          actor_email: parsedParams.actorEmail,
+          actor_ip: parsedParams.actorIp,
+          actor_token_id: parsedParams.actorTokenId,
+          actor_token_name: parsedParams.actorTokenName,
+          actor_token_type: parsedParams.actorTokenType,
+          actor_user_email: parsedParams.actorUserEmail,
+          actor_user_id: parsedParams.actorUserId,
+          action_type: parsedParams.actionType,
+          action_result: parsedParams.actionResult,
+          "resource.type": parsedParams.resourceType,
+          zone_name: parsedParams.zoneName,
         },
       }
     );
@@ -276,6 +296,15 @@ export class CloudflareClient {
       }
 
       const resultPayload = wrapped.data.result;
+      if (resultPayload === null) {
+        const parsedPagination = AuditLogPaginationSchema.safeParse(
+          wrapped.data.result_info
+        );
+        return {
+          data: [],
+          pagination: parsedPagination.success ? parsedPagination.data : undefined,
+        };
+      }
       if (Array.isArray(resultPayload)) {
         const parsedData = z.array(AuditLogSchema).parse(resultPayload);
         const parsedPagination = AuditLogPaginationSchema.safeParse(
@@ -379,6 +408,55 @@ export class CloudflareClient {
     );
 
     return DnsRecordSchema.parse(updated);
+  }
+
+  // -------------------------------------------------------------------------
+  // Cache purge
+  // -------------------------------------------------------------------------
+
+  private async purgeCache(
+    body: Record<string, unknown>,
+    zoneId?: string
+  ): Promise<PurgeCacheResult> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const result = await this.requestResult<PurgeCacheResult>(
+      "POST",
+      `/client/v4/zones/${resolvedZoneId}/purge_cache`,
+      { body }
+    );
+    return PurgeCacheResultSchema.parse(result);
+  }
+
+  async purgeCacheEverything(zoneId?: string): Promise<PurgeCacheResult> {
+    return this.purgeCache({ purge_everything: true }, zoneId);
+  }
+
+  async purgeCacheByUrls(
+    files: string[],
+    zoneId?: string
+  ): Promise<PurgeCacheResult> {
+    return this.purgeCache({ files }, zoneId);
+  }
+
+  async purgeCacheByTags(
+    tags: string[],
+    zoneId?: string
+  ): Promise<PurgeCacheResult> {
+    return this.purgeCache({ tags }, zoneId);
+  }
+
+  async purgeCacheByPrefixes(
+    prefixes: string[],
+    zoneId?: string
+  ): Promise<PurgeCacheResult> {
+    return this.purgeCache({ prefixes }, zoneId);
+  }
+
+  async purgeCacheByHosts(
+    hosts: string[],
+    zoneId?: string
+  ): Promise<PurgeCacheResult> {
+    return this.purgeCache({ hosts }, zoneId);
   }
 
   // -------------------------------------------------------------------------

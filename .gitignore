@@ -4,3 +4,11 @@ dist/
 .env.local
 *.tsbuildinfo
 .turbo
+
+# Editor/tooling
+.claude/
+.fuse_hidden*
+.*.bun-build
+
+# Local scratchpads / tinker scripts
+packages/*/src/tinker/

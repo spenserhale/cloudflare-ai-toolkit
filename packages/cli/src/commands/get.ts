@@ -1,5 +1,5 @@
 import { buildCommand } from "@stricli/core";
-import { CloudflareClient, resolveConfig } from "@cloudflare-toolkit/sdk";
+import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
 
 interface GetFlags {
   readonly json: boolean;

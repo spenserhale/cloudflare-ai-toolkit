@@ -26,6 +26,7 @@ export type {
   CreateResourceParams,
   PaginatedResponse,
   UpdateDnsRecordParams,
+  PurgeCacheResult,
   TokenVerificationResult,
   ErrorResponse,
 } from "./types.js";
@@ -44,5 +45,6 @@ export {
   ResourceSchema,
   ListResourcesParamsSchema,
   CreateResourceParamsSchema,
+  PurgeCacheResultSchema,
   ErrorResponseSchema,
 } from "./types.js";

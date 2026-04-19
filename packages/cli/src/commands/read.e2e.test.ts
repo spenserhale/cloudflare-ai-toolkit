@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI_ENTRY = join(PACKAGE_ROOT, "src/bin.ts");
+const BUN_BIN = process.env.BUN_BIN ?? "bun";
 
 interface MockRoute {
   readonly method: string;
@@ -101,7 +102,7 @@ async function runCliWithMockFetch(
       stdout: string;
       stderr: string;
     }>((resolvePromise, rejectPromise) => {
-      const child = spawn("bun", ["--preload", preloadPath, CLI_ENTRY, ...args], {
+      const child = spawn(BUN_BIN, ["--preload", preloadPath, CLI_ENTRY, ...args], {
         cwd: tempDir,
         env: {
           ...process.env,
@@ -256,5 +257,27 @@ describe("CLI read e2e", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr.trim()).toBe("");
+  });
+
+  it("audit logs list rejects dotted action types with a clear message", async () => {
+    const result = await runCliWithMockFetch(
+      [
+        "audit",
+        "logs",
+        "list",
+        "--actionType",
+        "zone.dns_record.delete",
+      ],
+      {
+        CLOUDFLARE_API_TOKEN: "test-token",
+        CLOUDFLARE_ACCOUNT_ID: "acc-id",
+        CLOUDFLARE_BASE_URL: "https://mock.cloudflare.test",
+      },
+      []
+    );
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Invalid action type 'zone.dns_record.delete'");
+    expect(result.stderr).toContain("Valid values: create, view, update, delete");
   });
 });

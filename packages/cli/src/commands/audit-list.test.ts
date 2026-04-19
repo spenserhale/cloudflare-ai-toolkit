@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CloudflareAuthError, CloudflareError } from "@cloudflare-toolkit/sdk";
+import { CloudflareAuthError, CloudflareError } from "@cloudflare-ai-toolkit/sdk";
 import { resolveDateRange, runAuditLogsList, type AuditListFlags } from "./audit-list.js";
 
 function baseFlags(overrides: Partial<AuditListFlags> = {}): AuditListFlags {
@@ -89,6 +89,62 @@ describe("runAuditLogsList", () => {
     expect(deps.log).toHaveBeenCalledTimes(1);
     expect(deps.error).not.toHaveBeenCalled();
     expect(deps.exit).not.toHaveBeenCalled();
+  });
+
+  it("forwards resourceType and filters output data without jq", async () => {
+    const listAuditLogs = vi.fn(async () => ({
+      data: [
+        {
+          id: "dns-delete-1",
+          action: { type: "delete", time: "2026-02-28T12:42:33Z" },
+          resource: { type: "dns_records" },
+          actor: { email: "spenser@pbhs.com" },
+          zone: { name: "pbhshosting.com" },
+        },
+        {
+          id: "cert-update-1",
+          action: { type: "update", time: "2026-02-28T01:09:52Z" },
+          resource: { type: "certificate_pack" },
+          actor: { context: "system" },
+        },
+      ],
+      pagination: { cursor: "next-cursor" },
+    }));
+    const verifyToken = vi.fn(async () => ({ status: "active" }));
+    const getAuthType = vi.fn(() => "apiToken" as const);
+    const deps = {
+      resolveConfig: vi.fn(() => ({
+        auth: { type: "apiToken" as const, token: "token" },
+        baseUrl: "https://api.cloudflare.com",
+      })),
+      createClient: vi.fn(() => ({ listAuditLogs, verifyToken, getAuthType })),
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(() => {
+        throw new Error("EXIT");
+      }),
+    };
+
+    await runAuditLogsList(
+      baseFlags({
+        json: true,
+        resourceType: "dns-records",
+      }),
+      deps
+    );
+
+    expect(listAuditLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceType: "dns-records",
+      }),
+      undefined
+    );
+
+    const firstLogCall = deps.log.mock.calls[0]?.[0];
+    const payload = typeof firstLogCall === "string" ? JSON.parse(firstLogCall) : firstLogCall;
+    expect(payload.data).toHaveLength(1);
+    expect(payload.data[0].id).toBe("dns-delete-1");
+    expect(payload.data[0].resource.type).toBe("dns_records");
   });
 
   it("uses default 30-day date range when since/before are omitted", async () => {

@@ -6,7 +6,7 @@ import {
   resolveConfig,
   toAuditLogTable,
   type AuditLogListResult,
-} from "@cloudflare-toolkit/sdk";
+} from "@cloudflare-ai-toolkit/sdk";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -15,6 +15,7 @@ function getClient(): CloudflareClient {
 
 const outputFormatSchema = z.enum(["json", "toon"]);
 type OutputFormat = z.infer<typeof outputFormatSchema>;
+const actionTypeSchema = z.enum(["create", "view", "update", "delete"]);
 
 function renderAuditLogs(
   result: AuditLogListResult,
@@ -43,8 +44,9 @@ export function registerAuditTools(server: FastMCP) {
       before: z.string().describe("End datetime in ISO-8601 format"),
       actorEmail: z.string().optional().describe("Filter by actor email"),
       actorId: z.string().optional().describe("Filter by actor ID"),
-      actionType: z.string().optional().describe("Filter by action type"),
+      actionType: actionTypeSchema.optional().describe("Filter by action type"),
       actionResult: z.string().optional().describe("Filter by action result"),
+      resourceType: z.string().optional().describe("Filter by resource type"),
       cursor: z.string().optional().describe("Pagination cursor"),
       limit: z.number().int().positive().max(1000).default(100).describe("Max results to return"),
       direction: z.enum(["asc", "desc"]).default("desc").describe("Sort direction"),
@@ -60,6 +62,7 @@ export function registerAuditTools(server: FastMCP) {
           actorId: args.actorId,
           actionType: args.actionType,
           actionResult: args.actionResult,
+          resourceType: args.resourceType,
           cursor: args.cursor,
           limit: args.limit,
           direction: args.direction,

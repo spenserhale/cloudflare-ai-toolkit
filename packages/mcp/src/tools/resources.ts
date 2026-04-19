@@ -1,6 +1,6 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-toolkit/sdk";
+import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();

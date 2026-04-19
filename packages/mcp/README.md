@@ -1,6 +1,15 @@
-# @cloudflare-toolkit/mcp
+# @cloudflare-ai-toolkit/mcp
 
 MCP server for Cloudflare, built with [FastMCP](https://github.com/punkpeye/fastmcp).
+
+## Install
+
+```bash
+npm install -g @cloudflare-ai-toolkit/mcp
+# or run ad-hoc: npx -y @cloudflare-ai-toolkit/mcp
+```
+
+Requires Node 20+. Installs a `cloudflare-mcp` binary.
 
 ## Tools
 
@@ -16,14 +25,14 @@ MCP server for Cloudflare, built with [FastMCP](https://github.com/punkpeye/fast
 
 ## Setup with Claude Desktop
 
-Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "cloudflare-toolkit": {
-      "command": "bun",
-      "args": ["run", "/Users/spenser/Code/Toolkits/cloudflare-toolkit/packages/mcp/src/index.ts"],
+    "cloudflare-ai-toolkit": {
+      "command": "npx",
+      "args": ["-y", "@cloudflare-ai-toolkit/mcp"],
       "env": {
         "CLOUDFLARE_API_TOKEN": "your-api-token-here"
       }
@@ -35,7 +44,7 @@ Add this to your Claude Desktop config (`~/Library/Application Support/Claude/cl
 ## Development
 
 ```bash
-# Run in stdio mode
+# Run in stdio mode from source
 bun run dev
 
 # Inspect with FastMCP inspector

@@ -1,8 +1,12 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@cloudflare-ai-toolkit/sdk": ["../sdk/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/tinker"]
 }

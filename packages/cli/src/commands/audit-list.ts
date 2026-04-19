@@ -8,7 +8,10 @@ import {
   toAuditLogTable,
   type AuditLog,
   type TokenVerificationResult,
-} from "@cloudflare-toolkit/sdk";
+} from "@cloudflare-ai-toolkit/sdk";
+
+const allowedActionTypes = ["create", "view", "update", "delete"] as const;
+type AuditActionType = (typeof allowedActionTypes)[number];
 
 export interface AuditListFlags {
   readonly accountId?: string;
@@ -16,8 +19,9 @@ export interface AuditListFlags {
   readonly before?: string;
   readonly actorEmail?: string;
   readonly actorId?: string;
-  readonly actionType?: string;
+  readonly actionType?: AuditActionType;
   readonly actionResult?: string;
+  readonly resourceType?: string;
   readonly limit: number;
   readonly cursor?: string;
   readonly direction: "asc" | "desc";
@@ -36,6 +40,70 @@ function parseDirection(value: string): "asc" | "desc" {
     throw new Error(`Direction must be 'asc' or 'desc', got '${value}'`);
   }
   return value;
+}
+
+function parseActionType(value: string): AuditActionType {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    throw new Error("Action type cannot be empty");
+  }
+
+  if (!allowedActionTypes.includes(normalized as AuditActionType)) {
+    throw new Error(
+      `Invalid action type '${value}'. Valid values: create, view, update, delete.`
+    );
+  }
+
+  return normalized as AuditActionType;
+}
+
+function parseResourceType(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    throw new Error("Resource type cannot be empty");
+  }
+  return normalized;
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function normalizeResourceType(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s.-]+/g, "_");
+}
+
+function resolveLogResourceType(log: AuditLog): string | undefined {
+  const root = readRecord(log);
+  const resource = readRecord(root?.resource);
+
+  return (
+    readString(resource?.type) ??
+    readString(resource?.product) ??
+    readString(root?.resource_type) ??
+    readString(root?.ResourceType) ??
+    readString(root?.resource_product) ??
+    readString(root?.ResourceProduct)
+  );
+}
+
+function filterAuditLogsByResourceType(
+  logs: readonly AuditLog[],
+  requestedResourceType: string
+): readonly AuditLog[] {
+  const expected = normalizeResourceType(requestedResourceType);
+  return logs.filter((log) => {
+    const resourceType = resolveLogResourceType(log);
+    if (!resourceType) return false;
+    return normalizeResourceType(resourceType) === expected;
+  });
 }
 
 function parsePositiveInt(value: string): number {
@@ -275,19 +343,27 @@ export async function runAuditLogsList(
         actorId: flags.actorId,
         actionType: flags.actionType,
         actionResult: flags.actionResult,
+        resourceType: flags.resourceType,
         cursor: flags.cursor,
         limit: flags.limit,
         direction: flags.direction,
       },
       flags.accountId
     );
+    const filteredData = flags.resourceType
+      ? filterAuditLogsByResourceType(result.data, flags.resourceType)
+      : result.data;
+    const output = {
+      ...result,
+      data: filteredData,
+    };
 
     if (flags.json) {
-      deps.log(JSON.stringify(result, null, 2));
+      deps.log(JSON.stringify(output, null, 2));
       return;
     }
 
-    deps.log(renderAuditLogsToon(result.data, result.pagination?.cursor));
+    deps.log(renderAuditLogsToon(output.data, output.pagination?.cursor));
   } catch (err) {
     const authDiagnostic = await diagnoseAuthFailure(err, client);
     deps.error(`Error: ${formatAuditError(err, authDiagnostic)}`);
@@ -333,7 +409,7 @@ export const listAuditLogsCommand = buildCommand({
       },
       actionType: {
         kind: "parsed",
-        parse: String,
+        parse: parseActionType,
         optional: true,
         brief: "Filter by action type",
       },
@@ -342,6 +418,12 @@ export const listAuditLogsCommand = buildCommand({
         parse: String,
         optional: true,
         brief: "Filter by action result",
+      },
+      resourceType: {
+        kind: "parsed",
+        parse: parseResourceType,
+        optional: true,
+        brief: "Filter by resource type (for example dns_records)",
       },
       cursor: {
         kind: "parsed",

@@ -3,7 +3,7 @@ import {
   CloudflareClient,
   resolveConfig,
   type UpdateDnsRecordParams,
-} from "@cloudflare-toolkit/sdk";
+} from "@cloudflare-ai-toolkit/sdk";
 
 interface DnsUpdateFlags {
   readonly type?: string;

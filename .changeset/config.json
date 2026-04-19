@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    { "repo": "spenserhale/cloudflare-ai-toolkit" }
+  ],
+  "commit": false,
+  "fixed": [["@cloudflare-ai-toolkit/sdk", "@cloudflare-ai-toolkit/cli", "@cloudflare-ai-toolkit/mcp"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

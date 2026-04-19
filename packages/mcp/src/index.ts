@@ -1,19 +1,19 @@
+#!/usr/bin/env node
 import { FastMCP } from "fastmcp";
+import pkg from "../package.json" with { type: "json" };
 import { registerResourceTools } from "./tools/resources.js";
 import { registerAuditTools } from "./tools/audit.js";
 import { registerDnsTools } from "./tools/dns.js";
 
 const server = new FastMCP({
-  name: "cloudflare-toolkit",
-  version: "0.1.0",
+  name: "cloudflare-ai-toolkit",
+  version: pkg.version as `${number}.${number}.${number}`,
 });
 
-// Register tool groups
 registerResourceTools(server);
 registerAuditTools(server);
 registerDnsTools(server);
 
-// Start the server in stdio mode (for Claude Desktop, Cursor, etc.)
 server.start({
   transportType: "stdio",
 });

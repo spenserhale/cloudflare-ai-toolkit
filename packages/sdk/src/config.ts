@@ -121,5 +121,8 @@ export function resolveConfig(
     accountId:
       overrides.accountId ??
       resolveEnvVar("CLOUDFLARE_ACCOUNT_ID"),
+    zoneId:
+      overrides.zoneId ??
+      resolveEnvVar("CLOUDFLARE_ZONE_ID"),
   };
 }

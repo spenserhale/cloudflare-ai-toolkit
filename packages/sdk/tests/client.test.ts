@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { CloudflareClient } from "../src/client.js";
 import { CloudflareAuthError, CloudflareError } from "../src/errors.js";
 
-function tokenClientConfig(overrides: Partial<{ accountId: string }> = {}) {
+function tokenClientConfig(overrides: Partial<{ accountId: string; zoneId: string }> = {}) {
   return {
     auth: {
       type: "apiToken" as const,
@@ -212,6 +212,220 @@ describe("CloudflareClient", () => {
       const result = await client.listAuditLogs();
       expect(result.data.length).toBe(1);
       expect(result.data[0]?.id).toBe("log-1");
+      expect(result.pagination?.cursor).toBe("next-cursor");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends snake_case filter query params for audit logs", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
+
+    let capturedUrl = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: [],
+          result_info: { count: 0 },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }) as typeof fetch;
+
+    try {
+      await client.listAuditLogs({
+        actionType: "delete",
+        actionResult: "success",
+        resourceType: "dns_records",
+        actorEmail: "spenser@pbhs.com",
+        actorId: "actor-1",
+        actorIp: "203.0.113.1",
+        actorTokenId: "token-1",
+        actorTokenName: "token-name",
+        actorTokenType: "api_key",
+        actorUserEmail: "spenser@pbhs.com",
+        actorUserId: "user-1",
+        zoneName: "example.com",
+      });
+
+      const url = new URL(capturedUrl);
+      expect(url.searchParams.get("action_type")).toBe("delete");
+      expect(url.searchParams.get("action_result")).toBe("success");
+      expect(url.searchParams.get("resource.type")).toBe("dns_records");
+      expect(url.searchParams.get("actor_email")).toBe("spenser@pbhs.com");
+      expect(url.searchParams.get("actor_id")).toBe("actor-1");
+      expect(url.searchParams.get("actor_ip")).toBe("203.0.113.1");
+      expect(url.searchParams.get("actor_token_id")).toBe("token-1");
+      expect(url.searchParams.get("actor_token_name")).toBe("token-name");
+      expect(url.searchParams.get("actor_token_type")).toBe("api_key");
+      expect(url.searchParams.get("actor_user_email")).toBe("spenser@pbhs.com");
+      expect(url.searchParams.get("actor_user_id")).toBe("user-1");
+      expect(url.searchParams.get("zone_name")).toBe("example.com");
+
+      expect(url.searchParams.has("action.type")).toBe(false);
+      expect(url.searchParams.has("actor.email")).toBe(false);
+      expect(url.searchParams.has("zone.name")).toBe(false);
+      expect(url.searchParams.has("resource_type")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Cache purge
+  // -------------------------------------------------------------------------
+
+  it("should require a zone id for cache purge calls", async () => {
+    const client = new CloudflareClient(tokenClientConfig());
+    await expect(client.purgeCacheEverything()).rejects.toMatchObject({
+      code: "CONFIG_ERROR",
+    });
+  });
+
+  it("purges everything via POST /zones/{zoneId}/purge_cache", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ zoneId: "zone-1" }));
+
+    let capturedUrl = "";
+    let capturedBody = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(input);
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { id: "purge-1" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await client.purgeCacheEverything();
+      expect(capturedUrl).toContain("/zones/zone-1/purge_cache");
+      expect(JSON.parse(capturedBody)).toEqual({ purge_everything: true });
+      expect(result.id).toBe("purge-1");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("purges by tags via POST /zones/{zoneId}/purge_cache", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ zoneId: "zone-1" }));
+
+    let capturedBody = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { id: "purge-2" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await client.purgeCacheByTags(["tag-a", "tag-b"]);
+      expect(JSON.parse(capturedBody)).toEqual({ tags: ["tag-a", "tag-b"] });
+      expect(result.id).toBe("purge-2");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("purges by prefixes via POST /zones/{zoneId}/purge_cache", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ zoneId: "zone-1" }));
+
+    let capturedBody = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { id: "purge-3" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await client.purgeCacheByPrefixes(["example.com/assets"]);
+      expect(JSON.parse(capturedBody)).toEqual({ prefixes: ["example.com/assets"] });
+      expect(result.id).toBe("purge-3");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("allows overriding zoneId per call", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ zoneId: "default-zone" }));
+
+    let capturedUrl = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { id: "purge-4" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    try {
+      await client.purgeCacheByUrls(["https://example.com/page"], "override-zone");
+      expect(capturedUrl).toContain("/zones/override-zone/purge_cache");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("treats wrapped audit log result=null as an empty list", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: null,
+          result_info: { cursor: "next-cursor" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await client.listAuditLogs({
+        actionType: "delete",
+        resourceType: "dns_records",
+      });
+      expect(result.data).toEqual([]);
       expect(result.pagination?.cursor).toBe("next-cursor");
     } finally {
       globalThis.fetch = originalFetch;

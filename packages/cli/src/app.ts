@@ -1,9 +1,17 @@
 import { buildApplication, buildRouteMap } from "@stricli/core";
+import pkg from "../package.json" with { type: "json" };
 import { listCommand } from "./commands/list.js";
 import { getCommand } from "./commands/get.js";
 import { createCommand } from "./commands/create.js";
 import { deleteCommand } from "./commands/delete.js";
 import { listAuditLogsCommand } from "./commands/audit-list.js";
+import {
+  purgeCacheEverythingCommand,
+  purgeCacheByUrlsCommand,
+  purgeCacheByTagsCommand,
+  purgeCacheByPrefixesCommand,
+  purgeCacheByHostsCommand,
+} from "./commands/cache-purge.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
 
@@ -37,6 +45,28 @@ const auditRoutes = buildRouteMap({
   },
 });
 
+const cachePurgeRoutes = buildRouteMap({
+  routes: {
+    everything: purgeCacheEverythingCommand,
+    urls: purgeCacheByUrlsCommand,
+    tags: purgeCacheByTagsCommand,
+    prefixes: purgeCacheByPrefixesCommand,
+    hosts: purgeCacheByHostsCommand,
+  },
+  docs: {
+    brief: "Purge cached content",
+  },
+});
+
+const cacheRoutes = buildRouteMap({
+  routes: {
+    purge: cachePurgeRoutes,
+  },
+  docs: {
+    brief: "Cache operations",
+  },
+});
+
 const dnsRecordRoutes = buildRouteMap({
   routes: {
     list: listDnsRecordsCommand,
@@ -60,6 +90,7 @@ const routes = buildRouteMap({
   routes: {
     resources: resourceRoutes,
     audit: auditRoutes,
+    cache: cacheRoutes,
     dns: dnsRoutes,
   },
   docs: {
@@ -70,6 +101,6 @@ const routes = buildRouteMap({
 export const app = buildApplication(routes, {
   name: "cloudflare",
   versionInfo: {
-    currentVersion: "0.1.0",
+    currentVersion: pkg.version,
   },
 });

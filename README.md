@@ -8,11 +8,56 @@ A monorepo containing the SDK, CLI, and MCP server for the Cloudflare API.
 
 | Package | Description |
 |---------|-------------|
-| [`@cloudflare-toolkit/sdk`](./packages/sdk) | Core SDK with types, API client, and business logic |
-| [`@cloudflare-toolkit/cli`](./packages/cli) | Command-line interface (Stricli) |
-| [`@cloudflare-toolkit/mcp`](./packages/mcp) | MCP server for AI assistants (FastMCP) |
+| [`@cloudflare-ai-toolkit/sdk`](./packages/sdk) | Core SDK with types, API client, and business logic |
+| [`@cloudflare-ai-toolkit/cli`](./packages/cli) | Command-line interface (Stricli) |
+| [`@cloudflare-ai-toolkit/mcp`](./packages/mcp) | MCP server for AI assistants (FastMCP) |
 
-## Getting Started
+## Installation
+
+### npm (requires Node 20+)
+
+```bash
+npm install -g @cloudflare-ai-toolkit/cli
+# or: pnpm add -g @cloudflare-ai-toolkit/cli
+# or: bun add -g @cloudflare-ai-toolkit/cli
+
+cloudflare --help
+```
+
+One-off run without installing:
+
+```bash
+npx @cloudflare-ai-toolkit/cli audit logs list --help
+```
+
+### Standalone binary (no Node required)
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spenserhale/cloudflare-ai-toolkit/main/scripts/install.sh | sh
+```
+
+Windows and manual installs: grab the matching binary from the
+[latest release](https://github.com/spenserhale/cloudflare-ai-toolkit/releases/latest)
+and put it on your `PATH`. Available assets: `cloudflare-linux-x64`,
+`cloudflare-linux-arm64`, `cloudflare-darwin-x64`, `cloudflare-darwin-arm64`,
+`cloudflare-windows-x64.exe`. A `.sha256` sits next to each one, and an
+aggregated `SHASUMS256.txt` is attached to the release.
+
+### Programmatic use (SDK)
+
+```bash
+npm install @cloudflare-ai-toolkit/sdk
+```
+
+```ts
+import { CloudflareClient } from "@cloudflare-ai-toolkit/sdk";
+
+const cf = new CloudflareClient({ apiToken: process.env.CLOUDFLARE_API_TOKEN });
+```
+
+## Local development
 
 ```bash
 # Install dependencies
@@ -61,6 +106,28 @@ bun run dev:cli -- dns records list <zone-id> --type A --name app.example.com
 bun run dev:cli -- dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
 ```
 
+### Cache purge
+
+Destructive purges (`everything`, `prefixes`, `hosts`) prompt for confirmation.
+Pass `--yes` to skip the prompt or to run non-interactively (e.g. in CI).
+
+```bash
+# Purge everything for a zone (requires confirmation or --yes)
+bun run dev:cli -- cache purge everything --zone-id <zone-id> --yes
+
+# Purge specific URLs
+bun run dev:cli -- cache purge urls https://example.com/a https://example.com/b
+
+# Purge by cache tag
+bun run dev:cli -- cache purge tags my-tag
+
+# Purge by URL prefix (requires confirmation or --yes)
+bun run dev:cli -- cache purge prefixes example.com/assets/ --yes
+
+# Purge by hostname (requires confirmation or --yes)
+bun run dev:cli -- cache purge hosts cdn.example.com --yes
+```
+
 ## Architecture
 
 ```
@@ -90,3 +157,25 @@ cd packages/sdk && bun run build
 2. Add the client method to `packages/sdk/src/client.ts`
 3. Add a CLI command in `packages/cli/src/commands/`
 4. Add an MCP tool in `packages/mcp/src/tools/`
+
+## Releasing
+
+Releases are automated via [Changesets](https://github.com/changesets/changesets)
+and GitHub Actions.
+
+1. Make changes, then run `bun changeset` and pick a version bump. Commit the
+   generated file under `.changeset/`.
+2. On merge to `main`, the `Release` workflow opens a "Version Packages" PR.
+3. Merging that PR bumps versions, publishes `@cloudflare-ai-toolkit/sdk`,
+   `@cloudflare-ai-toolkit/cli`, and `@cloudflare-ai-toolkit/mcp` to npm with
+   provenance, and creates a GitHub Release.
+4. The `Binaries` workflow builds standalone Bun-compiled binaries for
+   Linux/macOS/Windows (x64 + arm64) and attaches them to the release.
+
+### One-time repo setup
+
+- Add an `NPM_TOKEN` secret (a granular token with publish scope for the
+  `@cloudflare-ai-toolkit` scope), or configure [npm trusted publishing](https://docs.npmjs.com/trusted-publishers)
+  for this repo and remove the token dependency from the workflow.
+- Ensure the `@cloudflare-ai-toolkit` scope on npm exists and you're an owner.
+- The default `GITHUB_TOKEN` handles release creation and asset uploads.

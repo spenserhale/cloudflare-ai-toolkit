@@ -18,6 +18,7 @@ export const CloudflareConfigSchema = z.object({
   ]),
   baseUrl: z.string().url().default("https://api.cloudflare.com"),
   accountId: z.string().min(1).optional(),
+  zoneId: z.string().min(1).optional(),
 });
 
 export type CloudflareConfig = z.infer<typeof CloudflareConfigSchema>;
@@ -145,8 +146,9 @@ export const ListAuditLogsParamsSchema = z.object({
   actorTokenType: z.string().optional(),
   actorUserEmail: z.string().optional(),
   actorUserId: z.string().optional(),
-  actionType: z.string().optional(),
+  actionType: z.enum(["create", "view", "update", "delete"]).optional(),
   actionResult: z.string().optional(),
+  resourceType: z.string().optional(),
   zoneName: z.string().optional(),
 });
 
@@ -276,3 +278,15 @@ export const ErrorResponseSchema = z.object({
 });
 
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Cache purge schemas
+// ---------------------------------------------------------------------------
+
+export const PurgeCacheResultSchema = z
+  .object({
+    id: z.string(),
+  })
+  .passthrough();
+
+export type PurgeCacheResult = z.infer<typeof PurgeCacheResultSchema>;
