@@ -19,6 +19,20 @@ macOS/Linux one-liner:
 curl -fsSL https://raw.githubusercontent.com/spenserhale/cloudflare-ai-toolkit/main/scripts/install.sh | sh
 ```
 
+## Teach your AI agents about this CLI
+
+If you use Claude Code (or any agent that supports [open agent skills](https://skills.sh/)),
+install the `cloudflare-cli` skill so future sessions know the CLI is available
+and reach for it instead of hand-rolling `curl` calls to `api.cloudflare.com`:
+
+```bash
+npx skills add spenserhale/cloudflare-ai-toolkit@cloudflare-cli
+```
+
+The skill is short — it documents the command tree, auth env vars, and when
+to use each subcommand. It loads automatically whenever the user mentions
+Cloudflare, cache purging, DNS records, or audit logs.
+
 ## Configure
 
 ```bash

@@ -56,6 +56,21 @@ npm install -g @cloudflare-ai-toolkit/cli
 npx @cloudflare-ai-toolkit/cli audit logs list --help
 ```
 
+## Teach your AI agents about the CLI
+
+If you use Claude Code (or any agent that supports
+[open agent skills](https://skills.sh/)), install the `cloudflare-cli` skill.
+Future sessions will know the `cloudflare` binary is on your machine and reach
+for it instead of hand-rolling `curl` against `api.cloudflare.com`:
+
+```bash
+npx skills add spenserhale/cloudflare-ai-toolkit@cloudflare-cli
+```
+
+The skill is a short reference — command tree, auth env vars, and guidance on
+when to use each subcommand — and triggers whenever a user mentions Cloudflare,
+cache purging, DNS records, or audit logs.
+
 ## Use the SDK in your code
 
 ```bash
@@ -166,8 +181,7 @@ and GitHub Actions.
    `bun publish` (which strips `workspace:` protocol specifiers automatically),
    and creates a GitHub Release.
 4. The `Binaries` workflow compiles standalone binaries for Linux/macOS/Windows
-   (x64 + arm64) with `bun build --compile --bytecode` and attaches them to the
-   release.
+   (x64 + arm64) with `bun build --compile` and attaches them to the release.
 
 ### One-time repo setup
 
