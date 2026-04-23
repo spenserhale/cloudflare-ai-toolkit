@@ -5,15 +5,15 @@
     "": {
       "name": "cloudflare-toolkit",
       "devDependencies": {
-        "@changesets/changelog-github": "^0.5.0",
-        "@changesets/cli": "^2.27.0",
+        "@changesets/changelog-github": "^0.5.2",
+        "@changesets/cli": "^2.31.0",
         "@types/bun": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^5.9.3",
       },
     },
     "packages/cli": {
       "name": "@cloudflare-ai-toolkit/cli",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "cloudflare": "./dist/bin.js",
       },
@@ -30,7 +30,7 @@
     },
     "packages/mcp": {
       "name": "@cloudflare-ai-toolkit/mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "cloudflare-mcp": "./dist/index.js",
       },
@@ -47,7 +47,7 @@
     },
     "packages/sdk": {
       "name": "@cloudflare-ai-toolkit/sdk",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "zod": "^3.24.0",
       },
