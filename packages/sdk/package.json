@@ -1,6 +1,6 @@
 {
   "name": "@cloudflare-ai-toolkit/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Core SDK for the Cloudflare API (types, client, business logic).",
   "license": "MIT",
   "author": "Spenser Hale",
