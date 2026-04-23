@@ -16,7 +16,7 @@ Requires Node 20+.
 import { CloudflareClient } from "@cloudflare-ai-toolkit/sdk";
 
 const cf = new CloudflareClient({
-  apiToken: process.env.CLOUDFLARE_API_TOKEN,
+  auth: { type: "apiToken", token: process.env.CLOUDFLARE_API_TOKEN! },
 });
 
 const records = await cf.listDnsRecords("<zone-id>");
@@ -26,8 +26,11 @@ const records = await cf.listDnsRecords("<zone-id>");
 
 ```ts
 const cf = new CloudflareClient({
-  apiKey: process.env.CLOUDFLARE_API_KEY,
-  email: process.env.CLOUDFLARE_EMAIL,
+  auth: {
+    type: "globalApiKey",
+    apiKey: process.env.CLOUDFLARE_API_KEY!,
+    email: process.env.CLOUDFLARE_EMAIL!,
+  },
 });
 ```
 

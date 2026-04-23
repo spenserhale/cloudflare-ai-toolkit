@@ -3,6 +3,7 @@ import { FastMCP } from "fastmcp";
 import pkg from "../package.json" with { type: "json" };
 import { registerResourceTools } from "./tools/resources.js";
 import { registerAuditTools } from "./tools/audit.js";
+import { registerCacheTools } from "./tools/cache.js";
 import { registerDnsTools } from "./tools/dns.js";
 
 const server = new FastMCP({
@@ -12,6 +13,7 @@ const server = new FastMCP({
 
 registerResourceTools(server);
 registerAuditTools(server);
+registerCacheTools(server);
 registerDnsTools(server);
 
 server.start({

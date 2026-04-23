@@ -54,7 +54,9 @@ npm install @cloudflare-ai-toolkit/sdk
 ```ts
 import { CloudflareClient } from "@cloudflare-ai-toolkit/sdk";
 
-const cf = new CloudflareClient({ apiToken: process.env.CLOUDFLARE_API_TOKEN });
+const cf = new CloudflareClient({
+  auth: { type: "apiToken", token: process.env.CLOUDFLARE_API_TOKEN! },
+});
 ```
 
 ## Local development
@@ -80,6 +82,7 @@ CLOUDFLARE_API_TOKEN=...       # preferred (Bearer auth)
 CLOUDFLARE_API_KEY=...         # legacy fallback (Global API Key auth)
 CLOUDFLARE_EMAIL=...           # required when using CLOUDFLARE_API_KEY
 CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit-log commands/tools
+CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped commands/tools (DNS, cache purge)
 CLOUDFLARE_BASE_URL=...        # optional override (default https://api.cloudflare.com)
 ```
 
