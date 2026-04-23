@@ -18,6 +18,13 @@ cd "$(dirname "$0")/.."
 
 PACKAGES=(packages/sdk packages/cli packages/mcp)
 
+# Resync the lockfile against the (possibly just-bumped) package.json versions
+# before we build. `bun publish` resolves `workspace:*` by consulting the
+# lockfile, so if the lockfile still has stale versions we'd publish cli@N
+# pointing at sdk@N-1. `--no-frozen-lockfile` lets it adjust without
+# complaining about the diff.
+bun install --no-frozen-lockfile
+
 bun run build
 
 for pkg in "${PACKAGES[@]}"; do
@@ -34,6 +41,11 @@ for pkg in "${PACKAGES[@]}"; do
 
   echo "🦋  info publishing ${name}@${version}"
   (cd "$pkg" && bun publish --access public)
+
+  # `changeset publish` creates per-package tags locally so changesets/action
+  # can `git push` them. We replace that step, so mirror the behavior here —
+  # otherwise the action fails with "src refspec ... does not match any".
+  git tag "${name}@${version}" 2>/dev/null || true
 
   # Emit in the format changesets/action parses. The double-space after the
   # colon matches the exact `changeset publish` output format.

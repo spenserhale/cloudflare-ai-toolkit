@@ -49,7 +49,6 @@ jobs:
             --compile \
             --minify \
             --sourcemap \
-            --bytecode \
             --target=${{ matrix.target }} \
             --outfile ./dist/${{ matrix.asset }}
 

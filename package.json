@@ -12,7 +12,7 @@
     "lint": "bun run --filter '*' lint",
     "clean": "rm -rf packages/*/dist packages/*/node_modules node_modules",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && bun install --no-frozen-lockfile",
     "release": "bash scripts/publish.sh"
   },
   "devDependencies": {
