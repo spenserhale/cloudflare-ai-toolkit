@@ -1,8 +1,6 @@
 # Cloudflare Toolkit
 
-Cloudflare integration tools
-
-A monorepo containing the SDK, CLI, and MCP server for the Cloudflare API.
+Cloudflare integration tools — a typed SDK, a standalone CLI, and an MCP server.
 
 ## Packages
 
@@ -12,40 +10,53 @@ A monorepo containing the SDK, CLI, and MCP server for the Cloudflare API.
 | [`@cloudflare-ai-toolkit/cli`](./packages/cli) | Command-line interface (Stricli) |
 | [`@cloudflare-ai-toolkit/mcp`](./packages/mcp) | MCP server for AI assistants (FastMCP) |
 
-## Installation
+## Install the CLI
 
-### npm (requires Node 20+)
+### Recommended: standalone binary
 
-```bash
-npm install -g @cloudflare-ai-toolkit/cli
-# or: pnpm add -g @cloudflare-ai-toolkit/cli
-# or: bun add -g @cloudflare-ai-toolkit/cli
+No Node.js, no npm, no PATH conflicts. One file.
 
-cloudflare --help
-```
-
-One-off run without installing:
-
-```bash
-npx @cloudflare-ai-toolkit/cli audit logs list --help
-```
-
-### Standalone binary (no Node required)
-
-macOS and Linux:
+**macOS and Linux:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/spenserhale/cloudflare-ai-toolkit/main/scripts/install.sh | sh
 ```
 
-Windows and manual installs: grab the matching binary from the
-[latest release](https://github.com/spenserhale/cloudflare-ai-toolkit/releases/latest)
-and put it on your `PATH`. Available assets: `cloudflare-linux-x64`,
-`cloudflare-linux-arm64`, `cloudflare-darwin-x64`, `cloudflare-darwin-arm64`,
-`cloudflare-windows-x64.exe`. A `.sha256` sits next to each one, and an
-aggregated `SHASUMS256.txt` is attached to the release.
+The script detects your OS + architecture, downloads the matching binary from
+the [latest release](https://github.com/spenserhale/cloudflare-ai-toolkit/releases/latest),
+verifies its SHA256, and installs to `$HOME/.local/bin/cloudflare`. Pin a
+specific version with `CLOUDFLARE_TOOLKIT_VERSION=v0.1.1` or change the install
+directory with `CLOUDFLARE_TOOLKIT_INSTALL=$HOME/bin`.
 
-### Programmatic use (SDK)
+**Windows:** grab `cloudflare-windows-x64.exe` from the
+[latest release](https://github.com/spenserhale/cloudflare-ai-toolkit/releases/latest)
+and put it on your `PATH`.
+
+**Updating:** re-run the install command, or use the built-in:
+
+```bash
+cloudflare upgrade          # install latest
+cloudflare upgrade --check  # check without installing
+```
+
+Available binaries: `cloudflare-linux-{x64,arm64}`, `cloudflare-darwin-{x64,arm64}`,
+`cloudflare-windows-x64.exe`. A `.sha256` sits next to each one; an aggregated
+`SHASUMS256.txt` is attached to the release.
+
+### Alternative: install from npm
+
+Useful inside Node projects or if you want the CLI available via `npx`:
+
+```bash
+npm install -g @cloudflare-ai-toolkit/cli
+# or: bun add -g @cloudflare-ai-toolkit/cli
+# or: pnpm add -g @cloudflare-ai-toolkit/cli
+
+# one-off:
+npx @cloudflare-ai-toolkit/cli audit logs list --help
+```
+
+## Use the SDK in your code
 
 ```bash
 npm install @cloudflare-ai-toolkit/sdk
@@ -59,40 +70,41 @@ const cf = new CloudflareClient({
 });
 ```
 
-## Local development
+## Use the MCP server
 
-```bash
-# Install dependencies
-bun install
+For Claude Desktop and other MCP-compatible hosts. Add to your MCP config:
 
-# Build all packages
-bun run build
-
-# Run the CLI
-bun run dev:cli -- --help
-
-# Run the MCP server (stdio mode for Claude Desktop)
-bun run dev:mcp
+```json
+{
+  "mcpServers": {
+    "cloudflare": {
+      "command": "npx",
+      "args": ["-y", "@cloudflare-ai-toolkit/mcp"],
+      "env": { "CLOUDFLARE_API_TOKEN": "..." }
+    }
+  }
+}
 ```
 
-## Environment Variables
+## Environment variables
 
-```bash
-CLOUDFLARE_API_TOKEN=...       # preferred (Bearer auth)
-CLOUDFLARE_API_KEY=...         # legacy fallback (Global API Key auth)
-CLOUDFLARE_EMAIL=...           # required when using CLOUDFLARE_API_KEY
-CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit-log commands/tools
-CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped commands/tools (DNS, cache purge)
-CLOUDFLARE_BASE_URL=...        # optional override (default https://api.cloudflare.com)
+```
+CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
+CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
+CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
+CLOUDFLARE_ACCOUNT_ID    default for audit-log commands/tools
+CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge)
+CLOUDFLARE_BASE_URL      override (default https://api.cloudflare.com)
 ```
 
-## Implemented Features
+The SDK also walks parent directories looking for a `.env` file.
 
-### Audit logs (v2)
+## Commands
+
+### Audit logs
 
 ```bash
-# List audit logs and filter by actor + action type
-bun run dev:cli -- audit logs list \
+cloudflare audit logs list \
   --since 2026-02-01T00:00:00Z \
   --before 2026-02-02T00:00:00Z \
   --actorEmail alice@example.com \
@@ -102,11 +114,8 @@ bun run dev:cli -- audit logs list \
 ### DNS records
 
 ```bash
-# List DNS records in a zone
-bun run dev:cli -- dns records list <zone-id> --type A --name app.example.com
-
-# Update a DNS record
-bun run dev:cli -- dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
+cloudflare dns records list <zone-id> --type A --name app.example.com
+cloudflare dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
 ```
 
 ### Cache purge
@@ -115,70 +124,64 @@ Destructive purges (`everything`, `prefixes`, `hosts`) prompt for confirmation.
 Pass `--yes` to skip the prompt or to run non-interactively (e.g. in CI).
 
 ```bash
-# Purge everything for a zone (requires confirmation or --yes)
-bun run dev:cli -- cache purge everything --zone-id <zone-id> --yes
+cloudflare cache purge everything --zone-id <zone-id> --yes
+cloudflare cache purge urls https://example.com/a https://example.com/b
+cloudflare cache purge tags my-tag
+cloudflare cache purge prefixes example.com/assets/ --yes
+cloudflare cache purge hosts cdn.example.com --yes
+```
 
-# Purge specific URLs
-bun run dev:cli -- cache purge urls https://example.com/a https://example.com/b
+## Local development
 
-# Purge by cache tag
-bun run dev:cli -- cache purge tags my-tag
-
-# Purge by URL prefix (requires confirmation or --yes)
-bun run dev:cli -- cache purge prefixes example.com/assets/ --yes
-
-# Purge by hostname (requires confirmation or --yes)
-bun run dev:cli -- cache purge hosts cdn.example.com --yes
+```bash
+bun install
+bun run build
+bun run dev:cli -- --help
+bun run dev:mcp
+bun test
 ```
 
 ## Architecture
 
 ```
-packages/sdk/     <-- Types, API client, business logic (foundation)
-    ^       ^
-    |       |
+packages/sdk/           types, API client, business logic (foundation)
+    ^         ^
+    |         |
 packages/cli/   packages/mcp/
-    (Stricli)    (FastMCP)
+(Stricli)       (FastMCP)
 ```
 
-Both the CLI and MCP server are thin wrappers over the SDK. If the REST API
-changes, you update the SDK and both consumers get the fix automatically.
-
-## Development
-
-```bash
-# Run tests across all packages
-bun test
-
-# Build a specific package
-cd packages/sdk && bun run build
-```
-
-## Adding a New API Operation
-
-1. Add types to `packages/sdk/src/types.ts`
-2. Add the client method to `packages/sdk/src/client.ts`
-3. Add a CLI command in `packages/cli/src/commands/`
-4. Add an MCP tool in `packages/mcp/src/tools/`
+CLI and MCP are thin wrappers over the SDK. REST API changes → update the
+SDK → both consumers get the fix.
 
 ## Releasing
 
 Releases are automated via [Changesets](https://github.com/changesets/changesets)
 and GitHub Actions.
 
-1. Make changes, then run `bun changeset` and pick a version bump. Commit the
-   generated file under `.changeset/`.
-2. On merge to `main`, the `Release` workflow opens a "Version Packages" PR.
-3. Merging that PR bumps versions, publishes `@cloudflare-ai-toolkit/sdk`,
-   `@cloudflare-ai-toolkit/cli`, and `@cloudflare-ai-toolkit/mcp` to npm with
-   provenance, and creates a GitHub Release.
-4. The `Binaries` workflow builds standalone Bun-compiled binaries for
-   Linux/macOS/Windows (x64 + arm64) and attaches them to the release.
+1. Make changes, run `bun changeset` and pick a version bump. Commit the file
+   under `.changeset/`.
+2. On push to `main`, the `Release` workflow opens a "Version Packages" PR.
+3. Merging that PR bumps versions, publishes the three packages to npm via
+   `bun publish` (which strips `workspace:` protocol specifiers automatically),
+   and creates a GitHub Release.
+4. The `Binaries` workflow compiles standalone binaries for Linux/macOS/Windows
+   (x64 + arm64) with `bun build --compile --bytecode` and attaches them to the
+   release.
 
 ### One-time repo setup
 
-- Add an `NPM_TOKEN` secret (a granular token with publish scope for the
-  `@cloudflare-ai-toolkit` scope), or configure [npm trusted publishing](https://docs.npmjs.com/trusted-publishers)
-  for this repo and remove the token dependency from the workflow.
+- Add `NPM_TOKEN` as a repo secret. Use a Classic Automation token (bypasses
+  2FA in CI) or a Granular Access Token scoped to `@cloudflare-ai-toolkit` with
+  publish permission.
 - Ensure the `@cloudflare-ai-toolkit` scope on npm exists and you're an owner.
 - The default `GITHUB_TOKEN` handles release creation and asset uploads.
+
+### Trade-off on npm provenance
+
+We publish via `bun publish` (not `npm publish`) because Bun rewrites our
+`workspace:` internal-dependency specifiers on publish; npm does not. Today
+that means **no npm provenance attestations** on the published tarballs —
+[Bun doesn't yet support npm OIDC / sigstore](https://github.com/oven-sh/bun/issues/22423).
+The standalone binaries remain the primary distribution path and carry their
+own SHA256 verification against the GitHub Release.

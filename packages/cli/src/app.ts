@@ -14,6 +14,7 @@ import {
 } from "./commands/cache-purge.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
+import { upgradeCommand } from "./commands/upgrade.js";
 
 const resourceRoutes = buildRouteMap({
   routes: {
@@ -92,6 +93,7 @@ const routes = buildRouteMap({
     audit: auditRoutes,
     cache: cacheRoutes,
     dns: dnsRoutes,
+    upgrade: upgradeCommand,
   },
   docs: {
     brief: "Cloudflare integration tools",
