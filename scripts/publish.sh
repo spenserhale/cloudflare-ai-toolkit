@@ -18,12 +18,13 @@ cd "$(dirname "$0")/.."
 
 PACKAGES=(packages/sdk packages/cli packages/mcp)
 
-# Resync the lockfile against the (possibly just-bumped) package.json versions
-# before we build. `bun publish` resolves `workspace:*` by consulting the
-# lockfile, so if the lockfile still has stale versions we'd publish cli@N
-# pointing at sdk@N-1. `--no-frozen-lockfile` lets it adjust without
-# complaining about the diff.
-bun install --no-frozen-lockfile
+# Resync the lockfile's workspace package version records against the
+# (possibly just-bumped) package.json versions before we build. `bun publish`
+# resolves `workspace:*` by consulting the lockfile, not the live package.json
+# (upstream bugs oven-sh/bun#18906 and #20477). Without this, publishing cli@N
+# would point at sdk@N-1. `bun install` / `--no-frozen-lockfile` / `--force`
+# do NOT refresh these records — only `bun update --lockfile-only` does.
+bun update --lockfile-only
 
 bun run build
 

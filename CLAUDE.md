@@ -24,11 +24,16 @@ locally; use `node packages/cli/dist/bin.js --help` for smoke tests.
   that rewrites `workspace:*` specifiers to concrete versions on our tarballs.
   Don't switch back to `changeset publish` — it leaves the protocol in the
   published `package.json`, which breaks `npm install` for users.
-- `bun publish` resolves workspace dep versions from `bun.lock`, not
-  `package.json`. After `changeset version` bumps packages, the lockfile must
-  be refreshed with `bun install --no-frozen-lockfile` or cli/mcp will publish
-  with a stale `sdk` dep version. This is wired into the root `version` script
-  and `scripts/publish.sh`.
+- `bun publish` resolves workspace dep versions from `bun.lock`, not live
+  `package.json`. After `changeset version` bumps packages, the lockfile's
+  workspace *version records* (the `"name": "@x/y", "version": "..."` entries)
+  must be refreshed or cli/mcp will publish with a stale `sdk` dep version.
+  **`bun install`, `bun install --force`, and `bun install --no-frozen-lockfile`
+  all silently skip this refresh** when only workspace sibling versions changed
+  — a known Bun regression since 1.2.8 ([#18906](https://github.com/oven-sh/bun/issues/18906),
+  [#20477](https://github.com/oven-sh/bun/issues/20477)). The only command that
+  works is `bun update --lockfile-only`. This is wired into the root `version`
+  script and `scripts/publish.sh`. Remove it once the Bun bugs are fixed.
 - `scripts/publish.sh` must create per-package git tags (`git tag <name>@<version>`)
   after each `bun publish`. The Changesets action pushes them afterwards and
   fails with `src refspec ... does not match any` if they aren't local.
