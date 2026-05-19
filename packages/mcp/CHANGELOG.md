@@ -1,5 +1,20 @@
 # @cloudflare-ai-toolkit/mcp
 
+## 0.2.0
+
+### Minor Changes
+
+- [#4](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/4) [`37e1ee4`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/37e1ee4fe70f0882b6be057cd05dfcd8839c7f0b) Thanks [@spenserhale](https://github.com/spenserhale)! - Add Cloudflare Log Explorer support across SDK, CLI, and MCP.
+
+  - **SDK**: new `queryLogExplorer(params, overrides?)` and `enableLogExplorerDataset(params, overrides?)` methods on `CloudflareClient`. Scope resolves from the `scope` parameter (`"account" | "zone"`), then falls back to `zoneId` > `accountId` from config. Adds Zod schemas (`QueryLogExplorerParams`, `QueryLogExplorerResult`, `LogExplorerDataset`, etc.) and permission hints for `/logs/explorer/...` routes.
+  - **CLI**: new `cloudflare log-explorer query` (accepts `--sql`, `--file`, or `--stdin`) and `cloudflare log-explorer datasets enable <dataset>` commands. TOON output by default, `--json` for machine-readable; `--scope`, `--account-id`, `--zone-id` overrides supported.
+  - **MCP**: new `query_log_explorer` and `enable_log_explorer_dataset` tools registered on the FastMCP server.
+
+### Patch Changes
+
+- Updated dependencies [[`37e1ee4`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/37e1ee4fe70f0882b6be057cd05dfcd8839c7f0b)]:
+  - @cloudflare-ai-toolkit/sdk@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes
