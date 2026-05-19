@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-native-cli-creator": {
+      "source": "spenserhale/skills",
+      "sourceType": "github",
+      "skillPath": "skills/agent-native-cli-creator/SKILL.md",
+      "computedHash": "d5f34571a133cace5c13eb83fac773e60c8d24cfe622b5d86d9525015a06aa53"
+    }
+  }
+}

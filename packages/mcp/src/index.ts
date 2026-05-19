@@ -5,6 +5,7 @@ import { registerResourceTools } from "./tools/resources.js";
 import { registerAuditTools } from "./tools/audit.js";
 import { registerCacheTools } from "./tools/cache.js";
 import { registerDnsTools } from "./tools/dns.js";
+import { registerLogExplorerTools } from "./tools/log-explorer.js";
 
 const server = new FastMCP({
   name: "cloudflare-ai-toolkit",
@@ -15,6 +16,7 @@ registerResourceTools(server);
 registerAuditTools(server);
 registerCacheTools(server);
 registerDnsTools(server);
+registerLogExplorerTools(server);
 
 server.start({
   transportType: "stdio",

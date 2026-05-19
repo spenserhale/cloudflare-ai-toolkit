@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { registerAuditTools } from "./audit.js";
 import { registerCacheTools } from "./cache.js";
 import { registerDnsTools } from "./dns.js";
+import { registerLogExplorerTools } from "./log-explorer.js";
 import { registerResourceTools } from "./resources.js";
 
 interface FakeServer {
@@ -26,6 +27,7 @@ describe("MCP tool registration", () => {
     registerAuditTools(server as unknown as Parameters<typeof registerAuditTools>[0]);
     registerCacheTools(server as unknown as Parameters<typeof registerCacheTools>[0]);
     registerDnsTools(server as unknown as Parameters<typeof registerDnsTools>[0]);
+    registerLogExplorerTools(server as unknown as Parameters<typeof registerLogExplorerTools>[0]);
 
     expect(server.tools).toEqual(
       expect.arrayContaining([
@@ -38,6 +40,8 @@ describe("MCP tool registration", () => {
         "purge_cache_by_tags",
         "list_dns_records",
         "update_dns_record",
+        "query_log_explorer",
+        "enable_log_explorer_dataset",
       ])
     );
   });

@@ -29,6 +29,12 @@ export type {
   PurgeCacheResult,
   TokenVerificationResult,
   ErrorResponse,
+  LogExplorerScope,
+  QueryLogExplorerParams,
+  LogExplorerRow,
+  QueryLogExplorerResult,
+  LogExplorerDataset,
+  EnableLogExplorerDatasetParams,
 } from "./types.js";
 export {
   AuditLogListResultSchema,
@@ -47,4 +53,10 @@ export {
   CreateResourceParamsSchema,
   PurgeCacheResultSchema,
   ErrorResponseSchema,
+  LogExplorerScopeSchema,
+  QueryLogExplorerParamsSchema,
+  LogExplorerRowSchema,
+  QueryLogExplorerResultSchema,
+  LogExplorerDatasetSchema,
+  EnableLogExplorerDatasetParamsSchema,
 } from "./types.js";
