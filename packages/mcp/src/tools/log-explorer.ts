@@ -36,9 +36,13 @@ export function registerLogExplorerTools(server: FastMCP) {
       format: outputFormatSchema.default("toon").describe("Output format: toon or json"),
     }),
     execute: async (args) => {
+      const sql = args.sql.trim();
+      if (sql.length === 0) {
+        throw new Error("SQL query is empty.");
+      }
       const client = getClient();
       const result = await client.queryLogExplorer(
-        { sql: args.sql, scope: args.scope },
+        { sql, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
       );
       return renderQuery(result, args.format);
@@ -59,9 +63,13 @@ export function registerLogExplorerTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
+      const dataset = args.dataset.trim();
+      if (dataset.length === 0) {
+        throw new Error("Dataset name is empty.");
+      }
       const client = getClient();
       const result = await client.enableLogExplorerDataset(
-        { dataset: args.dataset, scope: args.scope },
+        { dataset, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
       );
       return JSON.stringify(result, null, 2);

@@ -105,7 +105,7 @@ describe("runLogExplorerQuery", () => {
 
     await expect(runLogExplorerQuery(baseFlags(), deps)).rejects.toThrow("EXIT:1");
     expect(error).toHaveBeenCalledWith(
-      expect.stringContaining("Provide a SQL query")
+      expect.stringContaining("Provide SQL via --sql")
     );
   });
 

@@ -116,11 +116,11 @@ async function resolveSql(
   );
   if (sources.length === 0) {
     throw new Error(
-      "Provide a SQL query as a positional argument, --file <path>, or --stdin."
+      "Provide SQL via --sql <query>, --file <path>, or --stdin."
     );
   }
   if (sources.length > 1) {
-    throw new Error("Pass SQL via exactly one of: positional argument, --file, or --stdin.");
+    throw new Error("Pass SQL via exactly one of: --sql <query>, --file <path>, or --stdin.");
   }
 
   let sql: string;

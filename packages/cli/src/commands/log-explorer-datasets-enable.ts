@@ -81,10 +81,14 @@ export async function runEnableLogExplorerDataset(
   deps: EnableDatasetDeps = defaultDeps
 ): Promise<void> {
   try {
+    const datasetName = dataset.trim();
+    if (datasetName.length === 0) {
+      throw new Error("Dataset name is empty.");
+    }
     const config = deps.resolveConfig();
     const client = deps.createClient(config);
     const result = await client.enableLogExplorerDataset(
-      { dataset, scope: flags.scope },
+      { dataset: datasetName, scope: flags.scope },
       { accountId: flags.accountId, zoneId: flags.zoneId }
     );
 
