@@ -3,10 +3,15 @@ import type {
   CloudflareAuth,
   CloudflareConfig,
   DnsRecord,
+  EnableLogExplorerDatasetParams,
   ListAuditLogsParams,
   ListDnsRecordsResult,
   ListDnsRecordsParams,
+  LogExplorerDataset,
+  LogExplorerScope,
   PurgeCacheResult,
+  QueryLogExplorerParams,
+  QueryLogExplorerResult,
   Resource,
   ListResourcesParams,
   CreateResourceParams,
@@ -22,9 +27,13 @@ import {
   CloudflareConfigSchema,
   DnsRecordResultInfoSchema,
   DnsRecordSchema,
+  EnableLogExplorerDatasetParamsSchema,
   ListAuditLogsParamsSchema,
   ListDnsRecordsParamsSchema,
+  LogExplorerDatasetSchema,
+  LogExplorerRowSchema,
   PurgeCacheResultSchema,
+  QueryLogExplorerParamsSchema,
   ResourceSchema,
   PaginatedResponseSchema,
   ErrorResponseSchema,
@@ -76,6 +85,19 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     requiredPermissions: ["Cache Purge"],
     docsUrl:
       "https://developers.cloudflare.com/api/resources/cache/methods/purge/",
+  },
+  {
+    method: "POST",
+    pathPattern:
+      /^\/client\/v4\/(accounts|zones)\/[^/]+\/logs\/explorer\/query\/sql$/u,
+    requiredPermissions: ["Logs Read"],
+    docsUrl: "https://developers.cloudflare.com/log-explorer/api/",
+  },
+  {
+    method: "POST",
+    pathPattern: /^\/client\/v4\/(accounts|zones)\/[^/]+\/logs\/explorer\/datasets$/u,
+    requiredPermissions: ["Logs Edit"],
+    docsUrl: "https://developers.cloudflare.com/log-explorer/manage-datasets/",
   },
 ];
 
@@ -457,6 +479,84 @@ export class CloudflareClient {
     zoneId?: string
   ): Promise<PurgeCacheResult> {
     return this.purgeCache({ hosts }, zoneId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Log Explorer
+  // -------------------------------------------------------------------------
+
+  private resolveLogExplorerBase(
+    scope: LogExplorerScope | undefined,
+    overrides: { accountId?: string; zoneId?: string }
+  ): { base: string; scope: LogExplorerScope } {
+    const accountId = overrides.accountId ?? this.config.accountId;
+    const zoneId = overrides.zoneId ?? this.config.zoneId;
+
+    if (scope === "account") {
+      if (!accountId) {
+        throw new CloudflareError(
+          "Account scope requires accountId. Provide --account-id or set CLOUDFLARE_ACCOUNT_ID.",
+          "CONFIG_ERROR"
+        );
+      }
+      return { base: `/client/v4/accounts/${accountId}`, scope: "account" };
+    }
+
+    if (scope === "zone") {
+      if (!zoneId) {
+        throw new CloudflareError(
+          "Zone scope requires zoneId. Provide --zone-id or set CLOUDFLARE_ZONE_ID.",
+          "CONFIG_ERROR"
+        );
+      }
+      return { base: `/client/v4/zones/${zoneId}`, scope: "zone" };
+    }
+
+    if (zoneId) {
+      return { base: `/client/v4/zones/${zoneId}`, scope: "zone" };
+    }
+    if (accountId) {
+      return { base: `/client/v4/accounts/${accountId}`, scope: "account" };
+    }
+
+    throw new CloudflareError(
+      "Log Explorer requires either a zone or account ID. Set CLOUDFLARE_ZONE_ID or CLOUDFLARE_ACCOUNT_ID, or pass --zone-id / --account-id.",
+      "CONFIG_ERROR"
+    );
+  }
+
+  async queryLogExplorer(
+    params: QueryLogExplorerParams,
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<QueryLogExplorerResult> {
+    const parsed = QueryLogExplorerParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const rows = await this.requestResult<unknown>(
+      "POST",
+      `${base}/logs/explorer/query/sql`,
+      { query: { query: parsed.sql } }
+    );
+
+    return {
+      rows: z.array(LogExplorerRowSchema).parse(rows),
+    };
+  }
+
+  async enableLogExplorerDataset(
+    params: EnableLogExplorerDatasetParams,
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<LogExplorerDataset> {
+    const parsed = EnableLogExplorerDatasetParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `${base}/logs/explorer/datasets`,
+      { body: { dataset: parsed.dataset } }
+    );
+
+    return LogExplorerDatasetSchema.parse(result);
   }
 
   // -------------------------------------------------------------------------

@@ -14,6 +14,8 @@ import {
 } from "./commands/cache-purge.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
+import { logExplorerQueryCommand } from "./commands/log-explorer-query.js";
+import { enableLogExplorerDatasetCommand } from "./commands/log-explorer-datasets-enable.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 
 const resourceRoutes = buildRouteMap({
@@ -87,12 +89,32 @@ const dnsRoutes = buildRouteMap({
   },
 });
 
+const logExplorerDatasetsRoutes = buildRouteMap({
+  routes: {
+    enable: enableLogExplorerDatasetCommand,
+  },
+  docs: {
+    brief: "Manage Log Explorer datasets",
+  },
+});
+
+const logExplorerRoutes = buildRouteMap({
+  routes: {
+    query: logExplorerQueryCommand,
+    datasets: logExplorerDatasetsRoutes,
+  },
+  docs: {
+    brief: "Run Log Explorer SQL queries and manage datasets",
+  },
+});
+
 const routes = buildRouteMap({
   routes: {
     resources: resourceRoutes,
     audit: auditRoutes,
     cache: cacheRoutes,
     dns: dnsRoutes,
+    "log-explorer": logExplorerRoutes,
     upgrade: upgradeCommand,
   },
   docs: {

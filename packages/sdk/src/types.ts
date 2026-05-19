@@ -290,3 +290,49 @@ export const PurgeCacheResultSchema = z
   .passthrough();
 
 export type PurgeCacheResult = z.infer<typeof PurgeCacheResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Log Explorer schemas
+// ---------------------------------------------------------------------------
+
+export const LogExplorerScopeSchema = z.enum(["account", "zone"]);
+export type LogExplorerScope = z.infer<typeof LogExplorerScopeSchema>;
+
+export const QueryLogExplorerParamsSchema = z.object({
+  sql: z.string().min(1, "SQL query is required"),
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type QueryLogExplorerParams = z.infer<typeof QueryLogExplorerParamsSchema>;
+
+export const LogExplorerRowSchema = z.record(z.unknown());
+export type LogExplorerRow = z.infer<typeof LogExplorerRowSchema>;
+
+export const QueryLogExplorerResultSchema = z.object({
+  rows: z.array(LogExplorerRowSchema),
+});
+
+export type QueryLogExplorerResult = z.infer<typeof QueryLogExplorerResultSchema>;
+
+export const LogExplorerDatasetSchema = z
+  .object({
+    dataset: z.string(),
+    object_type: z.string(),
+    object_id: z.string(),
+    dataset_id: z.string(),
+    enabled: z.boolean(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+  })
+  .passthrough();
+
+export type LogExplorerDataset = z.infer<typeof LogExplorerDatasetSchema>;
+
+export const EnableLogExplorerDatasetParamsSchema = z.object({
+  dataset: z.string().min(1, "Dataset name is required"),
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type EnableLogExplorerDatasetParams = z.infer<
+  typeof EnableLogExplorerDatasetParamsSchema
+>;
