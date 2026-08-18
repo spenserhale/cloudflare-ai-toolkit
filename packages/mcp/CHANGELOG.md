@@ -1,5 +1,12 @@
 # @cloudflare-ai-toolkit/mcp
 
+## 0.4.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudflare-ai-toolkit/sdk@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

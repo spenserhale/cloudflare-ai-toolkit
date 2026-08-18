@@ -1,5 +1,21 @@
 # @cloudflare-ai-toolkit/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- [`6b421a7`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/6b421a73bebe913aeac121f937de82d91552e916) Thanks [@spenserhale](https://github.com/spenserhale)! - Make `cloudflare upgrade` install-method aware.
+
+  - Standalone binary installs (from `scripts/install.sh`) self-update from GitHub Releases as before (SHA256-verified).
+  - npm/bun/pnpm global installs are now detected from the CLI's real path inside global `node_modules` and upgraded through their owning package manager: `npm install -g @cloudflare-ai-toolkit/cli@<version>`, `bun add -g`, or `pnpm add -g`. Previously these installs exited with an error telling the user to upgrade manually.
+  - `--check` reports update availability for both install methods without installing.
+  - Unrecognized layouts (source checkouts) and yarn installs fall back to actionable manual instructions instead of a dead end.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudflare-ai-toolkit/sdk@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
