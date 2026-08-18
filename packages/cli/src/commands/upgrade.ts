@@ -1,16 +1,26 @@
 import { buildCommand } from "@stricli/core";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import pkg from "../../package.json" with { type: "json" };
 
 const REPO = "spenserhale/cloudflare-ai-toolkit";
+const NPM_PACKAGE = "@cloudflare-ai-toolkit/cli";
 
 interface UpgradeFlags {
   readonly check: boolean;
   readonly force: boolean;
   readonly version: string | undefined;
+}
+
+export type InstallMethod = "binary" | "npm" | "bun" | "pnpm" | "yarn" | "unknown";
+
+export interface PackageManagerSpawnResult {
+  readonly command: string;
+  readonly code: number;
 }
 
 export interface UpgradeDeps {
@@ -19,11 +29,16 @@ export interface UpgradeDeps {
   readonly exit: (code: number) => never;
   readonly fetch: typeof fetch;
   readonly execPath: string;
+  readonly cliEntryPath: string;
   readonly currentVersion: string;
   readonly platform: NodeJS.Platform;
   readonly arch: string;
   readonly writeBinary: (path: string, bytes: Buffer) => Promise<void>;
   readonly replaceBinary: (target: string, tempSource: string) => Promise<void>;
+  readonly spawnPackageManager: (
+    command: string,
+    args: readonly string[]
+  ) => Promise<PackageManagerSpawnResult>;
 }
 
 const defaultDeps: UpgradeDeps = {
@@ -32,6 +47,7 @@ const defaultDeps: UpgradeDeps = {
   exit: (code) => process.exit(code),
   fetch: fetch as typeof fetch,
   execPath: process.execPath,
+  cliEntryPath: fileURLToPath(import.meta.url),
   currentVersion: pkg.version,
   platform: process.platform,
   arch: process.arch,
@@ -56,6 +72,17 @@ const defaultDeps: UpgradeDeps = {
       await rename(tempSource, target);
     }
   },
+  spawnPackageManager: (command, args) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(command, [...args], {
+        stdio: "inherit",
+        shell: process.platform === "win32",
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        resolve({ command: [command, ...args].join(" "), code: code ?? 1 });
+      });
+    }),
 };
 
 export function resolveAssetName(platform: string, arch: string): string | null {
@@ -74,6 +101,34 @@ export function isCompiledBinary(execPath: string): boolean {
   const name = basename(execPath).replace(/\.exe$/i, "");
   return name === "cloudflare";
 }
+
+/**
+ * Detect how the CLI was installed. Binary installs self-upgrade from GitHub
+ * Releases; package-manager installs (detected from the CLI's real path inside
+ * global node_modules) delegate to their owning package manager.
+ */
+export function detectInstallMethod(
+  execPath: string,
+  cliEntryPath: string
+): InstallMethod {
+  if (isCompiledBinary(execPath)) return "binary";
+
+  // Normalize separators so Windows paths match too.
+  const path = cliEntryPath.replaceAll("\\", "/");
+  if (path.includes(".bun/")) return "bun";
+  if (path.includes(".pnpm/") || path.includes("pnpm-global")) return "pnpm";
+  if (path.includes(".yarn/") || path.includes("yarn/global")) return "yarn";
+  if (path.includes(`node_modules/${NPM_PACKAGE}/`)) return "npm";
+  return "unknown";
+}
+
+const PACKAGE_MANAGER_COMMANDS: Partial<
+  Record<InstallMethod, { install: string; args: (spec: string) => string[] }>
+> = {
+  npm: { install: "npm", args: (spec) => ["install", "-g", spec] },
+  bun: { install: "bun", args: (spec) => ["add", "-g", spec] },
+  pnpm: { install: "pnpm", args: (spec) => ["add", "-g", spec] },
+};
 
 export function compareSemver(a: string, b: string): number {
   const parse = (v: string) => v.replace(/^v/, "").split(".").map((n) => Number(n) || 0);
@@ -128,17 +183,86 @@ async function downloadAndVerify(
   return bytes;
 }
 
-export async function runUpgrade(deps: UpgradeDeps, flags: UpgradeFlags): Promise<void> {
-  if (!isCompiledBinary(deps.execPath)) {
-    deps.error("`cloudflare upgrade` is only supported on the standalone binary install.");
-    deps.error("");
-    deps.error("You appear to be running via Node.js / a package manager. Update via:");
-    deps.error("  npm install -g @cloudflare-ai-toolkit/cli@latest");
-    deps.error("  bun add -g @cloudflare-ai-toolkit/cli@latest");
-    deps.error("");
-    deps.error("Or switch to the standalone binary:");
-    deps.error("  curl -fsSL https://raw.githubusercontent.com/spenserhale/cloudflare-ai-toolkit/main/scripts/install.sh | sh");
+function manualNpmHint(deps: UpgradeDeps): void {
+  deps.error("Update manually with your package manager:");
+  deps.error("  npm install -g @cloudflare-ai-toolkit/cli@latest");
+  deps.error("  bun add -g @cloudflare-ai-toolkit/cli@latest");
+  deps.error("  pnpm add -g @cloudflare-ai-toolkit/cli@latest");
+  deps.error("");
+  deps.error("Or switch to the self-upgrading standalone binary:");
+  deps.error(
+    "  curl -fsSL https://raw.githubusercontent.com/spenserhale/cloudflare-ai-toolkit/main/scripts/install.sh | sh"
+  );
+}
+
+async function upgradeViaPackageManager(
+  deps: UpgradeDeps,
+  method: InstallMethod,
+  version: string,
+  latestVersion: string,
+  flags: UpgradeFlags
+): Promise<void> {
+  const command = PACKAGE_MANAGER_COMMANDS[method];
+  if (!command) {
+    // Unreachable: runUpgrade screens unsupported methods before fetching.
+    manualNpmHint(deps);
     deps.exit(1);
+  }
+
+  deps.log(`Current: ${deps.currentVersion}`);
+  deps.log(`Latest:  ${latestVersion}`);
+
+  if (flags.check) {
+    deps.log(
+      compareSemver(deps.currentVersion, latestVersion) >= 0
+        ? "You are on the latest version."
+        : `Update available. Run \`cloudflare upgrade\` to install (via ${method}).`
+    );
+    return;
+  }
+
+  if (!flags.force && compareSemver(deps.currentVersion, latestVersion) >= 0) {
+    deps.log("Already on the latest version.");
+    return;
+  }
+
+  const spec = `${NPM_PACKAGE}@${version}`;
+  deps.log(`Upgrading via ${method}: ${command.install} ${command.args(spec).join(" ")} ...`);
+  const result = await deps.spawnPackageManager(command.install, command.args(spec));
+  if (result.code !== 0) {
+    deps.error(`\`${result.command}\` exited with code ${result.code}.`);
+    deps.exit(1);
+  }
+  deps.log(`Upgraded to ${version}.`);
+}
+
+export async function runUpgrade(deps: UpgradeDeps, flags: UpgradeFlags): Promise<void> {
+  const method = detectInstallMethod(deps.execPath, deps.cliEntryPath);
+
+  if (method !== "binary") {
+    if (method === "unknown") {
+      deps.error(
+        "Could not determine how the CLI was installed (not a standalone binary, and not a global npm/bun/pnpm install)."
+      );
+      deps.error("");
+      manualNpmHint(deps);
+      deps.exit(1);
+    }
+
+    // Bail before hitting the network for managers we can't drive anyway.
+    if (!PACKAGE_MANAGER_COMMANDS[method]) {
+      deps.error(
+        `This CLI was installed with '${method}', which \`cloudflare upgrade\` cannot drive automatically.`
+      );
+      manualNpmHint(deps);
+      deps.exit(1);
+    }
+
+    const latest = flags.version
+      ? { tag: "", version: flags.version.replace(/^v/, "") }
+      : await fetchLatestRelease(deps);
+    await upgradeViaPackageManager(deps, method, latest.version, latest.version, flags);
+    return;
   }
 
   const asset = resolveAssetName(deps.platform, deps.arch);
@@ -187,7 +311,8 @@ export async function runUpgrade(deps: UpgradeDeps, flags: UpgradeFlags): Promis
 
 export const upgradeCommand = buildCommand({
   docs: {
-    brief: "Upgrade the CLI to the latest release",
+    brief:
+      "Upgrade the CLI to the latest release (binary installs self-update from GitHub; npm/bun/pnpm installs upgrade via their package manager)",
   },
   parameters: {
     flags: {

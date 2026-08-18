@@ -39,6 +39,11 @@ cloudflare upgrade          # install latest
 cloudflare upgrade --check  # check without installing
 ```
 
+`cloudflare upgrade` knows how the CLI was installed: standalone binaries
+self-update from GitHub Releases (SHA256-verified), while npm/bun/pnpm global
+installs upgrade through their own package manager
+(`npm install -g`, `bun add -g`, or `pnpm add -g`).
+
 Available binaries: `cloudflare-linux-{x64,arm64}`, `cloudflare-darwin-{x64,arm64}`,
 `cloudflare-windows-x64.exe`. A `.sha256` sits next to each one; an aggregated
 `SHASUMS256.txt` is attached to the release.

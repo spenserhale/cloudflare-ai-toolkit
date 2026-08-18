@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   compareSemver,
+  detectInstallMethod,
   isCompiledBinary,
   resolveAssetName,
   runUpgrade,
@@ -16,13 +17,22 @@ function makeDeps(overrides: Partial<UpgradeDeps> = {}): UpgradeDeps {
     }) as unknown as (code: number) => never,
     fetch: vi.fn() as unknown as typeof fetch,
     execPath: "/usr/local/bin/cloudflare",
+    cliEntryPath:
+      "/usr/local/lib/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js",
     currentVersion: "0.1.0",
     platform: "linux",
     arch: "x64",
     writeBinary: vi.fn(async () => {}),
     replaceBinary: vi.fn(async () => {}),
+    spawnPackageManager: vi.fn(async () => ({ command: "ran", code: 0 })),
     ...overrides,
   };
+}
+
+function latestReleaseMock(tag: string) {
+  return vi.fn(async () =>
+    new Response(JSON.stringify({ tag_name: tag }), { status: 200 }),
+  ) as unknown as typeof fetch;
 }
 
 describe("compareSemver", () => {
@@ -68,18 +78,194 @@ describe("isCompiledBinary", () => {
   });
 });
 
-describe("runUpgrade", () => {
-  it("refuses when not running as compiled binary", async () => {
-    const deps = makeDeps({ execPath: "/usr/bin/node" });
+describe("detectInstallMethod", () => {
+  const node = "/usr/bin/node";
+
+  it("detects the standalone binary", () => {
+    expect(detectInstallMethod("/usr/local/bin/cloudflare", node)).toBe("binary");
+    expect(detectInstallMethod("C:/bin/cloudflare.exe", node)).toBe("binary");
+  });
+
+  it("detects bun global installs", () => {
+    expect(
+      detectInstallMethod(
+        node,
+        "/home/u/.bun/install/global/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js"
+      )
+    ).toBe("bun");
+  });
+
+  it("detects pnpm global installs", () => {
+    expect(
+      detectInstallMethod(
+        node,
+        "/home/u/.local/share/pnpm/global/5/.pnpm/@cloudflare-ai-toolkit+cli@0.2.0/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js"
+      )
+    ).toBe("pnpm");
+  });
+
+  it("detects npm global installs", () => {
+    expect(
+      detectInstallMethod(
+        node,
+        "/usr/local/lib/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js"
+      )
+    ).toBe("npm");
+  });
+
+  it("returns unknown for source checkouts and yarn", () => {
+    expect(detectInstallMethod(node, "/repo/packages/cli/dist/bin.js")).toBe("unknown");
+    expect(
+      detectInstallMethod(
+        node,
+        "/home/u/.config/yarn/global/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js"
+      )
+    ).toBe("yarn");
+  });
+});
+
+describe("runUpgrade (package manager installs)", () => {
+  const npmEntry = "/usr/local/lib/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js";
+
+  it("upgrades npm installs via npm install -g", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "npm install -g x", code: 0 }));
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath: npmEntry,
+      fetch: latestReleaseMock("v0.2.0"),
+      spawnPackageManager,
+    });
+    await runUpgrade(deps, { check: false, force: false, version: undefined });
+
+    expect(spawnPackageManager).toHaveBeenCalledWith("npm", [
+      "install",
+      "-g",
+      "@cloudflare-ai-toolkit/cli@0.2.0",
+    ]);
+    expect(deps.replaceBinary).not.toHaveBeenCalled();
+    expect(deps.log).toHaveBeenCalledWith("Upgraded to 0.2.0.");
+  });
+
+  it("upgrades bun installs via bun add -g", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "bun add -g x", code: 0 }));
+    const deps = makeDeps({
+      execPath: "/usr/local/bin/bun",
+      cliEntryPath:
+        "/home/u/.bun/install/global/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js",
+      fetch: latestReleaseMock("v0.2.0"),
+      spawnPackageManager,
+    });
+    await runUpgrade(deps, { check: false, force: false, version: undefined });
+
+    expect(spawnPackageManager).toHaveBeenCalledWith("bun", [
+      "add",
+      "-g",
+      "@cloudflare-ai-toolkit/cli@0.2.0",
+    ]);
+  });
+
+  it("upgrades pnpm installs via pnpm add -g", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "pnpm add -g x", code: 0 }));
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath:
+        "/home/u/.local/share/pnpm/global/5/.pnpm/@cloudflare-ai-toolkit+cli@0.2.0/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js",
+      fetch: latestReleaseMock("v0.2.0"),
+      spawnPackageManager,
+    });
+    await runUpgrade(deps, { check: false, force: false, version: undefined });
+
+    expect(spawnPackageManager).toHaveBeenCalledWith("pnpm", [
+      "add",
+      "-g",
+      "@cloudflare-ai-toolkit/cli@0.2.0",
+    ]);
+  });
+
+  it("honors --version for package manager installs", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "npm install -g x", code: 0 }));
+    const fetchMock = vi.fn() as unknown as typeof fetch;
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath: npmEntry,
+      fetch: fetchMock,
+      spawnPackageManager,
+    });
+    await runUpgrade(deps, { check: false, force: true, version: "0.1.1" });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(spawnPackageManager).toHaveBeenCalledWith("npm", [
+      "install",
+      "-g",
+      "@cloudflare-ai-toolkit/cli@0.1.1",
+    ]);
+  });
+
+  it("reports update-available in --check mode without spawning", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "ran", code: 0 }));
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath: npmEntry,
+      fetch: latestReleaseMock("v0.2.0"),
+      spawnPackageManager,
+    });
+    await runUpgrade(deps, { check: true, force: false, version: undefined });
+
+    expect(deps.log).toHaveBeenCalledWith(
+      "Update available. Run `cloudflare upgrade` to install (via npm)."
+    );
+    expect(spawnPackageManager).not.toHaveBeenCalled();
+  });
+
+  it("surfaces package manager failures", async () => {
+    const spawnPackageManager = vi.fn(async () => ({ command: "npm install -g x", code: 1 }));
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath: npmEntry,
+      fetch: latestReleaseMock("v0.2.0"),
+      spawnPackageManager,
+    });
     await expect(
-      runUpgrade(deps, { check: false, force: false, version: undefined }),
+      runUpgrade(deps, { check: false, force: false, version: undefined })
     ).rejects.toThrow("exit called");
-    expect(deps.exit).toHaveBeenCalledWith(1);
     expect(deps.error).toHaveBeenCalledWith(
-      expect.stringContaining("only supported on the standalone binary"),
+      expect.stringContaining("exited with code 1")
     );
   });
 
+  it("refuses with manual instructions when the install method is unknown", async () => {
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath: "/repo/packages/cli/dist/bin.js",
+    });
+    await expect(
+      runUpgrade(deps, { check: false, force: false, version: undefined })
+    ).rejects.toThrow("exit called");
+    expect(deps.exit).toHaveBeenCalledWith(1);
+    expect(deps.error).toHaveBeenCalledWith(
+      expect.stringContaining("Could not determine how the CLI was installed")
+    );
+    expect(deps.error).toHaveBeenCalledWith(
+      expect.stringContaining("npm install -g @cloudflare-ai-toolkit/cli@latest")
+    );
+  });
+
+  it("refuses with manual instructions for yarn installs", async () => {
+    const deps = makeDeps({
+      execPath: "/usr/bin/node",
+      cliEntryPath:
+        "/home/u/.config/yarn/global/node_modules/@cloudflare-ai-toolkit/cli/dist/bin.js",
+    });
+    await expect(
+      runUpgrade(deps, { check: false, force: false, version: undefined })
+    ).rejects.toThrow("exit called");
+    expect(deps.error).toHaveBeenCalledWith(
+      expect.stringContaining("cannot drive automatically")
+    );
+  });
+});
+
+describe("runUpgrade", () => {
   it("refuses when platform has no prebuilt binary", async () => {
     const deps = makeDeps({ platform: "freebsd" as NodeJS.Platform });
     await expect(

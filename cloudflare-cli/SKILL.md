@@ -66,7 +66,7 @@ cloudflare log-explorer datasets enable <dataset>      # turn on a Log Explorer 
 cloudflare log-explorer datasets get <dataset-id>      # field config, filter, ingest state
 cloudflare log-explorer datasets update <dataset-id> --enabled false
 cloudflare log-explorer datasets delete <dataset-id> --yes
-cloudflare upgrade                                     # self-update from GitHub Releases
+cloudflare upgrade                                     # self-update: binary→GitHub Releases, npm/bun/pnpm→package manager
 ```
 
 The list above is a summary — run `cloudflare <cmd> --help` for the actual flag set on each.

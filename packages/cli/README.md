@@ -88,6 +88,8 @@ cloudflare log-explorer datasets update <dataset-id> --enabled true|false [--fie
 cloudflare log-explorer datasets delete <dataset-id> [--yes]
 
 cloudflare upgrade [--check] [--force] [--version <version>]
+                   # binary installs self-update from GitHub Releases;
+                   # npm/bun/pnpm installs upgrade via their package manager
 ```
 
 Run `cloudflare <command> --help` for full flag docs.
