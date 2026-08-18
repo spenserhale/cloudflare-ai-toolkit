@@ -233,3 +233,118 @@ describe("CloudflareClient.getCustomHostname", () => {
     }
   });
 });
+
+const HOSTNAME_RESULT = {
+  id: "ch-1",
+  hostname: "app.example.com",
+  status: "pending",
+  ssl: { id: "cert-1", status: "pending_validation", type: "dv" },
+};
+
+describe("CloudflareClient.createCustomHostname", () => {
+  it("POSTs the hostname with ssl input", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedMethod = "";
+    let capturedUrl = "";
+    let capturedBody = "";
+    const restore = mockFetch((input, init) => {
+      capturedMethod = init?.method ?? "";
+      capturedUrl = String(input);
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: HOSTNAME_RESULT,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      const created = await client.createCustomHostname({
+        hostname: "app.example.com",
+        custom_origin_server: "origin.example.com",
+        ssl: { method: "http", certificate_authority: "google" },
+      });
+      expect(capturedMethod).toBe("POST");
+      expect(capturedUrl).toContain("/zones/zone-1/custom_hostnames");
+      expect(JSON.parse(capturedBody)).toEqual({
+        hostname: "app.example.com",
+        custom_origin_server: "origin.example.com",
+        ssl: { method: "http", certificate_authority: "google" },
+      });
+      expect(created.id).toBe("ch-1");
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("CloudflareClient.updateCustomHostname", () => {
+  it("PATCHes only the provided fields", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedMethod = "";
+    let capturedBody = "";
+    const restore = mockFetch((_input, init) => {
+      capturedMethod = init?.method ?? "";
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: HOSTNAME_RESULT,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      await client.updateCustomHostname("ch-1", {
+        custom_origin_sni: "sni.example.com",
+      });
+      expect(capturedMethod).toBe("PATCH");
+      expect(JSON.parse(capturedBody)).toEqual({
+        custom_origin_sni: "sni.example.com",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("rejects an update with no fields", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+    await expect(client.updateCustomHostname("ch-1", {})).rejects.toThrow(
+      /at least one field/u
+    );
+  });
+});
+
+describe("CloudflareClient.deleteCustomHostname", () => {
+  it("DELETEs the hostname", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedMethod = "";
+    let capturedUrl = "";
+    const restore = mockFetch((input, init) => {
+      capturedMethod = init?.method ?? "";
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify({ success: true, errors: [], messages: [], result: { id: "ch-1" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      await client.deleteCustomHostname("ch-1");
+      expect(capturedMethod).toBe("DELETE");
+      expect(capturedUrl).toContain("/zones/zone-1/custom_hostnames/ch-1");
+    } finally {
+      restore();
+    }
+  });
+});

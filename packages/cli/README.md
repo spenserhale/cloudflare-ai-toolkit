@@ -57,6 +57,21 @@ cloudflare dns records update <zone-id> <record-id> [flags]
 
 cloudflare custom-hostnames list [--hostname <fqdn>] [--zoneId <id>] [flags]
 cloudflare custom-hostnames get <custom-hostname-id> [--zoneId <id>] [--json]
+cloudflare custom-hostnames create <hostname> [--sslMethod http|txt|email] [--certificateAuthority <ca>] [flags]
+cloudflare custom-hostnames update <custom-hostname-id> [--customOriginServer <origin>] [--metadata <json>] [flags]
+cloudflare custom-hostnames delete <custom-hostname-id> [--zoneId <id>] [--yes]
+
+cloudflare waf rules list [--action <action>] [--description <text>] [flags]
+cloudflare waf rules get <rule-id> [--zoneId <id>] [--json]
+cloudflare waf rules create --action <action> --expression <expr> [--paused true] [flags]
+cloudflare waf rules update <rule-id> --action <action> --expression <expr> [flags]
+cloudflare waf rules delete <rule-id> [--zoneId <id>] [--yes]
+
+cloudflare redirects list [--zoneId <id>] [--json]
+cloudflare redirects get <rule-id> [--zoneId <id>] [--json]
+cloudflare redirects create --expression <expr> (--targetUrl <url>|--targetExpression <expr>) [--statusCode 301|302|303|307|308] [flags]
+cloudflare redirects update <rule-id> [--expression <expr>] [--statusCode <code>] [--enabled true|false] [flags]
+cloudflare redirects delete <rule-id> [--zoneId <id>] [--yes]
 
 cloudflare cache purge everything [--zoneId <id>] [--yes]
 cloudflare cache purge urls <url>... [--zoneId <id>]
@@ -65,7 +80,12 @@ cloudflare cache purge prefixes <prefix>... [--zoneId <id>] [--yes]
 cloudflare cache purge hosts <host>... [--zoneId <id>] [--yes]
 
 cloudflare log-explorer query [--sql <query>|--file <path>|--stdin] [flags]
+cloudflare log-explorer datasets list [--includeZones] [flags]
+cloudflare log-explorer datasets available [flags]
+cloudflare log-explorer datasets get <dataset-id> [flags]
 cloudflare log-explorer datasets enable <dataset> [flags]
+cloudflare log-explorer datasets update <dataset-id> --enabled true|false [--fields <a,b>] [--filter <expr>] [flags]
+cloudflare log-explorer datasets delete <dataset-id> [--yes]
 
 cloudflare upgrade [--check] [--force] [--version <version>]
 ```

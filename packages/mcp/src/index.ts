@@ -7,6 +7,8 @@ import { registerCacheTools } from "./tools/cache.js";
 import { registerCustomHostnameTools } from "./tools/custom-hostnames.js";
 import { registerDnsTools } from "./tools/dns.js";
 import { registerLogExplorerTools } from "./tools/log-explorer.js";
+import { registerRedirectTools } from "./tools/redirects.js";
+import { registerWafTools } from "./tools/waf.js";
 import { registerZoneTools } from "./tools/zones.js";
 
 const server = new FastMCP({
@@ -19,6 +21,8 @@ registerAuditTools(server);
 registerCacheTools(server);
 registerDnsTools(server);
 registerLogExplorerTools(server);
+registerRedirectTools(server);
+registerWafTools(server);
 registerZoneTools(server);
 registerCustomHostnameTools(server);
 

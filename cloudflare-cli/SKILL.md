@@ -1,6 +1,6 @@
 ---
 name: cloudflare-cli
-description: Reference for the `cloudflare` CLI (from @cloudflare-ai-toolkit/cli, installed globally on this machine), covering zone lookups, cache purges, DNS record changes, custom hostnames (SSL for SaaS) certificate state, Log Explorer SQL, and audit log queries against the Cloudflare API. Trigger whenever the user mentions Cloudflare, a zone or zone ID, cache invalidation or purging, DNS record edits, custom hostnames or SSL for SaaS certificates, Log Explorer, or audit logs — even if they don't name the CLI. Prefer this CLI over hand-rolling curl against api.cloudflare.com or reaching for wrangler for these tasks, since it handles auth, pagination, and flag validation.
+description: Reference for the `cloudflare` CLI (from @cloudflare-ai-toolkit/cli, installed globally on this machine), covering zone lookups, cache purges, DNS record changes, custom hostnames (SSL for SaaS) certificate state and lifecycle, WAF firewall rules, redirect rules, Log Explorer SQL, and audit log queries against the Cloudflare API. Trigger whenever the user mentions Cloudflare, a zone or zone ID, cache invalidation or purging, DNS record edits, custom hostnames or SSL for SaaS certificates, WAF or firewall rules, redirects or redirect rules, Log Explorer, or audit logs — even if they don't name the CLI. Prefer this CLI over hand-rolling curl against api.cloudflare.com or reaching for wrangler for these tasks, since it handles auth, pagination, and flag validation.
 ---
 
 # cloudflare CLI
@@ -41,13 +41,31 @@ cloudflare dns records list <zone-id>                  # list DNS records
 cloudflare dns records update <zone-id> <record-id>    # edit a DNS record
 cloudflare custom-hostnames list                       # SSL for SaaS hostnames + cert status
 cloudflare custom-hostnames get <custom-hostname-id>   # cert state, DCV + ownership records
+cloudflare custom-hostnames create <hostname>          # add hostname + request cert
+cloudflare custom-hostnames update <id> --customOriginServer <origin>
+cloudflare custom-hostnames delete <id> --yes          # remove hostname + cert
+cloudflare waf rules list                              # firewall (WAF custom) rules
+cloudflare waf rules get <rule-id>                     # rule detail incl. expression
+cloudflare waf rules create --action block --expression '<expr>'
+cloudflare waf rules update <rule-id> --action block --expression '<expr>'
+cloudflare waf rules delete <rule-id> --yes
+cloudflare redirects list                             # redirect rules (first match wins)
+cloudflare redirects get <rule-id>
+cloudflare redirects create --expression '<expr>' --targetUrl <url> [--statusCode 301]
+cloudflare redirects update <rule-id> --statusCode 302 # partial; other fields kept
+cloudflare redirects delete <rule-id> --yes
 cloudflare cache purge everything                      # nuke a whole zone's cache
 cloudflare cache purge urls <url>...                   # purge specific URLs
 cloudflare cache purge tags <tag>...                   # purge cache-tag members
 cloudflare cache purge prefixes <prefix>...            # purge a path prefix
 cloudflare cache purge hosts <host>...                 # purge a specific hostname
 cloudflare log-explorer query --sql '<sql>'            # SQL over Cloudflare logs
+cloudflare log-explorer datasets list                  # configured datasets + dataset IDs
+cloudflare log-explorer datasets available             # dataset types that can be enabled
 cloudflare log-explorer datasets enable <dataset>      # turn on a Log Explorer dataset
+cloudflare log-explorer datasets get <dataset-id>      # field config, filter, ingest state
+cloudflare log-explorer datasets update <dataset-id> --enabled false
+cloudflare log-explorer datasets delete <dataset-id> --yes
 cloudflare upgrade                                     # self-update from GitHub Releases
 ```
 
@@ -77,13 +95,38 @@ cloudflare custom-hostnames get <custom-hostname-id> --zoneId <zone-id>
 
 These need a token with `SSL and Certificates Read`; `zones list` needs `Zone Read`.
 
+## WAF firewall rules
+
+Each rule pairs a Cloudflare rules-language expression with an action
+(`block`, `challenge`, `js_challenge`, `managed_challenge`, `allow`, `log`, `bypass`).
+
+- Read the current rule before updating: `waf rules update` is a PUT — resend the current action/expression plus your change, or you'll clobber them.
+- Stage risky rules with `--paused true`, verify with `waf rules get`, then unpause.
+- `log` action is Enterprise-plan only. Reads need `Firewall Services Read`; writes need `Firewall Services Write`.
+
+## Redirect rules
+
+`cloudflare redirects` manages the zone's redirect rules. Rules run in order — first match wins.
+
+- Target is one of `--targetUrl <literal>` or `--targetExpression <dynamic rules expr>`.
+- `--dryRun` on create validates the expression without saving — use it before enforcing.
+- `redirects update` is partial: pass only what changes (e.g. just `--statusCode 302`); other fields keep their values.
+- Disable a rule with `--enabled false` instead of deleting it. Reads need `Rulesets Read`; writes need `Rulesets Edit`.
+
 ## Destructive commands
 
-`cache purge everything`, `prefixes`, and `hosts` take a `--yes` flag to skip the confirmation prompt. Don't pass `--yes` reflexively. If the user's scope is ambiguous ("purge the cache" — which zone? everything or specific URLs?), confirm before running. An accidental `purge everything` on a production zone is painful to recover from.
+`cache purge everything`, `prefixes`, and `hosts` take a `--yes` flag to skip the confirmation prompt. So do `log-explorer datasets delete`, `custom-hostnames delete`, `waf rules delete`, and `redirects delete`. Don't pass `--yes` reflexively. If the user's scope is ambiguous ("purge the cache" — which zone? everything or specific URLs?), confirm before running. An accidental `purge everything` on a production zone is painful to recover from.
+
+## Log Explorer notes
+
+- `enable` takes a dataset *name* (`http_requests`, `gateway_dns`); `get`/`update`/`delete` take a *dataset ID* from `datasets list`.
+- `datasets update` always requires `--enabled true|false` (even when only changing fields/filter). Check the current value with `datasets get` first.
+- Scope defaults to the zone when `CLOUDFLARE_ZONE_ID` is set, else the account; pass `--scope account|zone` or `--accountId`/`--zoneId` to override.
+- Queries need `Logs Read`; enable/update/delete need `Logs Edit`.
 
 ## When something isn't covered
 
-The CLI focuses on zones, DNS, cache, custom hostnames, Log Explorer, and audit operations. For Workers, R2, Pages, Access, or anything else not listed, fall back to `wrangler` or a direct call to the Cloudflare REST API — don't bend these commands into doing something they don't.
+The CLI focuses on zones, DNS, cache, custom hostnames, WAF firewall rules, redirect rules, Log Explorer, and audit operations. For Workers, R2, Pages, Access, or anything else not listed, fall back to `wrangler` or a direct call to the Cloudflare REST API — don't bend these commands into doing something they don't.
 
 ## If the command isn't found
 

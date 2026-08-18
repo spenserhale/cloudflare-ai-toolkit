@@ -229,3 +229,235 @@ describe("CloudflareClient.enableLogExplorerDataset", () => {
     }
   });
 });
+
+function datasetResult(overrides: Record<string, unknown> = {}) {
+  return {
+    dataset: "http_requests",
+    object_type: "zone",
+    object_id: "zone-1",
+    dataset_id: "ds-1",
+    enabled: true,
+    deletion_protection: false,
+    created_at: "2026-05-12T00:00:00Z",
+    updated_at: "2026-05-12T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function envelope(result: unknown) {
+  return JSON.stringify({
+    success: true,
+    errors: [],
+    messages: [],
+    result,
+  });
+}
+
+describe("CloudflareClient.listLogExplorerDatasets", () => {
+  it("GETs the datasets endpoint and parses the array", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedUrl = "";
+    const restore = mockFetch((input) => {
+      capturedUrl = String(input);
+      return new Response(envelope([datasetResult()]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    try {
+      const datasets = await client.listLogExplorerDatasets();
+      expect(capturedUrl).toContain("/zones/zone-1/logs/explorer/datasets");
+      expect(new URL(capturedUrl).searchParams.get("include_zones")).toBeNull();
+      expect(datasets.length).toBe(1);
+      expect(datasets[0]?.dataset_id).toBe("ds-1");
+    } finally {
+      restore();
+    }
+  });
+
+  it("passes include_zones through and returns [] for a null result", async () => {
+    const client = new CloudflareClient(tokenConfig({ accountId: "acc-1" }));
+
+    let capturedUrl = "";
+    const restore = mockFetch((input) => {
+      capturedUrl = String(input);
+      return new Response(envelope(null), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    try {
+      const datasets = await client.listLogExplorerDatasets({
+        scope: "account",
+        includeZones: true,
+      });
+      expect(capturedUrl).toContain("/accounts/acc-1/logs/explorer/datasets");
+      expect(new URL(capturedUrl).searchParams.get("include_zones")).toBe("true");
+      expect(datasets).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("CloudflareClient.getLogExplorerDataset", () => {
+  it("GETs a single dataset with fields and filter", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedUrl = "";
+    const restore = mockFetch((input) => {
+      capturedUrl = String(input);
+      return new Response(
+        envelope(
+          datasetResult({
+            fields: [{ enabled: true, name: "ClientIP" }],
+            filter: '{http.request.method=="GET"}',
+          })
+        ),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      const dataset = await client.getLogExplorerDataset({ datasetId: "ds-1" });
+      expect(capturedUrl).toContain("/zones/zone-1/logs/explorer/datasets/ds-1");
+      expect(dataset.fields).toEqual([{ enabled: true, name: "ClientIP" }]);
+      expect(dataset.filter).toBe('{http.request.method=="GET"}');
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("CloudflareClient.updateLogExplorerDataset", () => {
+  it("PUTs enabled, fields, filter, and deletion_protection", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedMethod = "";
+    let capturedUrl = "";
+    let capturedBody = "";
+    const restore = mockFetch((input, init) => {
+      capturedMethod = init?.method ?? "";
+      capturedUrl = String(input);
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        envelope(datasetResult({ enabled: false })),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      const dataset = await client.updateLogExplorerDataset({
+        datasetId: "ds-1",
+        enabled: false,
+        fields: [
+          { name: "ClientIP", enabled: true },
+          { name: "RayID", enabled: false },
+        ],
+        filter: "",
+        deletionProtection: false,
+      });
+      expect(capturedMethod).toBe("PUT");
+      expect(capturedUrl).toContain("/zones/zone-1/logs/explorer/datasets/ds-1");
+      expect(JSON.parse(capturedBody)).toEqual({
+        enabled: false,
+        deletion_protection: false,
+        fields: [
+          { name: "ClientIP", enabled: true },
+          { name: "RayID", enabled: false },
+        ],
+        filter: "",
+      });
+      expect(dataset.enabled).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("omits unset optional body keys", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedBody = "";
+    const restore = mockFetch((_input, init) => {
+      capturedBody = typeof init?.body === "string" ? init.body : "";
+      return new Response(envelope(datasetResult()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    try {
+      await client.updateLogExplorerDataset({ datasetId: "ds-1", enabled: true });
+      expect(JSON.parse(capturedBody)).toEqual({ enabled: true });
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("CloudflareClient.deleteLogExplorerDataset", () => {
+  it("DELETEs the dataset endpoint", async () => {
+    const client = new CloudflareClient(tokenConfig({ accountId: "acc-1" }));
+
+    let capturedMethod = "";
+    let capturedUrl = "";
+    const restore = mockFetch((input, init) => {
+      capturedMethod = init?.method ?? "";
+      capturedUrl = String(input);
+      return new Response(envelope(datasetResult()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    try {
+      await client.deleteLogExplorerDataset({
+        datasetId: "ds-1",
+        scope: "account",
+      });
+      expect(capturedMethod).toBe("DELETE");
+      expect(capturedUrl).toContain("/accounts/acc-1/logs/explorer/datasets/ds-1");
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("CloudflareClient.listAvailableLogExplorerDatasets", () => {
+  it("GETs the available endpoint and parses schemas", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedUrl = "";
+    const restore = mockFetch((input) => {
+      capturedUrl = String(input);
+      return new Response(
+        envelope([
+          {
+            dataset: "http_requests",
+            object_type: "zone",
+            timestamp_field: "EdgeStartTimestamp",
+            schema: {
+              type: "object",
+              properties: { ClientIP: { type: "string" } },
+              required: ["ClientIP"],
+            },
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      const datasets = await client.listAvailableLogExplorerDatasets();
+      expect(capturedUrl).toContain("/zones/zone-1/logs/explorer/datasets/available");
+      expect(datasets.length).toBe(1);
+      expect(datasets[0]?.timestamp_field).toBe("EdgeStartTimestamp");
+      expect(datasets[0]?.schema?.required).toEqual(["ClientIP"]);
+    } finally {
+      restore();
+    }
+  });
+});

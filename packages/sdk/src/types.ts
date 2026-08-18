@@ -322,6 +322,13 @@ export const QueryLogExplorerResultSchema = z.object({
 
 export type QueryLogExplorerResult = z.infer<typeof QueryLogExplorerResultSchema>;
 
+export const LogExplorerDatasetFieldSchema = z.object({
+  enabled: z.boolean(),
+  name: z.string(),
+});
+
+export type LogExplorerDatasetField = z.infer<typeof LogExplorerDatasetFieldSchema>;
+
 export const LogExplorerDatasetSchema = z
   .object({
     dataset: z.string(),
@@ -329,6 +336,9 @@ export const LogExplorerDatasetSchema = z
     object_id: z.string(),
     dataset_id: z.string(),
     enabled: z.boolean(),
+    deletion_protection: z.boolean().optional(),
+    fields: z.array(LogExplorerDatasetFieldSchema).nullable().optional(),
+    filter: z.string().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
   })
@@ -344,6 +354,63 @@ export const EnableLogExplorerDatasetParamsSchema = z.object({
 export type EnableLogExplorerDatasetParams = z.infer<
   typeof EnableLogExplorerDatasetParamsSchema
 >;
+
+export const ListLogExplorerDatasetsParamsSchema = z.object({
+  scope: LogExplorerScopeSchema.optional(),
+  includeZones: z.boolean().optional(),
+});
+
+export type ListLogExplorerDatasetsParams = z.infer<
+  typeof ListLogExplorerDatasetsParamsSchema
+>;
+
+export const GetLogExplorerDatasetParamsSchema = z.object({
+  datasetId: z.string().min(1, "Dataset ID is required"),
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type GetLogExplorerDatasetParams = z.infer<typeof GetLogExplorerDatasetParamsSchema>;
+
+export const UpdateLogExplorerDatasetParamsSchema = z.object({
+  datasetId: z.string().min(1, "Dataset ID is required"),
+  enabled: z.boolean(),
+  deletionProtection: z.boolean().optional(),
+  fields: z.array(LogExplorerDatasetFieldSchema).optional(),
+  filter: z.string().optional(),
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type UpdateLogExplorerDatasetParams = z.infer<
+  typeof UpdateLogExplorerDatasetParamsSchema
+>;
+
+export const DeleteLogExplorerDatasetParamsSchema = z.object({
+  datasetId: z.string().min(1, "Dataset ID is required"),
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type DeleteLogExplorerDatasetParams = z.infer<
+  typeof DeleteLogExplorerDatasetParamsSchema
+>;
+
+export const ListAvailableLogExplorerDatasetsParamsSchema = z.object({
+  scope: LogExplorerScopeSchema.optional(),
+});
+
+export type ListAvailableLogExplorerDatasetsParams = z.infer<
+  typeof ListAvailableLogExplorerDatasetsParamsSchema
+>;
+
+export const AvailableLogExplorerDatasetSchema = z
+  .object({
+    dataset: z.string(),
+    object_type: z.string(),
+    timestamp_field: z.string(),
+    schema: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type AvailableLogExplorerDataset = z.infer<typeof AvailableLogExplorerDatasetSchema>;
 
 // ---------------------------------------------------------------------------
 // Custom hostname (SSL for SaaS) schemas
@@ -462,6 +529,320 @@ export const ListCustomHostnamesResultSchema = z.object({
 export type ListCustomHostnamesResult = z.infer<
   typeof ListCustomHostnamesResultSchema
 >;
+
+export const CustomHostnameSslSettingsSchema = z
+  .object({
+    ciphers: z.array(z.string()).optional(),
+    early_hints: z.enum(["on", "off"]).optional(),
+    http2: z.enum(["on", "off"]).optional(),
+    min_tls_version: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional(),
+    tls_1_3: z.enum(["on", "off"]).optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameSslSettings = z.infer<typeof CustomHostnameSslSettingsSchema>;
+
+/**
+ * SSL properties accepted when creating or updating a custom hostname.
+ * Sent verbatim as the request's `ssl` object.
+ */
+export const CustomHostnameSslInputSchema = z
+  .object({
+    method: z.enum(["http", "txt", "email"]).optional(),
+    type: z.literal("dv").optional(),
+    wildcard: z.boolean().optional(),
+    bundle_method: z.enum(["ubiquitous", "optimal", "force"]).optional(),
+    certificate_authority: z
+      .enum(["digicert", "google", "lets_encrypt", "ssl_com"])
+      .optional(),
+    cloudflare_branding: z.boolean().optional(),
+    custom_certificate: z.string().optional(),
+    custom_key: z.string().optional(),
+    custom_csr_id: z.string().optional(),
+    settings: CustomHostnameSslSettingsSchema.optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameSslInput = z.infer<typeof CustomHostnameSslInputSchema>;
+
+export const CreateCustomHostnameParamsSchema = z.object({
+  hostname: z.string().min(1, "Hostname is required"),
+  custom_origin_server: z.string().optional(),
+  custom_origin_sni: z.string().optional(),
+  custom_metadata: z.record(z.unknown()).optional(),
+  ssl: CustomHostnameSslInputSchema.optional(),
+});
+
+export type CreateCustomHostnameParams = z.infer<typeof CreateCustomHostnameParamsSchema>;
+
+export const UpdateCustomHostnameParamsSchema = z
+  .object({
+    custom_origin_server: z.string().optional(),
+    custom_origin_sni: z.string().optional(),
+    custom_metadata: z.record(z.unknown()).optional(),
+    ssl: CustomHostnameSslInputSchema.optional(),
+  })
+  .refine(
+    (params) =>
+      params.custom_origin_server !== undefined ||
+      params.custom_origin_sni !== undefined ||
+      params.custom_metadata !== undefined ||
+      params.ssl !== undefined,
+    { message: "Provide at least one field to update" }
+  );
+
+export type UpdateCustomHostnameParams = z.infer<
+  typeof UpdateCustomHostnameParamsSchema
+>;
+
+// ---------------------------------------------------------------------------
+// Firewall (WAF) rule schemas
+// ---------------------------------------------------------------------------
+
+export const FIREWALL_RULE_ACTIONS = [
+  "block",
+  "challenge",
+  "js_challenge",
+  "managed_challenge",
+  "allow",
+  "log",
+  "bypass",
+] as const;
+
+export const FirewallRuleActionSchema = z.enum(FIREWALL_RULE_ACTIONS);
+
+export type FirewallRuleAction = z.infer<typeof FirewallRuleActionSchema>;
+
+export const FIREWALL_RULE_PRODUCTS = [
+  "zoneLockdown",
+  "uaBlock",
+  "bic",
+  "hot",
+  "securityLevel",
+  "rateLimit",
+  "waf",
+] as const;
+
+export const FirewallRuleProductSchema = z.enum(FIREWALL_RULE_PRODUCTS);
+
+export type FirewallRuleProduct = z.infer<typeof FirewallRuleProductSchema>;
+
+export const FirewallFilterSchema = z
+  .object({
+    id: z.string().optional(),
+    description: z.string().optional(),
+    expression: z.string().optional(),
+    paused: z.boolean().optional(),
+    ref: z.string().optional(),
+  })
+  .passthrough();
+
+export type FirewallFilter = z.infer<typeof FirewallFilterSchema>;
+
+export const FirewallRuleSchema = z
+  .object({
+    id: z.string().optional(),
+    action: FirewallRuleActionSchema.optional(),
+    description: z.string().optional(),
+    filter: FirewallFilterSchema.optional(),
+    paused: z.boolean().optional(),
+    priority: z.number().optional(),
+    products: z.array(FirewallRuleProductSchema).optional(),
+    ref: z.string().optional(),
+  })
+  .passthrough();
+
+export type FirewallRule = z.infer<typeof FirewallRuleSchema>;
+
+export const ListFirewallRulesParamsSchema = z.object({
+  id: z.string().optional(),
+  action: FirewallRuleActionSchema.optional(),
+  description: z.string().optional(),
+  paused: z.boolean().optional(),
+  page: z.number().int().positive().optional(),
+  perPage: z.number().int().min(1).max(100).optional(),
+});
+
+export type ListFirewallRulesParams = z.infer<typeof ListFirewallRulesParamsSchema>;
+
+export const ListFirewallRulesResultSchema = z.object({
+  rules: z.array(FirewallRuleSchema),
+  resultInfo: ResultInfoSchema.optional(),
+});
+
+export type ListFirewallRulesResult = z.infer<typeof ListFirewallRulesResultSchema>;
+
+/**
+ * Body for POST /zones/{zone_id}/firewall/rules. The filter expression is
+ * required; Cloudflare creates the underlying filter record automatically.
+ */
+export const CreateFirewallRuleParamsSchema = z.object({
+  expression: z.string().min(1, "Filter expression is required"),
+  action: FirewallRuleActionSchema,
+  description: z.string().optional(),
+  paused: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  products: z.array(FirewallRuleProductSchema).optional(),
+  ref: z.string().optional(),
+});
+
+export type CreateFirewallRuleParams = z.infer<typeof CreateFirewallRuleParamsSchema>;
+
+/**
+ * Body for PUT /zones/{zone_id}/firewall/rules/{rule_id}. PUT replaces the
+ * rule, so the action and expression are required.
+ */
+export const UpdateFirewallRuleParamsSchema = z.object({
+  expression: z.string().min(1, "Filter expression is required"),
+  action: FirewallRuleActionSchema,
+  description: z.string().optional(),
+  paused: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  products: z.array(FirewallRuleProductSchema).optional(),
+  ref: z.string().optional(),
+});
+
+export type UpdateFirewallRuleParams = z.infer<typeof UpdateFirewallRuleParamsSchema>;
+
+// ---------------------------------------------------------------------------
+// Redirect rule (Rulesets Engine, http_request_dynamic_redirect phase) schemas
+// ---------------------------------------------------------------------------
+
+export const REDIRECT_RULE_PHASE = "http_request_dynamic_redirect";
+
+export const REDIRECT_STATUS_CODES = [301, 302, 303, 307, 308] as const;
+
+export const RedirectStatusCodeSchema = z.union([
+  z.literal(301),
+  z.literal(302),
+  z.literal(303),
+  z.literal(307),
+  z.literal(308),
+]);
+
+export type RedirectStatusCode = z.infer<typeof RedirectStatusCodeSchema>;
+
+export const RedirectTargetUrlSchema = z
+  .object({
+    value: z.string().optional(),
+    expression: z.string().optional(),
+  })
+  .passthrough();
+
+export type RedirectTargetUrl = z.infer<typeof RedirectTargetUrlSchema>;
+
+export const RedirectFromValueSchema = z
+  .object({
+    target_url: RedirectTargetUrlSchema.optional(),
+    status_code: RedirectStatusCodeSchema.optional(),
+    preserve_query_string: z.boolean().optional(),
+  })
+  .passthrough();
+
+export type RedirectFromValue = z.infer<typeof RedirectFromValueSchema>;
+
+export const RedirectActionParametersSchema = z
+  .object({
+    from_list: z.record(z.unknown()).optional(),
+    from_value: RedirectFromValueSchema.optional(),
+  })
+  .passthrough();
+
+export type RedirectActionParameters = z.infer<typeof RedirectActionParametersSchema>;
+
+export const RedirectRuleSchema = z
+  .object({
+    id: z.string().optional(),
+    action: z.string().optional(),
+    expression: z.string().optional(),
+    description: z.string().optional(),
+    enabled: z.boolean().optional(),
+    action_parameters: RedirectActionParametersSchema.optional(),
+    version: z.string().optional(),
+    last_updated: z.string().optional(),
+    ref: z.string().optional(),
+  })
+  .passthrough();
+
+export type RedirectRule = z.infer<typeof RedirectRuleSchema>;
+
+export const RulesetSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    kind: z.string().optional(),
+    phase: z.string().optional(),
+    version: z.string().optional(),
+    last_updated: z.string().optional(),
+    description: z.string().optional(),
+    rules: z.array(RedirectRuleSchema).optional(),
+  })
+  .passthrough();
+
+export type Ruleset = z.infer<typeof RulesetSchema>;
+
+export const ListRedirectRulesResultSchema = z.object({
+  rulesetId: z.string().optional(),
+  rules: z.array(RedirectRuleSchema),
+});
+
+export type ListRedirectRulesResult = z.infer<typeof ListRedirectRulesResultSchema>;
+
+/**
+ * Flat creation params — the SDK builds the nested `action_parameters.from_value`
+ * object the Rulesets API expects. Pass exactly one of `targetUrl` (literal URL)
+ * or `targetExpression` (dynamic rules-language expression evaluating to a URL).
+ */
+export const CreateRedirectRuleParamsSchema = z
+  .object({
+    expression: z.string().min(1, "Filter expression is required"),
+    targetUrl: z.string().optional(),
+    targetExpression: z.string().optional(),
+    statusCode: RedirectStatusCodeSchema.optional(),
+    preserveQueryString: z.boolean().optional(),
+    description: z.string().optional(),
+    enabled: z.boolean().optional(),
+    dryRun: z.boolean().optional(),
+  })
+  .refine(
+    (params) => Boolean(params.targetUrl ?? params.targetExpression),
+    { message: "Provide targetUrl (literal) or targetExpression (dynamic) — exactly one" }
+  )
+  .refine(
+    (params) => !(params.targetUrl !== undefined && params.targetExpression !== undefined),
+    { message: "Pass only one of targetUrl or targetExpression" }
+  );
+
+export type CreateRedirectRuleParams = z.infer<typeof CreateRedirectRuleParamsSchema>;
+
+/**
+ * Partial update params. Any redirect-action field (targetUrl, targetExpression,
+ * statusCode, preserveQueryString) merges with the rule's current from_value, so
+ * you can change just the status code without resending the target.
+ */
+export const UpdateRedirectRuleParamsSchema = z
+  .object({
+    expression: z.string().min(1).optional(),
+    targetUrl: z.string().optional(),
+    targetExpression: z.string().optional(),
+    statusCode: RedirectStatusCodeSchema.optional(),
+    preserveQueryString: z.boolean().optional(),
+    description: z.string().optional(),
+    enabled: z.boolean().optional(),
+  })
+  .refine(
+    (params) =>
+      params.expression !== undefined ||
+      params.targetUrl !== undefined ||
+      params.targetExpression !== undefined ||
+      params.statusCode !== undefined ||
+      params.preserveQueryString !== undefined ||
+      params.description !== undefined ||
+      params.enabled !== undefined,
+    { message: "Provide at least one field to update" }
+  );
+
+export type UpdateRedirectRuleParams = z.infer<typeof UpdateRedirectRuleParamsSchema>;
 
 // ---------------------------------------------------------------------------
 // Zone schemas

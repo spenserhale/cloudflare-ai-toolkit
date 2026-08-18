@@ -75,4 +75,123 @@ export function registerLogExplorerTools(server: FastMCP) {
       return JSON.stringify(result, null, 2);
     },
   });
+
+  server.addTool({
+    name: "list_log_explorer_datasets",
+    description:
+      "List configured Log Explorer datasets (IDs, enabled state) for the account or zone.",
+    parameters: z.object({
+      scope: LogExplorerScopeSchema.optional().describe("account or zone"),
+      accountId: z.string().optional().describe("Override CLOUDFLARE_ACCOUNT_ID"),
+      zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
+      includeZones: z
+        .boolean()
+        .optional()
+        .describe("Include zone-scoped datasets belonging to the account"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const datasets = await client.listLogExplorerDatasets(
+        { scope: args.scope, includeZones: args.includeZones },
+        { accountId: args.accountId, zoneId: args.zoneId }
+      );
+      return JSON.stringify(datasets, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "list_available_log_explorer_datasets",
+    description:
+      "List dataset types the account or zone can enable, with timestamp fields and schemas.",
+    parameters: z.object({
+      scope: LogExplorerScopeSchema.optional().describe("account or zone"),
+      accountId: z.string().optional().describe("Override CLOUDFLARE_ACCOUNT_ID"),
+      zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const datasets = await client.listAvailableLogExplorerDatasets(
+        { scope: args.scope },
+        { accountId: args.accountId, zoneId: args.zoneId }
+      );
+      return JSON.stringify(datasets, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "get_log_explorer_dataset",
+    description:
+      "Get one Log Explorer dataset by ID, including field configuration and filter.",
+    parameters: z.object({
+      datasetId: z.string().min(1).describe("Dataset ID from list_log_explorer_datasets"),
+      scope: LogExplorerScopeSchema.optional().describe("account or zone"),
+      accountId: z.string().optional().describe("Override CLOUDFLARE_ACCOUNT_ID"),
+      zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const dataset = await client.getLogExplorerDataset(
+        { datasetId: args.datasetId, scope: args.scope },
+        { accountId: args.accountId, zoneId: args.zoneId }
+      );
+      return JSON.stringify(dataset, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "update_log_explorer_dataset",
+    description:
+      "Update a Log Explorer dataset: enable/disable ingest, restrict fields, set or clear a Logpush filter, or toggle deletion protection.",
+    parameters: z.object({
+      datasetId: z.string().min(1).describe("Dataset ID from list_log_explorer_datasets"),
+      enabled: z.boolean().describe("Whether log ingest stays active"),
+      fields: z
+        .array(z.object({ name: z.string(), enabled: z.boolean() }))
+        .optional()
+        .describe("Field allowlist; omitted keeps current fields"),
+      filter: z
+        .string()
+        .optional()
+        .describe("Logpush filter predicate; empty string clears it"),
+      deletionProtection: z.boolean().optional().describe("Set false to allow deletion"),
+      scope: LogExplorerScopeSchema.optional().describe("account or zone"),
+      accountId: z.string().optional().describe("Override CLOUDFLARE_ACCOUNT_ID"),
+      zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const dataset = await client.updateLogExplorerDataset(
+        {
+          datasetId: args.datasetId,
+          enabled: args.enabled,
+          fields: args.fields,
+          filter: args.filter,
+          deletionProtection: args.deletionProtection,
+          scope: args.scope,
+        },
+        { accountId: args.accountId, zoneId: args.zoneId }
+      );
+      return JSON.stringify(dataset, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "delete_log_explorer_dataset",
+    description:
+      "Delete a Log Explorer dataset, stopping its log ingest. Requires deletion protection to be off.",
+    parameters: z.object({
+      datasetId: z.string().min(1).describe("Dataset ID from list_log_explorer_datasets"),
+      scope: LogExplorerScopeSchema.optional().describe("account or zone"),
+      accountId: z.string().optional().describe("Override CLOUDFLARE_ACCOUNT_ID"),
+      zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      await client.deleteLogExplorerDataset(
+        { datasetId: args.datasetId, scope: args.scope },
+        { accountId: args.accountId, zoneId: args.zoneId }
+      );
+      return JSON.stringify({ deleted: true, datasetId: args.datasetId }, null, 2);
+    },
+  });
 }

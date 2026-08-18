@@ -13,15 +13,39 @@ import {
   purgeCacheByHostsCommand,
 } from "./commands/cache-purge.js";
 import {
+  createCustomHostnameCommand,
+  deleteCustomHostnameCommand,
   getCustomHostnameCommand,
   listCustomHostnamesCommand,
+  updateCustomHostnameCommand,
 } from "./commands/custom-hostnames.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
 import { logExplorerQueryCommand } from "./commands/log-explorer-query.js";
 import { enableLogExplorerDatasetCommand } from "./commands/log-explorer-datasets-enable.js";
+import {
+  createRedirectRuleCommand,
+  deleteRedirectRuleCommand,
+  getRedirectRuleCommand,
+  listRedirectRulesCommand,
+  updateRedirectRuleCommand,
+} from "./commands/redirects.js";
+import {
+  deleteLogExplorerDatasetCommand,
+  getLogExplorerDatasetCommand,
+  listAvailableLogExplorerDatasetsCommand,
+  listLogExplorerDatasetsCommand,
+  updateLogExplorerDatasetCommand,
+} from "./commands/log-explorer-datasets.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
+import {
+  createFirewallRuleCommand,
+  deleteFirewallRuleCommand,
+  getFirewallRuleCommand,
+  listFirewallRulesCommand,
+  updateFirewallRuleCommand,
+} from "./commands/waf-rules.js";
 
 const resourceRoutes = buildRouteMap({
   routes: {
@@ -89,9 +113,47 @@ const customHostnameRoutes = buildRouteMap({
   routes: {
     list: listCustomHostnamesCommand,
     get: getCustomHostnameCommand,
+    create: createCustomHostnameCommand,
+    update: updateCustomHostnameCommand,
+    delete: deleteCustomHostnameCommand,
   },
   docs: {
     brief: "Custom hostname (SSL for SaaS) operations",
+  },
+});
+
+const firewallRuleRoutes = buildRouteMap({
+  routes: {
+    list: listFirewallRulesCommand,
+    get: getFirewallRuleCommand,
+    create: createFirewallRuleCommand,
+    update: updateFirewallRuleCommand,
+    delete: deleteFirewallRuleCommand,
+  },
+  docs: {
+    brief: "Manage firewall (WAF custom) rules",
+  },
+});
+
+const wafRoutes = buildRouteMap({
+  routes: {
+    rules: firewallRuleRoutes,
+  },
+  docs: {
+    brief: "WAF operations",
+  },
+});
+
+const redirectsRoutes = buildRouteMap({
+  routes: {
+    list: listRedirectRulesCommand,
+    get: getRedirectRuleCommand,
+    create: createRedirectRuleCommand,
+    update: updateRedirectRuleCommand,
+    delete: deleteRedirectRuleCommand,
+  },
+  docs: {
+    brief: "Manage redirect rules",
   },
 });
 
@@ -116,7 +178,12 @@ const dnsRoutes = buildRouteMap({
 
 const logExplorerDatasetsRoutes = buildRouteMap({
   routes: {
+    list: listLogExplorerDatasetsCommand,
+    available: listAvailableLogExplorerDatasetsCommand,
+    get: getLogExplorerDatasetCommand,
     enable: enableLogExplorerDatasetCommand,
+    update: updateLogExplorerDatasetCommand,
+    delete: deleteLogExplorerDatasetCommand,
   },
   docs: {
     brief: "Manage Log Explorer datasets",
@@ -141,6 +208,8 @@ const routes = buildRouteMap({
     zones: zoneRoutes,
     "custom-hostnames": customHostnameRoutes,
     dns: dnsRoutes,
+    waf: wafRoutes,
+    redirects: redirectsRoutes,
     "log-explorer": logExplorerRoutes,
     upgrade: upgradeCommand,
   },

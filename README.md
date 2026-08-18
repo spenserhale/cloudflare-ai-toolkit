@@ -156,18 +156,64 @@ cloudflare dns records update <zone-id> <record-id> --content 203.0.113.10 --pro
 ### Custom hostnames (SSL for SaaS)
 
 Inspect certificate and hostname-validation state for Cloudflare for SaaS
-custom hostnames. A hostname only carries production traffic once both
-`status` and `ssl.status` are `active`; `get` calls that out explicitly and
-prints the outstanding DCV records and ownership challenges.
+custom hostnames, and manage their lifecycle. A hostname only carries
+production traffic once both `status` and `ssl.status` are `active`; `get`
+calls that out explicitly and prints the outstanding DCV records and
+ownership challenges.
 
 ```bash
 cloudflare custom-hostnames list --zoneId <zone-id>
 cloudflare custom-hostnames list --hostname app.example.com
 cloudflare custom-hostnames list --ssl false          # hostnames with no certificate
 cloudflare custom-hostnames get <custom-hostname-id> --json
+cloudflare custom-hostnames create app.example.com --sslMethod http
+cloudflare custom-hostnames update <custom-hostname-id> --customOriginServer origin.example.com
+cloudflare custom-hostnames delete <custom-hostname-id> --yes
 ```
 
 Requires a token with `SSL and Certificates Read` (or Write).
+
+### WAF firewall rules
+
+Manage the zone's firewall (WAF custom) rules — each is a Cloudflare rules-
+language expression plus an action. `update` is a PUT: pass the current
+action/expression (fetch with `waf rules get`) plus your change.
+
+```bash
+cloudflare waf rules list --zoneId <zone-id> --action block
+cloudflare waf rules get <rule-id>
+cloudflare waf rules create --action block \
+  --expression 'http.request.uri.path contains "/wp-login.php"'
+cloudflare waf rules create --action managed_challenge --paused true \
+  --expression 'ip.src.country eq "CN"' --description 'Challenge CN'
+cloudflare waf rules update <rule-id> --action block --expression '...' --paused false
+cloudflare waf rules delete <rule-id> --yes
+```
+
+Requires `Firewall Services Read`/`Write`; the `log` action is Enterprise-only.
+
+### Redirect rules
+
+Manage the zone's redirect rules (Rulesets Engine, first match wins). Targets
+are either a literal URL or a dynamic rules-language expression.
+
+```bash
+cloudflare redirects list --zoneId <zone-id>
+cloudflare redirects create \
+  --expression 'http.request.uri.path eq "/old"' \
+  --targetUrl https://example.com/new --statusCode 301
+cloudflare redirects create \
+  --expression 'starts_with(http.request.uri.path, "/blog/")' \
+  --targetExpression 'concat("https://blog.example.com", http.request.uri.path)' \
+  --preserveQueryString true
+cloudflare redirects create --expression '...' --targetUrl ... --dryRun   # validate only
+cloudflare redirects update <rule-id> --statusCode 302                   # partial; rest kept
+cloudflare redirects update <rule-id> --enabled false                    # disable
+cloudflare redirects get <rule-id>
+cloudflare redirects delete <rule-id> --yes
+```
+
+Requires a token with `Rulesets Edit` (`Rulesets Read` for listing).
 
 ### Cache purge
 
@@ -181,6 +227,27 @@ cloudflare cache purge tags my-tag
 cloudflare cache purge prefixes example.com/assets/ --yes
 cloudflare cache purge hosts cdn.example.com --yes
 ```
+
+### Log Explorer
+
+Run SQL over Cloudflare logs and manage the datasets that feed it. Commands
+target the zone when `CLOUDFLARE_ZONE_ID` is set, else the account; pass
+`--scope account` (or `--accountId`/`--zoneId`) to override.
+
+```bash
+cloudflare log-explorer query --sql "SELECT count() FROM http_requests WHERE EdgeStartTimestamp >= now() - INTERVAL '1' DAY"
+cloudflare log-explorer datasets list                        # configured datasets + IDs
+cloudflare log-explorer datasets available                   # dataset types you can enable
+cloudflare log-explorer datasets enable http_requests
+cloudflare log-explorer datasets get <dataset-id>            # field config + filter
+cloudflare log-explorer datasets update <dataset-id> --enabled false
+cloudflare log-explorer datasets update <dataset-id> --enabled true --fields ClientIP,EdgeResponseStatus
+cloudflare log-explorer datasets delete <dataset-id> --yes
+```
+
+`get`/`update`/`delete` take the `dataset_id` from `datasets list`; `enable`
+takes the dataset name from `datasets available`. Requires a token with
+`Logs Read` (queries, listing) and `Logs Edit` (enable/update/delete).
 
 ## Local development
 

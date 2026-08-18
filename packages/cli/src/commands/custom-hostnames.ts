@@ -1,10 +1,12 @@
 import { buildCommand } from "@stricli/core";
+import { createInterface } from "node:readline/promises";
 import {
   CloudflareAuthError,
   CloudflareClient,
   CloudflareError,
   resolveConfig,
   type CustomHostname,
+  type CustomHostnameSslInput,
   type ListCustomHostnamesResult,
 } from "@cloudflare-ai-toolkit/sdk";
 
@@ -14,12 +16,19 @@ import {
 
 interface CustomHostnamesDeps {
   readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (
-    config: ReturnType<typeof resolveConfig>
-  ) => Pick<CloudflareClient, "listCustomHostnames" | "getCustomHostname">;
+  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+    CloudflareClient,
+    | "listCustomHostnames"
+    | "getCustomHostname"
+    | "createCustomHostname"
+    | "updateCustomHostname"
+    | "deleteCustomHostname"
+  >;
   readonly log: typeof console.log;
   readonly error: typeof console.error;
   readonly exit: (code: number) => never;
+  readonly isTTY: () => boolean;
+  readonly confirm: (prompt: string) => Promise<boolean>;
 }
 
 const defaultDeps: CustomHostnamesDeps = {
@@ -28,6 +37,16 @@ const defaultDeps: CustomHostnamesDeps = {
   log: console.log,
   error: console.error,
   exit: (code) => process.exit(code),
+  isTTY: () => Boolean(process.stdin.isTTY && process.stdout.isTTY),
+  confirm: async (prompt) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = await rl.question(prompt);
+      return /^y(es)?$/i.test(answer.trim());
+    } finally {
+      rl.close();
+    }
+  },
 };
 
 function formatError(err: unknown): string {
@@ -389,5 +408,414 @@ export const getCustomHostnameCommand = buildCommand({
   },
   async func(this: void, flags: CustomHostnamesGetFlags, customHostnameId: string) {
     await runGetCustomHostname(customHostnameId, flags);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Create a custom hostname
+// ---------------------------------------------------------------------------
+
+const SSL_METHODS = ["http", "txt", "email"] as const;
+const CERTIFICATE_AUTHORITIES = ["digicert", "google", "lets_encrypt", "ssl_com"] as const;
+
+export interface CustomHostnamesCreateFlags {
+  readonly customOriginServer?: string;
+  readonly customOriginSni?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly sslMethod?: (typeof SSL_METHODS)[number];
+  readonly sslWildcard: boolean;
+  readonly certificateAuthority?: (typeof CERTIFICATE_AUTHORITIES)[number];
+  readonly zoneId?: string;
+  readonly json: boolean;
+}
+
+function parseSslMethod(value: string): (typeof SSL_METHODS)[number] {
+  const match = SSL_METHODS.find((m) => m === value);
+  if (match) return match;
+  throw new Error(
+    `SSL method must be one of ${SSL_METHODS.join("|")}, got '${value}' (http is recommended when the CNAME is in place)`
+  );
+}
+
+function parseCertificateAuthority(value: string): (typeof CERTIFICATE_AUTHORITIES)[number] {
+  const match = CERTIFICATE_AUTHORITIES.find((ca) => ca === value);
+  if (match) return match;
+  throw new Error(
+    `Certificate authority must be one of ${CERTIFICATE_AUTHORITIES.join("|")}, got '${value}'`
+  );
+}
+
+function parseMetadata(value: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("not an object");
+    }
+    return parsed as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(
+      `--metadata must be a JSON object, e.g. --metadata '{"customer_id":"42"}' (got '${value}': ${err instanceof Error ? err.message : String(err)})`
+    );
+  }
+}
+
+function buildSslInput(
+  flags: {
+    sslMethod?: (typeof SSL_METHODS)[number];
+    sslWildcard: boolean;
+    certificateAuthority?: (typeof CERTIFICATE_AUTHORITIES)[number];
+  },
+  required: boolean
+): CustomHostnameSslInput | undefined {
+  const provided =
+    flags.sslMethod !== undefined ||
+    flags.sslWildcard ||
+    flags.certificateAuthority !== undefined;
+  if (!provided) {
+    if (required) {
+      throw new Error(
+        "Provide at least one SSL flag (--sslMethod, --sslWildcard, --certificateAuthority) or drop them all to keep the API defaults."
+      );
+    }
+    return undefined;
+  }
+  return {
+    method: flags.sslMethod,
+    wildcard: flags.sslWildcard,
+    certificate_authority: flags.certificateAuthority,
+    type: "dv",
+  };
+}
+
+export async function runCreateCustomHostname(
+  hostname: string,
+  flags: CustomHostnamesCreateFlags,
+  deps: CustomHostnamesDeps = defaultDeps
+): Promise<void> {
+  try {
+    const trimmed = hostname.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Hostname is empty.");
+    }
+
+    const config = deps.resolveConfig();
+    const client = deps.createClient(config);
+    const created = await client.createCustomHostname(
+      {
+        hostname: trimmed,
+        custom_origin_server: flags.customOriginServer,
+        custom_origin_sni: flags.customOriginSni,
+        custom_metadata: flags.metadata,
+        ssl: buildSslInput(flags, false),
+      },
+      flags.zoneId
+    );
+
+    if (flags.json) {
+      deps.log(JSON.stringify(created, null, 2));
+      return;
+    }
+    deps.log(`Created custom hostname ${created.id} (${created.hostname}).`);
+    deps.log(formatCustomHostnameDetails(created));
+  } catch (err) {
+    deps.error(`Error: ${formatError(err)}`);
+    deps.exit(1);
+  }
+}
+
+export const createCustomHostnameCommand = buildCommand({
+  docs: {
+    brief: "Create a custom hostname and request its certificate",
+    customUsage: [
+      "app.example.com",
+      "app.example.com --sslMethod http",
+      "app.example.com --customOriginServer origin.example.com",
+    ],
+  },
+  parameters: {
+    flags: {
+      customOriginServer: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "Origin server the custom hostname proxies to (A/AAAA/CNAME in your zone)",
+      },
+      customOriginSni: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "SNI sent to the custom origin (or ':request_host_header:')",
+      },
+      metadata: {
+        kind: "parsed",
+        parse: parseMetadata,
+        optional: true,
+        brief: 'Per-hostname metadata as a JSON object, e.g. \'{"customer_id":"42"}\'',
+      },
+      sslMethod: {
+        kind: "parsed",
+        parse: parseSslMethod,
+        optional: true,
+        brief: "Domain control validation method (http|txt|email); http recommended",
+      },
+      sslWildcard: {
+        kind: "boolean",
+        brief: "Request a wildcard certificate",
+        default: false,
+      },
+      certificateAuthority: {
+        kind: "parsed",
+        parse: parseCertificateAuthority,
+        optional: true,
+        brief: "Certificate authority (digicert|google|lets_encrypt|ssl_com)",
+      },
+      zoneId: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "Zone ID (defaults to CLOUDFLARE_ZONE_ID)",
+      },
+      json: {
+        kind: "boolean",
+        brief: "Output as JSON",
+        default: false,
+      },
+    },
+    positional: {
+      kind: "tuple",
+      parameters: [
+        {
+          brief: "Fully qualified custom hostname to add",
+          parse: String,
+          placeholder: "hostname",
+        },
+      ],
+    },
+  },
+  async func(this: void, flags: CustomHostnamesCreateFlags, hostname: string) {
+    await runCreateCustomHostname(hostname, flags);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Update a custom hostname
+// ---------------------------------------------------------------------------
+
+export interface CustomHostnamesUpdateFlags {
+  readonly customOriginServer?: string;
+  readonly customOriginSni?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly sslMethod?: (typeof SSL_METHODS)[number];
+  readonly sslWildcard: boolean;
+  readonly certificateAuthority?: (typeof CERTIFICATE_AUTHORITIES)[number];
+  readonly zoneId?: string;
+  readonly json: boolean;
+}
+
+export async function runUpdateCustomHostname(
+  customHostnameId: string,
+  flags: CustomHostnamesUpdateFlags,
+  deps: CustomHostnamesDeps = defaultDeps
+): Promise<void> {
+  try {
+    const trimmed = customHostnameId.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Custom hostname ID is empty.");
+    }
+
+    const changed =
+      flags.customOriginServer !== undefined ||
+      flags.customOriginSni !== undefined ||
+      flags.metadata !== undefined ||
+      flags.sslMethod !== undefined ||
+      flags.sslWildcard ||
+      flags.certificateAuthority !== undefined;
+    if (!changed) {
+      throw new Error(
+        "Nothing to update. Pass --customOriginServer, --customOriginSni, --metadata, or SSL flags. Resending the same SSL config also retriggers DCV."
+      );
+    }
+
+    const config = deps.resolveConfig();
+    const client = deps.createClient(config);
+    const updated = await client.updateCustomHostname(
+      trimmed,
+      {
+        custom_origin_server: flags.customOriginServer,
+        custom_origin_sni: flags.customOriginSni,
+        custom_metadata: flags.metadata,
+        ssl: buildSslInput(flags, false),
+      },
+      flags.zoneId
+    );
+
+    if (flags.json) {
+      deps.log(JSON.stringify(updated, null, 2));
+      return;
+    }
+    deps.log(formatCustomHostnameDetails(updated));
+  } catch (err) {
+    deps.error(`Error: ${formatError(err)}`);
+    deps.exit(1);
+  }
+}
+
+export const updateCustomHostnameCommand = buildCommand({
+  docs: {
+    brief: "Update a custom hostname (origin, metadata, or SSL config; resending SSL retriggers DCV)",
+  },
+  parameters: {
+    flags: {
+      customOriginServer: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "New origin server for the custom hostname",
+      },
+      customOriginSni: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "New SNI sent to the custom origin",
+      },
+      metadata: {
+        kind: "parsed",
+        parse: parseMetadata,
+        optional: true,
+        brief: 'Replace per-hostname metadata with this JSON object',
+      },
+      sslMethod: {
+        kind: "parsed",
+        parse: parseSslMethod,
+        optional: true,
+        brief: "Change DCV method (http|txt|email)",
+      },
+      sslWildcard: {
+        kind: "boolean",
+        brief: "Request a wildcard certificate",
+        default: false,
+      },
+      certificateAuthority: {
+        kind: "parsed",
+        parse: parseCertificateAuthority,
+        optional: true,
+        brief: "Change certificate authority (digicert|google|lets_encrypt|ssl_com)",
+      },
+      zoneId: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "Zone ID (defaults to CLOUDFLARE_ZONE_ID)",
+      },
+      json: {
+        kind: "boolean",
+        brief: "Output as JSON",
+        default: false,
+      },
+    },
+    positional: {
+      kind: "tuple",
+      parameters: [
+        {
+          brief: "Custom hostname ID (find it with `custom-hostnames list`)",
+          parse: String,
+          placeholder: "custom-hostname-id",
+        },
+      ],
+    },
+  },
+  async func(this: void, flags: CustomHostnamesUpdateFlags, customHostnameId: string) {
+    await runUpdateCustomHostname(customHostnameId, flags);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Delete a custom hostname
+// ---------------------------------------------------------------------------
+
+export interface CustomHostnamesDeleteFlags {
+  readonly zoneId?: string;
+  readonly json: boolean;
+  readonly yes: boolean;
+}
+
+export async function runDeleteCustomHostname(
+  customHostnameId: string,
+  flags: CustomHostnamesDeleteFlags,
+  deps: CustomHostnamesDeps = defaultDeps
+): Promise<void> {
+  try {
+    const trimmed = customHostnameId.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Custom hostname ID is empty.");
+    }
+
+    if (!flags.yes) {
+      if (!deps.isTTY()) {
+        throw new Error(
+          "Refusing to delete a custom hostname without confirmation. Pass --yes to proceed non-interactively."
+        );
+      }
+      const confirmed = await deps.confirm(
+        `About to delete custom hostname ${trimmed} and its certificate. Type 'yes' to continue: `
+      );
+      if (!confirmed) {
+        deps.error("Aborted.");
+        deps.exit(1);
+        return;
+      }
+    }
+
+    const config = deps.resolveConfig();
+    const client = deps.createClient(config);
+    await client.deleteCustomHostname(trimmed, flags.zoneId);
+
+    if (flags.json) {
+      deps.log(JSON.stringify({ deleted: true, id: trimmed }, null, 2));
+      return;
+    }
+    deps.log(`Deleted custom hostname ${trimmed}.`);
+  } catch (err) {
+    deps.error(`Error: ${formatError(err)}`);
+    deps.exit(1);
+  }
+}
+
+export const deleteCustomHostnameCommand = buildCommand({
+  docs: {
+    brief: "Delete a custom hostname and its certificate",
+  },
+  parameters: {
+    flags: {
+      zoneId: {
+        kind: "parsed",
+        parse: String,
+        optional: true,
+        brief: "Zone ID (defaults to CLOUDFLARE_ZONE_ID)",
+      },
+      json: {
+        kind: "boolean",
+        brief: "Output as JSON",
+        default: false,
+      },
+      yes: {
+        kind: "boolean",
+        brief: "Skip the confirmation prompt",
+        default: false,
+      },
+    },
+    positional: {
+      kind: "tuple",
+      parameters: [
+        {
+          brief: "Custom hostname ID (find it with `custom-hostnames list`)",
+          parse: String,
+          placeholder: "custom-hostname-id",
+        },
+      ],
+    },
+  },
+  async func(this: void, flags: CustomHostnamesDeleteFlags, customHostnameId: string) {
+    await runDeleteCustomHostname(customHostnameId, flags);
   },
 });

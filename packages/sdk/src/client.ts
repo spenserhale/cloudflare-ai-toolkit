@@ -1,15 +1,27 @@
 import type {
   AuditLogListResult,
+  AvailableLogExplorerDataset,
   CloudflareAuth,
   CloudflareConfig,
+  CreateCustomHostnameParams,
+  CreateFirewallRuleParams,
+  CreateRedirectRuleParams,
   CustomHostname,
+  DeleteLogExplorerDatasetParams,
   DnsRecord,
   EnableLogExplorerDatasetParams,
+  FirewallRule,
+  GetLogExplorerDatasetParams,
   ListAuditLogsParams,
+  ListAvailableLogExplorerDatasetsParams,
   ListCustomHostnamesParams,
   ListCustomHostnamesResult,
   ListDnsRecordsResult,
   ListDnsRecordsParams,
+  ListFirewallRulesParams,
+  ListFirewallRulesResult,
+  ListLogExplorerDatasetsParams,
+  ListRedirectRulesResult,
   ListZonesParams,
   ListZonesResult,
   LogExplorerDataset,
@@ -17,11 +29,17 @@ import type {
   PurgeCacheResult,
   QueryLogExplorerParams,
   QueryLogExplorerResult,
+  RedirectRule,
   Resource,
   ListResourcesParams,
   CreateResourceParams,
   PaginatedResponse,
+  Ruleset,
+  UpdateCustomHostnameParams,
   UpdateDnsRecordParams,
+  UpdateFirewallRuleParams,
+  UpdateLogExplorerDatasetParams,
+  UpdateRedirectRuleParams,
   TokenVerificationResult,
   Zone,
   ZoneNameFilterOperator,
@@ -30,29 +48,50 @@ import {
   AuditLogSchema,
   AuditLogListResultSchema,
   AuditLogPaginationSchema,
+  AvailableLogExplorerDatasetSchema,
   CloudflareResponseSchema,
   CloudflareConfigSchema,
+  CreateCustomHostnameParamsSchema,
+  CreateFirewallRuleParamsSchema,
+  CreateRedirectRuleParamsSchema,
   CustomHostnameSchema,
   DnsRecordResultInfoSchema,
   DnsRecordSchema,
+  DeleteLogExplorerDatasetParamsSchema,
   EnableLogExplorerDatasetParamsSchema,
+  FirewallRuleSchema,
+  GetLogExplorerDatasetParamsSchema,
   ListAuditLogsParamsSchema,
+  ListAvailableLogExplorerDatasetsParamsSchema,
   ListCustomHostnamesParamsSchema,
   ListDnsRecordsParamsSchema,
+  ListFirewallRulesParamsSchema,
+  ListLogExplorerDatasetsParamsSchema,
   ListZonesParamsSchema,
   LogExplorerDatasetSchema,
   LogExplorerRowSchema,
   ResultInfoSchema,
   PurgeCacheResultSchema,
   QueryLogExplorerParamsSchema,
+  REDIRECT_RULE_PHASE,
+  RedirectRuleSchema,
   ResourceSchema,
   PaginatedResponseSchema,
   ErrorResponseSchema,
+  RulesetSchema,
+  UpdateCustomHostnameParamsSchema,
   UpdateDnsRecordParamsSchema,
+  UpdateFirewallRuleParamsSchema,
+  UpdateLogExplorerDatasetParamsSchema,
+  UpdateRedirectRuleParamsSchema,
   TokenVerificationResultSchema,
   ZoneSchema,
 } from "./types.js";
-import { CloudflareError, CloudflareAuthError } from "./errors.js";
+import {
+  CloudflareError,
+  CloudflareAuthError,
+  CloudflareNotFoundError,
+} from "./errors.js";
 import { z } from "zod";
 
 type QueryValue = string | number | boolean | undefined;
@@ -136,6 +175,89 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     pathPattern: /^\/client\/v4\/(accounts|zones)\/[^/]+\/logs\/explorer\/datasets$/u,
     requiredPermissions: ["Logs Edit"],
     docsUrl: "https://developers.cloudflare.com/log-explorer/manage-datasets/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/(accounts|zones)\/[^/]+\/logs\/explorer\/datasets(\/[^/]+)?$/u,
+    requiredPermissions: ["Logs Read"],
+    docsUrl: "https://developers.cloudflare.com/log-explorer/manage-datasets/",
+  },
+  {
+    method: "PUT",
+    pathPattern: /^\/client\/v4\/(accounts|zones)\/[^/]+\/logs\/explorer\/datasets\/[^/]+$/u,
+    requiredPermissions: ["Logs Edit"],
+    docsUrl: "https://developers.cloudflare.com/log-explorer/manage-datasets/",
+  },
+  {
+    method: "DELETE",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/custom_hostnames\/[^/]+$/u,
+    requiredPermissions: ["SSL and Certificates Write"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/custom_hostnames/methods/delete/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/firewall\/rules$/u,
+    requiredPermissions: ["Firewall Services Read", "Firewall Services Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/firewall/subresources/rules/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/firewall\/rules\/[^/]+$/u,
+    requiredPermissions: ["Firewall Services Read", "Firewall Services Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/firewall/subresources/rules/methods/get/",
+  },
+  {
+    method: "POST",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/firewall\/rules$/u,
+    requiredPermissions: ["Firewall Services Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/firewall/subresources/rules/methods/create/",
+  },
+  {
+    method: "PUT",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/firewall\/rules\/[^/]+$/u,
+    requiredPermissions: ["Firewall Services Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/firewall/subresources/rules/methods/edit/",
+  },
+  {
+    method: "DELETE",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/firewall\/rules\/[^/]+$/u,
+    requiredPermissions: ["Firewall Services Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/firewall/subresources/rules/methods/delete/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets(\/|\?|$)/u,
+    requiredPermissions: ["Rulesets Read", "Rulesets Edit"],
+    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+  },
+  {
+    method: "POST",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
+    requiredPermissions: ["Rulesets Edit"],
+    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+  },
+  {
+    method: "PUT",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
+    requiredPermissions: ["Rulesets Edit"],
+    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+  },
+  {
+    method: "PATCH",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
+    requiredPermissions: ["Rulesets Edit"],
+    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+  },
+  {
+    method: "DELETE",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
+    requiredPermissions: ["Rulesets Edit"],
+    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
   },
 ];
 
@@ -602,6 +724,339 @@ export class CloudflareClient {
     return CustomHostnameSchema.parse(result);
   }
 
+  async createCustomHostname(
+    params: CreateCustomHostnameParams,
+    zoneId?: string
+  ): Promise<CustomHostname> {
+    const parsed = CreateCustomHostnameParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `/client/v4/zones/${resolvedZoneId}/custom_hostnames`,
+      { body: parsed }
+    );
+
+    return CustomHostnameSchema.parse(result);
+  }
+
+  async updateCustomHostname(
+    customHostnameId: string,
+    params: UpdateCustomHostnameParams,
+    zoneId?: string
+  ): Promise<CustomHostname> {
+    const parsed = UpdateCustomHostnameParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const result = await this.requestResult<unknown>(
+      "PATCH",
+      `/client/v4/zones/${resolvedZoneId}/custom_hostnames/${encodeURIComponent(customHostnameId)}`,
+      { body: parsed }
+    );
+
+    return CustomHostnameSchema.parse(result);
+  }
+
+  async deleteCustomHostname(
+    customHostnameId: string,
+    zoneId?: string
+  ): Promise<void> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    await this.requestResult<unknown>(
+      "DELETE",
+      `/client/v4/zones/${resolvedZoneId}/custom_hostnames/${encodeURIComponent(customHostnameId)}`
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Firewall (WAF) rules
+  // -------------------------------------------------------------------------
+
+  async listFirewallRules(
+    params: ListFirewallRulesParams = {},
+    zoneId?: string
+  ): Promise<ListFirewallRulesResult> {
+    const parsedParams = ListFirewallRulesParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const body = await this.requestRaw<unknown>(
+      "GET",
+      `/client/v4/zones/${resolvedZoneId}/firewall/rules`,
+      {
+        query: {
+          id: parsedParams.id,
+          action: parsedParams.action,
+          description: parsedParams.description,
+          paused: parsedParams.paused,
+          page: parsedParams.page,
+          per_page: parsedParams.perPage,
+        },
+      }
+    );
+
+    const parsedResponse = CloudflareResponseSchema(
+      z.array(FirewallRuleSchema)
+    ).safeParse(body);
+    if (!parsedResponse.success) {
+      throw new CloudflareError(
+        "Unexpected firewall rules response shape",
+        "INVALID_RESPONSE"
+      );
+    }
+
+    if (!parsedResponse.data.success) {
+      const first = parsedResponse.data.errors[0];
+      throw new CloudflareError(
+        first?.message ?? "Firewall rules request failed",
+        String(first?.code ?? "API_ERROR")
+      );
+    }
+
+    const info = ResultInfoSchema.safeParse(parsedResponse.data.result_info);
+
+    return {
+      rules: parsedResponse.data.result,
+      resultInfo: info.success ? info.data : undefined,
+    };
+  }
+
+  async getFirewallRule(ruleId: string, zoneId?: string): Promise<FirewallRule> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `/client/v4/zones/${resolvedZoneId}/firewall/rules/${encodeURIComponent(ruleId)}`
+    );
+
+    return FirewallRuleSchema.parse(result);
+  }
+
+  async createFirewallRule(
+    params: CreateFirewallRuleParams,
+    zoneId?: string
+  ): Promise<FirewallRule> {
+    const parsed = CreateFirewallRuleParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const { expression, ...rule } = parsed;
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `/client/v4/zones/${resolvedZoneId}/firewall/rules`,
+      { body: { ...rule, filter: { expression } } }
+    );
+
+    return FirewallRuleSchema.parse(result);
+  }
+
+  async updateFirewallRule(
+    ruleId: string,
+    params: UpdateFirewallRuleParams,
+    zoneId?: string
+  ): Promise<FirewallRule> {
+    const parsed = UpdateFirewallRuleParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const { expression, ...rule } = parsed;
+    const result = await this.requestResult<unknown>(
+      "PUT",
+      `/client/v4/zones/${resolvedZoneId}/firewall/rules/${encodeURIComponent(ruleId)}`,
+      {
+        body: {
+          id: ruleId,
+          ...rule,
+          filter: { expression },
+        },
+      }
+    );
+
+    return FirewallRuleSchema.parse(result);
+  }
+
+  async deleteFirewallRule(ruleId: string, zoneId?: string): Promise<void> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    await this.requestResult<unknown>(
+      "DELETE",
+      `/client/v4/zones/${resolvedZoneId}/firewall/rules/${encodeURIComponent(ruleId)}`
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Redirect rules (Rulesets Engine, http_request_dynamic_redirect phase)
+  // -------------------------------------------------------------------------
+
+  private async getRedirectEntrypoint(zoneId: string): Promise<Ruleset | undefined> {
+    let result: unknown;
+    try {
+      result = await this.requestResult<unknown>(
+        "GET",
+        `/client/v4/zones/${zoneId}/rulesets/phases/${REDIRECT_RULE_PHASE}/entrypoint`
+      );
+    } catch (err) {
+      if (err instanceof CloudflareError && err.statusCode === 404) return undefined;
+      throw err;
+    }
+
+    if (result === null || result === undefined) return undefined;
+    return RulesetSchema.parse(result);
+  }
+
+  private buildRedirectFromValue(
+    params: {
+      targetUrl?: string;
+      targetExpression?: string;
+      statusCode?: number;
+      preserveQueryString?: boolean;
+    },
+    current?: RedirectRule
+  ): { from_value: Record<string, unknown> } {
+    const existing = current?.action_parameters?.from_value ?? {};
+    const targetUrl =
+      params.targetUrl !== undefined
+        ? { value: params.targetUrl }
+        : params.targetExpression !== undefined
+          ? { expression: params.targetExpression }
+          : existing.target_url;
+    return {
+      from_value: {
+        ...existing,
+        target_url: targetUrl,
+        status_code: params.statusCode ?? existing.status_code,
+        preserve_query_string:
+          params.preserveQueryString ?? existing.preserve_query_string,
+      },
+    };
+  }
+
+  /** Accepts a rule or a full ruleset response and extracts the rule. */
+  private extractRedirectRule(
+    result: unknown,
+    fallback: Record<string, unknown>,
+    ruleId?: string
+  ): RedirectRule {
+    if (result && typeof result === "object" && !Array.isArray(result)) {
+      const candidate = result as { rules?: unknown; id?: unknown };
+      if (Array.isArray(candidate.rules)) {
+        const rules = z.array(RedirectRuleSchema).parse(candidate.rules);
+        const match =
+          (ruleId !== undefined ? rules.find((rule) => rule.id === ruleId) : undefined) ??
+          rules[rules.length - 1];
+        if (match) return match;
+      } else {
+        return RedirectRuleSchema.parse(result);
+      }
+    }
+    return RedirectRuleSchema.parse(fallback);
+  }
+
+  async listRedirectRules(zoneId?: string): Promise<ListRedirectRulesResult> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const ruleset = await this.getRedirectEntrypoint(resolvedZoneId);
+    if (!ruleset) return { rules: [] };
+    return { rulesetId: ruleset.id, rules: ruleset.rules ?? [] };
+  }
+
+  async getRedirectRule(ruleId: string, zoneId?: string): Promise<RedirectRule> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const { rules } = await this.listRedirectRules(resolvedZoneId);
+    const match = rules.find((rule) => rule.id === ruleId);
+    if (!match) {
+      throw new CloudflareNotFoundError("Redirect rule", ruleId);
+    }
+    return match;
+  }
+
+  async createRedirectRule(
+    params: CreateRedirectRuleParams,
+    zoneId?: string
+  ): Promise<RedirectRule> {
+    const parsed = CreateRedirectRuleParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const rule: Record<string, unknown> = {
+      action: "redirect",
+      expression: parsed.expression,
+      description: parsed.description,
+      enabled: parsed.enabled ?? true,
+      action_parameters: this.buildRedirectFromValue(parsed),
+    };
+
+    // If the phase has no entrypoint ruleset yet, create it with this rule.
+    const entrypoint = await this.getRedirectEntrypoint(resolvedZoneId);
+    if (!entrypoint) {
+      const result = await this.requestResult<unknown>(
+        "PUT",
+        `/client/v4/zones/${resolvedZoneId}/rulesets/phases/${REDIRECT_RULE_PHASE}/entrypoint`,
+        { body: { rules: [rule] } }
+      );
+      return this.extractRedirectRule(result, rule);
+    }
+
+    // dry_run validates without persisting; the API returns a null result.
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `/client/v4/zones/${resolvedZoneId}/rulesets/${entrypoint.id}/rules`,
+      {
+        query: { dry_run: parsed.dryRun },
+        body: rule,
+      }
+    );
+    return this.extractRedirectRule(result, rule);
+  }
+
+  async updateRedirectRule(
+    ruleId: string,
+    params: UpdateRedirectRuleParams,
+    zoneId?: string
+  ): Promise<RedirectRule> {
+    const parsed = UpdateRedirectRuleParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const { rulesetId, rules } = await this.listRedirectRules(resolvedZoneId);
+    if (!rulesetId) {
+      throw new CloudflareError(
+        "No redirect rules exist yet. Create one with createRedirectRule first.",
+        "NOT_FOUND"
+      );
+    }
+    const current = rules.find((rule) => rule.id === ruleId);
+    if (!current) {
+      throw new CloudflareNotFoundError("Redirect rule", ruleId);
+    }
+
+    const body: Record<string, unknown> = {};
+    if (parsed.expression !== undefined) body.expression = parsed.expression;
+    if (parsed.description !== undefined) body.description = parsed.description;
+    if (parsed.enabled !== undefined) body.enabled = parsed.enabled;
+
+    const wantsActionChange =
+      parsed.targetUrl !== undefined ||
+      parsed.targetExpression !== undefined ||
+      parsed.statusCode !== undefined ||
+      parsed.preserveQueryString !== undefined;
+    if (wantsActionChange) {
+      body.action_parameters = this.buildRedirectFromValue(parsed, current);
+    }
+
+    const result = await this.requestResult<unknown>(
+      "PATCH",
+      `/client/v4/zones/${resolvedZoneId}/rulesets/${rulesetId}/rules/${encodeURIComponent(ruleId)}`,
+      { body }
+    );
+    return this.extractRedirectRule(result, body, ruleId);
+  }
+
+  async deleteRedirectRule(ruleId: string, zoneId?: string): Promise<void> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const { rulesetId } = await this.listRedirectRules(resolvedZoneId);
+    if (!rulesetId) {
+      throw new CloudflareNotFoundError("Redirect rule", ruleId);
+    }
+
+    await this.requestResult<unknown>(
+      "DELETE",
+      `/client/v4/zones/${resolvedZoneId}/rulesets/${rulesetId}/rules/${encodeURIComponent(ruleId)}`
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Cache purge
   // -------------------------------------------------------------------------
@@ -727,6 +1182,90 @@ export class CloudflareClient {
     );
 
     return LogExplorerDatasetSchema.parse(result);
+  }
+
+  async listLogExplorerDatasets(
+    params: ListLogExplorerDatasetsParams = {},
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<LogExplorerDataset[]> {
+    const parsed = ListLogExplorerDatasetsParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${base}/logs/explorer/datasets`,
+      { query: { include_zones: parsed.includeZones } }
+    );
+
+    if (result === null || result === undefined) return [];
+    return z.array(LogExplorerDatasetSchema).parse(result);
+  }
+
+  async getLogExplorerDataset(
+    params: GetLogExplorerDatasetParams,
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<LogExplorerDataset> {
+    const parsed = GetLogExplorerDatasetParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${base}/logs/explorer/datasets/${encodeURIComponent(parsed.datasetId)}`
+    );
+
+    return LogExplorerDatasetSchema.parse(result);
+  }
+
+  async updateLogExplorerDataset(
+    params: UpdateLogExplorerDatasetParams,
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<LogExplorerDataset> {
+    const parsed = UpdateLogExplorerDatasetParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const result = await this.requestResult<unknown>(
+      "PUT",
+      `${base}/logs/explorer/datasets/${encodeURIComponent(parsed.datasetId)}`,
+      {
+        body: {
+          enabled: parsed.enabled,
+          deletion_protection: parsed.deletionProtection,
+          fields: parsed.fields,
+          filter: parsed.filter,
+        },
+      }
+    );
+
+    return LogExplorerDatasetSchema.parse(result);
+  }
+
+  async deleteLogExplorerDataset(
+    params: DeleteLogExplorerDatasetParams,
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<void> {
+    const parsed = DeleteLogExplorerDatasetParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    await this.requestResult<unknown>(
+      "DELETE",
+      `${base}/logs/explorer/datasets/${encodeURIComponent(parsed.datasetId)}`
+    );
+  }
+
+  async listAvailableLogExplorerDatasets(
+    params: ListAvailableLogExplorerDatasetsParams = {},
+    overrides: { accountId?: string; zoneId?: string } = {}
+  ): Promise<AvailableLogExplorerDataset[]> {
+    const parsed = ListAvailableLogExplorerDatasetsParamsSchema.parse(params);
+    const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
+
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${base}/logs/explorer/datasets/available`
+    );
+
+    if (result === null || result === undefined) return [];
+    return z.array(AvailableLogExplorerDatasetSchema).parse(result);
   }
 
   // -------------------------------------------------------------------------

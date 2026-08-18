@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   formatCustomHostnameDetails,
+  runCreateCustomHostname,
+  runDeleteCustomHostname,
   runGetCustomHostname,
   runListCustomHostnames,
+  runUpdateCustomHostname,
 } from "./custom-hostnames.js";
 
 const PENDING_HOSTNAME = {
@@ -74,6 +77,33 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
 
 function outputOf(deps: { log: { mock: { calls: unknown[][] } } }): string {
   return deps.log.mock.calls.map((call) => String(call[0])).join("\n");
+}
+
+function makeTypedDeps(
+  methods: Record<string, unknown>,
+  overrides: { isTTY?: () => boolean } = {}
+) {
+  const log = vi.fn();
+  const error = vi.fn();
+  const exit = vi.fn(() => undefined as never);
+  return {
+    log,
+    error,
+    exit,
+    deps: {
+      resolveConfig: vi.fn(() => ({
+        auth: { type: "apiToken" as const, token: "test-token" },
+        baseUrl: "https://api.cloudflare.com",
+        zoneId: "zone-from-env",
+      })),
+      createClient: vi.fn(() => methods),
+      log,
+      error,
+      exit,
+      isTTY: vi.fn(() => overrides.isTTY?.() ?? true),
+      confirm: vi.fn(async () => true),
+    } as never,
+  };
 }
 
 interface SpyFn {
@@ -207,5 +237,123 @@ describe("formatCustomHostnameDetails", () => {
     expect(output).toContain("Ready for production traffic");
     expect(output).toContain("Verified (no outstanding ownership challenges).");
     expect(output).toContain("Expires:   2026-11-01T00:00:00Z");
+  });
+});
+
+describe("custom-hostnames create", () => {
+  it("creates a hostname and forwards ssl settings", async () => {
+    const createCustomHostname = vi.fn(async () => PENDING_HOSTNAME);
+    const { deps } = makeTypedDeps({ createCustomHostname });
+
+    await runCreateCustomHostname(
+      "app.example.com",
+      {
+        sslMethod: "http",
+        sslWildcard: false,
+        certificateAuthority: "google",
+        json: true,
+      },
+      deps
+    );
+
+    expect(createCustomHostname).toHaveBeenCalledWith(
+      {
+        hostname: "app.example.com",
+        custom_origin_server: undefined,
+        custom_origin_sni: undefined,
+        custom_metadata: undefined,
+        ssl: {
+          method: "http",
+          wildcard: false,
+          certificate_authority: "google",
+          type: "dv",
+        },
+      },
+      undefined
+    );
+  });
+
+  it("omits ssl entirely when no ssl flags are passed", async () => {
+    const createCustomHostname = vi.fn(async () => ACTIVE_HOSTNAME);
+    const { deps } = makeTypedDeps({ createCustomHostname });
+
+    await runCreateCustomHostname("app.example.com", { sslWildcard: false, json: true }, deps);
+
+    expect(createCustomHostname).toHaveBeenCalledWith(
+      {
+        hostname: "app.example.com",
+        custom_origin_server: undefined,
+        custom_origin_sni: undefined,
+        custom_metadata: undefined,
+        ssl: undefined,
+      },
+      undefined
+    );
+  });
+});
+
+describe("custom-hostnames update", () => {
+  it("errors when nothing to update is provided", async () => {
+    const updateCustomHostname = vi.fn(async () => PENDING_HOSTNAME);
+    const { deps, error } = makeTypedDeps({ updateCustomHostname });
+
+    await runUpdateCustomHostname("ch-1", { sslWildcard: false, json: false }, deps);
+
+    expect(updateCustomHostname).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("Nothing to update")
+    );
+  });
+
+  it("forwards origin and metadata", async () => {
+    const updateCustomHostname = vi.fn(async () => PENDING_HOSTNAME);
+    const { deps } = makeTypedDeps({ updateCustomHostname });
+
+    await runUpdateCustomHostname(
+      "ch-1",
+      {
+        sslWildcard: false,
+        customOriginServer: "origin2.example.com",
+        // stricli's parsed flag hands runUpdateCustomHostname the parsed object
+        metadata: { customer_id: "42" },
+        json: true,
+      },
+      deps
+    );
+
+    expect(updateCustomHostname).toHaveBeenCalledWith(
+      "ch-1",
+      {
+        custom_origin_server: "origin2.example.com",
+        custom_origin_sni: undefined,
+        custom_metadata: { customer_id: "42" },
+        ssl: undefined,
+      },
+      undefined
+    );
+  });
+});
+
+describe("custom-hostnames delete", () => {
+  it("refuses without --yes in non-interactive mode", async () => {
+    const deleteCustomHostname = vi.fn(async () => undefined);
+    const { deps, error } = makeTypedDeps({ deleteCustomHostname }, { isTTY: () => false });
+
+    await runDeleteCustomHostname("ch-1", { json: false, yes: false }, deps);
+
+    expect(deleteCustomHostname).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("Pass --yes to proceed non-interactively")
+    );
+  });
+
+  it("deletes with --yes", async () => {
+    const deleteCustomHostname = vi.fn(async () => undefined);
+    const { deps } = makeTypedDeps({ deleteCustomHostname });
+
+    await runDeleteCustomHostname("ch-1", { json: false, yes: true }, deps);
+
+    expect(deleteCustomHostname).toHaveBeenCalledWith("ch-1", undefined);
+    expect(outputOf(deps)).toContain("Deleted custom hostname ch-1.");
   });
 });

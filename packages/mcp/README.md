@@ -28,8 +28,26 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `get_zone` | Get one zone's status, type, plan, and nameservers; falls back to `CLOUDFLARE_ZONE_ID` |
 | `list_custom_hostnames` | List custom hostnames (SSL for SaaS) with hostname and certificate status |
 | `get_custom_hostname` | Get one custom hostname's certificate state, DCV records, and ownership challenges |
+| `create_custom_hostname` | Create a custom hostname and request its certificate |
+| `update_custom_hostname` | Update a custom hostname's origin, metadata, or SSL config; resending SSL retriggers DCV |
+| `delete_custom_hostname` | Delete a custom hostname and its certificate |
+| `list_firewall_rules` | List firewall (WAF custom) rules with actions, expressions, and paused state |
+| `get_firewall_rule` | Get one firewall rule by ID, including its filter expression |
+| `create_firewall_rule` | Create a firewall rule from a rules-language expression (supports paused staging) |
+| `update_firewall_rule` | Replace a firewall rule's action/expression (PUT; resend current values to keep them) |
+| `delete_firewall_rule` | Delete a firewall rule |
+| `list_redirect_rules` | List redirect rules in a zone (first match wins) |
+| `get_redirect_rule` | Get one redirect rule: expression, target, status code, state |
+| `create_redirect_rule` | Create a redirect rule from an expression (supports dryRun validation) |
+| `update_redirect_rule` | Partially update a redirect rule; unspecified fields keep their values |
+| `delete_redirect_rule` | Delete a redirect rule |
 | `query_log_explorer` | Run a SQL query against Log Explorer (account or zone scope) |
 | `enable_log_explorer_dataset` | Enable a Log Explorer dataset for the account or zone |
+| `list_log_explorer_datasets` | List configured Log Explorer datasets with their IDs and enabled state |
+| `list_available_log_explorer_datasets` | List dataset types the account or zone can enable, with schemas and timestamp fields |
+| `get_log_explorer_dataset` | Get one dataset's field configuration, filter, and ingest state |
+| `update_log_explorer_dataset` | Update a dataset: enable/disable ingest, restrict fields, set or clear a filter |
+| `delete_log_explorer_dataset` | Delete a dataset and stop its log ingest |
 
 ## Setup with Claude Desktop
 
