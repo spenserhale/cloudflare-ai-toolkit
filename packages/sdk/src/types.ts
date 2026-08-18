@@ -64,6 +64,22 @@ export type CloudflareResponse<T> = {
 };
 
 // ---------------------------------------------------------------------------
+// Shared pagination metadata (Cloudflare `result_info`)
+// ---------------------------------------------------------------------------
+
+export const ResultInfoSchema = z
+  .object({
+    page: z.number().optional(),
+    per_page: z.number().optional(),
+    count: z.number().optional(),
+    total_count: z.number().optional(),
+    total_pages: z.number().optional(),
+  })
+  .passthrough();
+
+export type ResultInfo = z.infer<typeof ResultInfoSchema>;
+
+// ---------------------------------------------------------------------------
 // Legacy scaffold resource schemas
 // ---------------------------------------------------------------------------
 
@@ -220,17 +236,9 @@ export const ListDnsRecordsParamsSchema = z.object({
 
 export type ListDnsRecordsParams = z.infer<typeof ListDnsRecordsParamsSchema>;
 
-export const DnsRecordResultInfoSchema = z
-  .object({
-    page: z.number().optional(),
-    per_page: z.number().optional(),
-    count: z.number().optional(),
-    total_count: z.number().optional(),
-    total_pages: z.number().optional(),
-  })
-  .passthrough();
+export const DnsRecordResultInfoSchema = ResultInfoSchema;
 
-export type DnsRecordResultInfo = z.infer<typeof DnsRecordResultInfoSchema>;
+export type DnsRecordResultInfo = ResultInfo;
 
 export const ListDnsRecordsResultSchema = z.object({
   records: z.array(DnsRecordSchema),
@@ -336,3 +344,226 @@ export const EnableLogExplorerDatasetParamsSchema = z.object({
 export type EnableLogExplorerDatasetParams = z.infer<
   typeof EnableLogExplorerDatasetParamsSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Custom hostname (SSL for SaaS) schemas
+// ---------------------------------------------------------------------------
+
+export const CustomHostnameValidationRecordSchema = z
+  .object({
+    txt_name: z.string().optional(),
+    txt_value: z.string().optional(),
+    http_url: z.string().optional(),
+    http_body: z.string().optional(),
+    cname: z.string().optional(),
+    cname_target: z.string().optional(),
+    emails: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameValidationRecord = z.infer<
+  typeof CustomHostnameValidationRecordSchema
+>;
+
+export const CustomHostnameValidationErrorSchema = z
+  .object({
+    message: z.string().optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameValidationError = z.infer<
+  typeof CustomHostnameValidationErrorSchema
+>;
+
+export const CustomHostnameSslSchema = z
+  .object({
+    id: z.string().optional(),
+    status: z.string().optional(),
+    type: z.string().optional(),
+    method: z.string().optional(),
+    hosts: z.array(z.string()).optional(),
+    issuer: z.string().optional(),
+    serial_number: z.string().optional(),
+    signature: z.string().optional(),
+    certificate_authority: z.string().optional(),
+    bundle_method: z.string().optional(),
+    wildcard: z.boolean().optional(),
+    uploaded_on: z.string().optional(),
+    expires_on: z.string().optional(),
+    validation_records: z.array(CustomHostnameValidationRecordSchema).optional(),
+    validation_errors: z.array(CustomHostnameValidationErrorSchema).optional(),
+    settings: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameSsl = z.infer<typeof CustomHostnameSslSchema>;
+
+export const CustomHostnameOwnershipVerificationSchema = z
+  .object({
+    type: z.string().optional(),
+    name: z.string().optional(),
+    value: z.string().optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameOwnershipVerification = z.infer<
+  typeof CustomHostnameOwnershipVerificationSchema
+>;
+
+export const CustomHostnameOwnershipVerificationHttpSchema = z
+  .object({
+    http_url: z.string().optional(),
+    http_body: z.string().optional(),
+  })
+  .passthrough();
+
+export type CustomHostnameOwnershipVerificationHttp = z.infer<
+  typeof CustomHostnameOwnershipVerificationHttpSchema
+>;
+
+export const CustomHostnameSchema = z
+  .object({
+    id: z.string(),
+    hostname: z.string(),
+    status: z.string().optional(),
+    ssl: CustomHostnameSslSchema.optional(),
+    verification_errors: z.array(z.string()).optional(),
+    ownership_verification: CustomHostnameOwnershipVerificationSchema.optional(),
+    ownership_verification_http:
+      CustomHostnameOwnershipVerificationHttpSchema.optional(),
+    custom_origin_server: z.string().optional(),
+    custom_origin_sni: z.string().optional(),
+    custom_metadata: z.record(z.unknown()).optional(),
+    created_at: z.string().optional(),
+  })
+  .passthrough();
+
+export type CustomHostname = z.infer<typeof CustomHostnameSchema>;
+
+export const ListCustomHostnamesParamsSchema = z.object({
+  hostname: z.string().optional(),
+  id: z.string().optional(),
+  ssl: z.boolean().optional(),
+  order: z.enum(["ssl", "ssl_status"]).optional(),
+  direction: z.enum(["asc", "desc"]).optional(),
+  page: z.number().int().positive().optional(),
+  perPage: z.number().int().min(5).max(50).optional(),
+});
+
+export type ListCustomHostnamesParams = z.infer<
+  typeof ListCustomHostnamesParamsSchema
+>;
+
+export const ListCustomHostnamesResultSchema = z.object({
+  hostnames: z.array(CustomHostnameSchema),
+  resultInfo: ResultInfoSchema.optional(),
+});
+
+export type ListCustomHostnamesResult = z.infer<
+  typeof ListCustomHostnamesResultSchema
+>;
+
+// ---------------------------------------------------------------------------
+// Zone schemas
+// ---------------------------------------------------------------------------
+
+export const ZoneSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    status: z.string().optional(),
+    paused: z.boolean().optional(),
+    type: z.string().optional(),
+    account: z
+      .object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    owner: z
+      .object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+        type: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    plan: z
+      .object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    name_servers: z.array(z.string()).optional(),
+    original_name_servers: z.array(z.string()).nullable().optional(),
+    original_registrar: z.string().nullable().optional(),
+    original_dnshost: z.string().nullable().optional(),
+    vanity_name_servers: z.array(z.string()).optional(),
+    development_mode: z.number().optional(),
+    created_on: z.string().optional(),
+    activated_on: z.string().nullable().optional(),
+    modified_on: z.string().optional(),
+    meta: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type Zone = z.infer<typeof ZoneSchema>;
+
+/**
+ * Cloudflare refines `name` / `account.name` searches with an operator prefix,
+ * e.g. `?name=contains:example`. `equal` is the API default and sends the bare
+ * value.
+ */
+export const ZoneNameFilterOperatorSchema = z.enum([
+  "equal",
+  "not_equal",
+  "starts_with",
+  "ends_with",
+  "contains",
+  "starts_with_case_sensitive",
+  "ends_with_case_sensitive",
+  "contains_case_sensitive",
+]);
+
+export type ZoneNameFilterOperator = z.infer<typeof ZoneNameFilterOperatorSchema>;
+
+export const ZoneStatusSchema = z.enum([
+  "initializing",
+  "pending",
+  "active",
+  "moved",
+]);
+
+export type ZoneStatus = z.infer<typeof ZoneStatusSchema>;
+
+export const ZoneTypeSchema = z.enum(["full", "partial", "secondary", "internal"]);
+
+export type ZoneType = z.infer<typeof ZoneTypeSchema>;
+
+export const ListZonesParamsSchema = z.object({
+  name: z.string().optional(),
+  nameOperator: ZoneNameFilterOperatorSchema.optional(),
+  accountId: z.string().optional(),
+  accountName: z.string().optional(),
+  accountNameOperator: ZoneNameFilterOperatorSchema.optional(),
+  status: ZoneStatusSchema.optional(),
+  type: z.array(ZoneTypeSchema).nonempty().optional(),
+  match: z.enum(["all", "any"]).optional(),
+  order: z
+    .enum(["name", "status", "account.id", "account.name", "plan.id"])
+    .optional(),
+  direction: z.enum(["asc", "desc"]).optional(),
+  page: z.number().int().positive().optional(),
+  perPage: z.number().int().min(5).max(50).optional(),
+});
+
+export type ListZonesParams = z.infer<typeof ListZonesParamsSchema>;
+
+export const ListZonesResultSchema = z.object({
+  zones: z.array(ZoneSchema),
+  resultInfo: ResultInfoSchema.optional(),
+});
+
+export type ListZonesResult = z.infer<typeof ListZonesResultSchema>;

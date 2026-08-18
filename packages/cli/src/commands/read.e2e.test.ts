@@ -102,10 +102,16 @@ async function runCliWithMockFetch(
       stdout: string;
       stderr: string;
     }>((resolvePromise, rejectPromise) => {
+      // Drop any ambient CLOUDFLARE_* vars so a developer's real credentials or
+      // zone defaults can't leak into the spawned CLI and change the assertions.
+      const inheritedEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.startsWith("CLOUDFLARE_"))
+      );
+
       const child = spawn(BUN_BIN, ["--preload", preloadPath, CLI_ENTRY, ...args], {
         cwd: tempDir,
         env: {
-          ...process.env,
+          ...inheritedEnv,
           ...envOverrides,
           MOCK_ROUTES: JSON.stringify(routes),
         },
@@ -221,6 +227,107 @@ describe("CLI read e2e", () => {
     const output = JSON.parse(result.stdout);
     expect(output.records).toHaveLength(1);
     expect(output.records[0]?.id).toBe("rec-1");
+  });
+
+  it("zones list resolves a domain name to a zone", async () => {
+    const routes: readonly MockRoute[] = [
+      {
+        method: "GET",
+        pathname: "/client/v4/zones",
+        status: 200,
+        body: {
+          success: true,
+          errors: [],
+          messages: [],
+          result: [
+            {
+              id: "zone-abc",
+              name: "myedgewooddental.com",
+              status: "active",
+              type: "full",
+              account: { id: "acc-1", name: "Example Account" },
+              plan: { id: "plan-1", name: "Free Website" },
+              name_servers: ["bob.ns.cloudflare.com", "lola.ns.cloudflare.com"],
+              original_name_servers: null,
+            },
+          ],
+          result_info: { page: 1, per_page: 20, count: 1, total_count: 1, total_pages: 1 },
+        },
+        expectedHeaders: {
+          authorization: "Bearer test-token",
+        },
+      },
+    ];
+
+    const result = await runCliWithMockFetch(
+      ["zones", "list", "myedgewooddental.com"],
+      {
+        CLOUDFLARE_API_TOKEN: "test-token",
+        CLOUDFLARE_BASE_URL: "https://mock.cloudflare.test",
+      },
+      routes
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stderr.trim()).toBe("");
+    expect(result.stdout).toContain("zone-abc  myedgewooddental.com");
+    expect(result.stdout).toContain("status=active");
+  });
+
+  it("custom-hostnames get prints certificate and ownership validation state", async () => {
+    const routes: readonly MockRoute[] = [
+      {
+        method: "GET",
+        pathname: "/client/v4/zones/zone-id/custom_hostnames/ch-1",
+        status: 200,
+        body: {
+          success: true,
+          errors: [],
+          messages: [],
+          result: {
+            id: "ch-1",
+            hostname: "app.example.com",
+            status: "pending",
+            ssl: {
+              id: "cert-1",
+              status: "pending_validation",
+              type: "dv",
+              method: "txt",
+              validation_records: [
+                {
+                  txt_name: "_acme-challenge.app.example.com",
+                  txt_value: "810b7d5f01154524b961ba0cd578acc2",
+                },
+              ],
+            },
+            ownership_verification: {
+              type: "txt",
+              name: "_cf-custom-hostname.app.example.com",
+              value: "0e2d5a7f-1548-4f27-8c05-b577cb14f4ec",
+            },
+          },
+        },
+        expectedHeaders: {
+          authorization: "Bearer test-token",
+        },
+      },
+    ];
+
+    const result = await runCliWithMockFetch(
+      ["custom-hostnames", "get", "ch-1"],
+      {
+        CLOUDFLARE_API_TOKEN: "test-token",
+        CLOUDFLARE_ZONE_ID: "zone-id",
+        CLOUDFLARE_BASE_URL: "https://mock.cloudflare.test",
+      },
+      routes
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stderr.trim()).toBe("");
+    expect(result.stdout).toContain("TXT _acme-challenge.app.example.com");
+    expect(result.stdout).toContain("_cf-custom-hostname.app.example.com");
+    expect(result.stdout).toContain("Not ready");
   });
 
   it("audit logs list falls back to legacy global API key headers when token is absent", async () => {

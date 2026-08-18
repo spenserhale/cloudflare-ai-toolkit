@@ -108,7 +108,8 @@ CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
 CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
 CLOUDFLARE_ACCOUNT_ID    default for audit-log commands/tools
-CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge)
+CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
+                         custom hostnames, `zones get`, log-explorer)
 CLOUDFLARE_BASE_URL      override (default https://api.cloudflare.com)
 ```
 
@@ -126,6 +127,25 @@ cloudflare audit logs list \
   --actionType zone.settings.update
 ```
 
+### Zones
+
+Search and filter zones — this is how you turn a domain name into the zone ID
+every other zone-scoped command needs. The positional name is an exact match
+unless you pass `--operator`.
+
+```bash
+cloudflare zones list                                       # every zone
+cloudflare zones list myedgewooddental.com                  # exact name
+cloudflare zones list dental --operator contains            # partial search
+cloudflare zones list --status pending --order name
+cloudflare zones list --accountId <account-id> --type full,partial
+cloudflare zones get <zone-id>                              # or CLOUDFLARE_ZONE_ID
+```
+
+`--operator` accepts Cloudflare's name filter operators: `equal` (default),
+`not_equal`, `starts_with`, `ends_with`, `contains`, and the
+`*_case_sensitive` variants.
+
 ### DNS records
 
 ```bash
@@ -133,13 +153,29 @@ cloudflare dns records list <zone-id> --type A --name app.example.com
 cloudflare dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
 ```
 
+### Custom hostnames (SSL for SaaS)
+
+Inspect certificate and hostname-validation state for Cloudflare for SaaS
+custom hostnames. A hostname only carries production traffic once both
+`status` and `ssl.status` are `active`; `get` calls that out explicitly and
+prints the outstanding DCV records and ownership challenges.
+
+```bash
+cloudflare custom-hostnames list --zoneId <zone-id>
+cloudflare custom-hostnames list --hostname app.example.com
+cloudflare custom-hostnames list --ssl false          # hostnames with no certificate
+cloudflare custom-hostnames get <custom-hostname-id> --json
+```
+
+Requires a token with `SSL and Certificates Read` (or Write).
+
 ### Cache purge
 
 Destructive purges (`everything`, `prefixes`, `hosts`) prompt for confirmation.
 Pass `--yes` to skip the prompt or to run non-interactively (e.g. in CI).
 
 ```bash
-cloudflare cache purge everything --zone-id <zone-id> --yes
+cloudflare cache purge everything --zoneId <zone-id> --yes
 cloudflare cache purge urls https://example.com/a https://example.com/b
 cloudflare cache purge tags my-tag
 cloudflare cache purge prefixes example.com/assets/ --yes

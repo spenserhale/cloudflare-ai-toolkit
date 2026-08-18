@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { registerAuditTools } from "./audit.js";
 import { registerCacheTools } from "./cache.js";
+import { registerCustomHostnameTools } from "./custom-hostnames.js";
 import { registerDnsTools } from "./dns.js";
 import { registerLogExplorerTools } from "./log-explorer.js";
 import { registerResourceTools } from "./resources.js";
+import { registerZoneTools } from "./zones.js";
 
 interface FakeServer {
   readonly tools: string[];
@@ -28,6 +30,10 @@ describe("MCP tool registration", () => {
     registerCacheTools(server as unknown as Parameters<typeof registerCacheTools>[0]);
     registerDnsTools(server as unknown as Parameters<typeof registerDnsTools>[0]);
     registerLogExplorerTools(server as unknown as Parameters<typeof registerLogExplorerTools>[0]);
+    registerZoneTools(server as unknown as Parameters<typeof registerZoneTools>[0]);
+    registerCustomHostnameTools(
+      server as unknown as Parameters<typeof registerCustomHostnameTools>[0]
+    );
 
     expect(server.tools).toEqual(
       expect.arrayContaining([
@@ -42,6 +48,10 @@ describe("MCP tool registration", () => {
         "update_dns_record",
         "query_log_explorer",
         "enable_log_explorer_dataset",
+        "list_zones",
+        "get_zone",
+        "list_custom_hostnames",
+        "get_custom_hostname",
       ])
     );
   });

@@ -12,11 +12,16 @@ import {
   purgeCacheByPrefixesCommand,
   purgeCacheByHostsCommand,
 } from "./commands/cache-purge.js";
+import {
+  getCustomHostnameCommand,
+  listCustomHostnamesCommand,
+} from "./commands/custom-hostnames.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
 import { logExplorerQueryCommand } from "./commands/log-explorer-query.js";
 import { enableLogExplorerDatasetCommand } from "./commands/log-explorer-datasets-enable.js";
 import { upgradeCommand } from "./commands/upgrade.js";
+import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 
 const resourceRoutes = buildRouteMap({
   routes: {
@@ -70,6 +75,26 @@ const cacheRoutes = buildRouteMap({
   },
 });
 
+const zoneRoutes = buildRouteMap({
+  routes: {
+    list: listZonesCommand,
+    get: getZoneCommand,
+  },
+  docs: {
+    brief: "Zone lookups",
+  },
+});
+
+const customHostnameRoutes = buildRouteMap({
+  routes: {
+    list: listCustomHostnamesCommand,
+    get: getCustomHostnameCommand,
+  },
+  docs: {
+    brief: "Custom hostname (SSL for SaaS) operations",
+  },
+});
+
 const dnsRecordRoutes = buildRouteMap({
   routes: {
     list: listDnsRecordsCommand,
@@ -113,6 +138,8 @@ const routes = buildRouteMap({
     resources: resourceRoutes,
     audit: auditRoutes,
     cache: cacheRoutes,
+    zones: zoneRoutes,
+    "custom-hostnames": customHostnameRoutes,
     dns: dnsRoutes,
     "log-explorer": logExplorerRoutes,
     upgrade: upgradeCommand,

@@ -22,6 +22,33 @@ const cf = new CloudflareClient({
 const records = await cf.listDnsRecords("<zone-id>");
 ```
 
+### Find a zone
+
+```ts
+// Exact name match (the API default).
+const { zones } = await cf.listZones({ name: "example.com" });
+
+// Partial search — Cloudflare refines the filter with an operator prefix.
+const matches = await cf.listZones({ name: "exam", nameOperator: "contains" });
+
+const zone = await cf.getZone("<zone-id>"); // omit to use CLOUDFLARE_ZONE_ID
+```
+
+### Custom hostnames (SSL for SaaS)
+
+```ts
+const { hostnames } = await cf.listCustomHostnames(
+  { hostname: "app.example.com" },
+  "<zone-id>" // omit to use CLOUDFLARE_ZONE_ID
+);
+
+const hostname = await cf.getCustomHostname("<custom-hostname-id>");
+
+// `status` tracks hostname activation, `ssl.status` tracks certificate issuance.
+// Both must be "active" before the hostname serves production traffic.
+const ready = hostname.status === "active" && hostname.ssl?.status === "active";
+```
+
 ### Legacy Global API Key auth
 
 ```ts

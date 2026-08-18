@@ -41,7 +41,7 @@ export CLOUDFLARE_API_TOKEN=...       # preferred
 # export CLOUDFLARE_API_KEY=...
 # export CLOUDFLARE_EMAIL=...
 export CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit commands
-export CLOUDFLARE_ZONE_ID=...         # optional default for dns/cache commands
+export CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped commands
 ```
 
 ## Commands
@@ -49,14 +49,25 @@ export CLOUDFLARE_ZONE_ID=...         # optional default for dns/cache commands
 ```bash
 cloudflare audit logs list [flags]
 
+cloudflare zones list [name] [--operator <op>] [--status <status>] [flags]
+cloudflare zones get [zone-id] [--json]
+
 cloudflare dns records list <zone-id> [flags]
 cloudflare dns records update <zone-id> <record-id> [flags]
 
-cloudflare cache purge everything [--zone-id <id>] [--yes]
-cloudflare cache purge urls <url>... [--zone-id <id>]
-cloudflare cache purge tags <tag>... [--zone-id <id>]
-cloudflare cache purge prefixes <prefix>... [--zone-id <id>] [--yes]
-cloudflare cache purge hosts <host>... [--zone-id <id>] [--yes]
+cloudflare custom-hostnames list [--hostname <fqdn>] [--zoneId <id>] [flags]
+cloudflare custom-hostnames get <custom-hostname-id> [--zoneId <id>] [--json]
+
+cloudflare cache purge everything [--zoneId <id>] [--yes]
+cloudflare cache purge urls <url>... [--zoneId <id>]
+cloudflare cache purge tags <tag>... [--zoneId <id>]
+cloudflare cache purge prefixes <prefix>... [--zoneId <id>] [--yes]
+cloudflare cache purge hosts <host>... [--zoneId <id>] [--yes]
+
+cloudflare log-explorer query [--sql <query>|--file <path>|--stdin] [flags]
+cloudflare log-explorer datasets enable <dataset> [flags]
+
+cloudflare upgrade [--check] [--force] [--version <version>]
 ```
 
 Run `cloudflare <command> --help` for full flag docs.

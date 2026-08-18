@@ -2,11 +2,16 @@ import type {
   AuditLogListResult,
   CloudflareAuth,
   CloudflareConfig,
+  CustomHostname,
   DnsRecord,
   EnableLogExplorerDatasetParams,
   ListAuditLogsParams,
+  ListCustomHostnamesParams,
+  ListCustomHostnamesResult,
   ListDnsRecordsResult,
   ListDnsRecordsParams,
+  ListZonesParams,
+  ListZonesResult,
   LogExplorerDataset,
   LogExplorerScope,
   PurgeCacheResult,
@@ -18,6 +23,8 @@ import type {
   PaginatedResponse,
   UpdateDnsRecordParams,
   TokenVerificationResult,
+  Zone,
+  ZoneNameFilterOperator,
 } from "./types.js";
 import {
   AuditLogSchema,
@@ -25,13 +32,17 @@ import {
   AuditLogPaginationSchema,
   CloudflareResponseSchema,
   CloudflareConfigSchema,
+  CustomHostnameSchema,
   DnsRecordResultInfoSchema,
   DnsRecordSchema,
   EnableLogExplorerDatasetParamsSchema,
   ListAuditLogsParamsSchema,
+  ListCustomHostnamesParamsSchema,
   ListDnsRecordsParamsSchema,
+  ListZonesParamsSchema,
   LogExplorerDatasetSchema,
   LogExplorerRowSchema,
+  ResultInfoSchema,
   PurgeCacheResultSchema,
   QueryLogExplorerParamsSchema,
   ResourceSchema,
@@ -39,6 +50,7 @@ import {
   ErrorResponseSchema,
   UpdateDnsRecordParamsSchema,
   TokenVerificationResultSchema,
+  ZoneSchema,
 } from "./types.js";
 import { CloudflareError, CloudflareAuthError } from "./errors.js";
 import { z } from "zod";
@@ -67,6 +79,18 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
   },
   {
     method: "GET",
+    pathPattern: /^\/client\/v4\/zones$/u,
+    requiredPermissions: ["Zone Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/zones/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+$/u,
+    requiredPermissions: ["Zone Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/zones/methods/get/",
+  },
+  {
+    method: "GET",
     pathPattern: /^\/client\/v4\/zones\/[^/]+\/dns_records$/u,
     requiredPermissions: ["DNS Read", "DNS Write"],
     docsUrl:
@@ -78,6 +102,20 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     requiredPermissions: ["DNS Write"],
     docsUrl:
       "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/edit/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/custom_hostnames$/u,
+    requiredPermissions: ["SSL and Certificates Read", "SSL and Certificates Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/custom_hostnames/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/custom_hostnames\/[^/]+$/u,
+    requiredPermissions: ["SSL and Certificates Read", "SSL and Certificates Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/custom_hostnames/methods/get/",
   },
   {
     method: "POST",
@@ -367,6 +405,71 @@ export class CloudflareClient {
   }
 
   // -------------------------------------------------------------------------
+  // Zones
+  // -------------------------------------------------------------------------
+
+  private buildZoneNameFilter(
+    value: string | undefined,
+    operator: ZoneNameFilterOperator | undefined
+  ): string | undefined {
+    if (value === undefined) return undefined;
+    if (operator === undefined || operator === "equal") return value;
+    return `${operator}:${value}`;
+  }
+
+  async listZones(params: ListZonesParams = {}): Promise<ListZonesResult> {
+    const parsedParams = ListZonesParamsSchema.parse(params);
+
+    const body = await this.requestRaw<unknown>("GET", "/client/v4/zones", {
+      query: {
+        name: this.buildZoneNameFilter(parsedParams.name, parsedParams.nameOperator),
+        "account.id": parsedParams.accountId,
+        "account.name": this.buildZoneNameFilter(
+          parsedParams.accountName,
+          parsedParams.accountNameOperator
+        ),
+        status: parsedParams.status,
+        type: parsedParams.type?.join(","),
+        match: parsedParams.match,
+        order: parsedParams.order,
+        direction: parsedParams.direction,
+        page: parsedParams.page,
+        per_page: parsedParams.perPage,
+      },
+    });
+
+    const parsedResponse = CloudflareResponseSchema(z.array(ZoneSchema)).safeParse(body);
+    if (!parsedResponse.success) {
+      throw new CloudflareError("Unexpected zones response shape", "INVALID_RESPONSE");
+    }
+
+    if (!parsedResponse.data.success) {
+      const first = parsedResponse.data.errors[0];
+      throw new CloudflareError(
+        first?.message ?? "Zones request failed",
+        String(first?.code ?? "API_ERROR")
+      );
+    }
+
+    const info = ResultInfoSchema.safeParse(parsedResponse.data.result_info);
+
+    return {
+      zones: parsedResponse.data.result,
+      resultInfo: info.success ? info.data : undefined,
+    };
+  }
+
+  async getZone(zoneId?: string): Promise<Zone> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `/client/v4/zones/${encodeURIComponent(resolvedZoneId)}`
+    );
+
+    return ZoneSchema.parse(result);
+  }
+
+  // -------------------------------------------------------------------------
   // DNS records
   // -------------------------------------------------------------------------
 
@@ -430,6 +533,73 @@ export class CloudflareClient {
     );
 
     return DnsRecordSchema.parse(updated);
+  }
+
+  // -------------------------------------------------------------------------
+  // Custom hostnames (SSL for SaaS)
+  // -------------------------------------------------------------------------
+
+  async listCustomHostnames(
+    params: ListCustomHostnamesParams = {},
+    zoneId?: string
+  ): Promise<ListCustomHostnamesResult> {
+    const parsedParams = ListCustomHostnamesParamsSchema.parse(params);
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    const body = await this.requestRaw<unknown>(
+      "GET",
+      `/client/v4/zones/${resolvedZoneId}/custom_hostnames`,
+      {
+        query: {
+          hostname: parsedParams.hostname,
+          id: parsedParams.id,
+          ssl:
+            parsedParams.ssl === undefined ? undefined : parsedParams.ssl ? 1 : 0,
+          order: parsedParams.order,
+          direction: parsedParams.direction,
+          page: parsedParams.page,
+          per_page: parsedParams.perPage,
+        },
+      }
+    );
+
+    const parsedResponse = CloudflareResponseSchema(
+      z.array(CustomHostnameSchema)
+    ).safeParse(body);
+    if (!parsedResponse.success) {
+      throw new CloudflareError(
+        "Unexpected custom hostnames response shape",
+        "INVALID_RESPONSE"
+      );
+    }
+
+    if (!parsedResponse.data.success) {
+      const first = parsedResponse.data.errors[0];
+      throw new CloudflareError(
+        first?.message ?? "Custom hostnames request failed",
+        String(first?.code ?? "API_ERROR")
+      );
+    }
+
+    const info = ResultInfoSchema.safeParse(parsedResponse.data.result_info);
+
+    return {
+      hostnames: parsedResponse.data.result,
+      resultInfo: info.success ? info.data : undefined,
+    };
+  }
+
+  async getCustomHostname(
+    customHostnameId: string,
+    zoneId?: string
+  ): Promise<CustomHostname> {
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `/client/v4/zones/${resolvedZoneId}/custom_hostnames/${encodeURIComponent(customHostnameId)}`
+    );
+
+    return CustomHostnameSchema.parse(result);
   }
 
   // -------------------------------------------------------------------------
