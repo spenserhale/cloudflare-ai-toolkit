@@ -1,5 +1,39 @@
 # @cloudflare-ai-toolkit/sdk
 
+## 0.3.0
+
+### Minor Changes
+
+- [`0646839`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/0646839f303bda61c1b55c98ad8f0c491ec56f22) Thanks [@spenserhale](https://github.com/spenserhale)! - Add custom hostname lifecycle (create/update/delete) across SDK, CLI, and MCP, completing the existing list/get support.
+
+  - **SDK**: new `createCustomHostname(params, zoneId?)`, `updateCustomHostname(id, params, zoneId?)` (PATCH; partial updates validated to require at least one field; resending SSL config retriggers DCV), and `deleteCustomHostname(id, zoneId?)` on `CloudflareClient`. Adds `CustomHostnameSslInput`/`CustomHostnameSslSettings` schemas (method, wildcard, certificate authority, TLS settings) and permission hints for POST/PATCH/DELETE (`SSL and Certificates Write`).
+  - **CLI**: new `cloudflare custom-hostnames create <hostname>` (`--sslMethod http|txt|email`, `--sslWildcard`, `--certificateAuthority`, `--customOriginServer`, `--customOriginSni`, `--metadata <json>`), `custom-hostnames update <id>`, and `custom-hostnames delete <id> [--yes]` with interactive confirmation that refuses to run non-interactively without `--yes`.
+  - **MCP**: new `create_custom_hostname`, `update_custom_hostname`, and `delete_custom_hostname` tools.
+
+- [`0646839`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/0646839f303bda61c1b55c98ad8f0c491ec56f22) Thanks [@spenserhale](https://github.com/spenserhale)! - Add full Log Explorer dataset management across SDK, CLI, and MCP.
+
+  - **SDK**: new methods on `CloudflareClient` — `listLogExplorerDatasets(params?, overrides?)` (with `includeZones`), `listAvailableLogExplorerDatasets(params?, overrides?)` (dataset types, schemas, timestamp fields), `getLogExplorerDataset`, `updateLogExplorerDataset` (enable/disable ingest, field allowlist, Logpush filter set/clear, deletion protection), and `deleteLogExplorerDataset`. `LogExplorerDataset` now types `fields`, `filter`, and `deletion_protection`; adds `LogExplorerDatasetField` and `AvailableLogExplorerDataset` schemas plus permission hints (`Logs Read` for dataset reads, `Logs Edit` for update/delete).
+  - **CLI**: new `cloudflare log-explorer datasets list [--includeZones]`, `datasets available`, `datasets get <dataset-id>` (prints enabled/disabled field checklist and filter), `datasets update <dataset-id> --enabled true|false [--fields a,b] [--filter expr] [--deletionProtection bool]`, and `datasets delete <dataset-id> [--yes]` with interactive confirmation that refuses to run non-interactively without `--yes`. `get`/`update`/`delete` address datasets by the `dataset_id` shown by `datasets list`.
+  - **MCP**: new `list_log_explorer_datasets`, `list_available_log_explorer_datasets`, `get_log_explorer_dataset`, `update_log_explorer_dataset`, and `delete_log_explorer_dataset` tools.
+
+- [`0646839`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/0646839f303bda61c1b55c98ad8f0c491ec56f22) Thanks [@spenserhale](https://github.com/spenserhale)! - Add redirect rule management across SDK, CLI, and MCP via the Rulesets Engine `http_request_dynamic_redirect` phase.
+
+  - **SDK**: new methods on `CloudflareClient` — `listRedirectRules(zoneId?)` (reads the phase entrypoint ruleset; returns `{ rulesetId, rules }`, empty when none exists), `getRedirectRule(ruleId, zoneId?)`, `createRedirectRule(params, zoneId?)` (flat `targetUrl`/`targetExpression` + `statusCode` + `preserveQueryString` params; creates the entrypoint via PUT if absent; supports `dryRun` validation), `updateRedirectRule(ruleId, params, zoneId?)` (partial PATCH — target/status changes merge with the rule's current from_value), and `deleteRedirectRule(ruleId, zoneId?)`. Adds `RedirectRule`, `Ruleset`, `RedirectStatusCode` (301|302|303|307|308), `REDIRECT_RULE_PHASE` schemas/consts plus permission hints (`Rulesets Read`/`Rulesets Edit`).
+  - **CLI**: new `cloudflare redirects list|get|create|update|delete`. `create` takes `--expression` plus exactly one of `--targetUrl`/`--targetExpression`, with `--statusCode`, `--preserveQueryString`, `--enabled`, and `--dryRun` (validate without saving). `update` is partial — pass only what changes. `delete` prompts and refuses non-interactively without `--yes`.
+  - **MCP**: new `list_redirect_rules`, `get_redirect_rule`, `create_redirect_rule` (with dryRun), `update_redirect_rule`, and `delete_redirect_rule` tools.
+
+- [`0646839`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/0646839f303bda61c1b55c98ad8f0c491ec56f22) Thanks [@spenserhale](https://github.com/spenserhale)! - Add WAF firewall rules (custom rules) support across SDK, CLI, and MCP via the `/zones/{id}/firewall/rules` API.
+
+  - **SDK**: new methods on `CloudflareClient` — `listFirewallRules(params?, zoneId?)` (filter by action, description substring, paused state, with pagination), `getFirewallRule(ruleId, zoneId?)`, `createFirewallRule(params, zoneId?)`, `updateFirewallRule(ruleId, params, zoneId?)` (PUT; action + expression required), and `deleteFirewallRule(ruleId, zoneId?)`. The create/update APIs take a flat `expression` and wrap it into the `filter` object the API expects. Adds `FirewallRule`, `FirewallFilter`, `FirewallRuleAction` (block|challenge|js_challenge|managed_challenge|allow|log|bypass), and `FirewallRuleProduct` schemas plus permission hints (`Firewall Services Read` for reads, `Firewall Services Write` for writes).
+  - **CLI**: new `cloudflare waf rules list|get|create|update|delete`. `create` takes `--action` and `--expression` (Cloudflare rules language) with `--paused true` for staging; `update` documents the PUT semantics (resend current values to keep them); `delete` prompts and refuses non-interactively without `--yes`. `get` prints the full filter expression, priority, and paused state.
+  - **MCP**: new `list_firewall_rules`, `get_firewall_rule`, `create_firewall_rule`, `update_firewall_rule`, and `delete_firewall_rule` tools.
+
+- [`209b63f`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/209b63fd3a260c1656f4114bcceeadee337e63eb) Thanks [@spenserhale](https://github.com/spenserhale)! - Add zone search and custom hostname (SSL for SaaS) support across SDK, CLI, and MCP.
+
+  - **SDK**: new `listZones(params?)`, `getZone(zoneId?)`, `listCustomHostnames(params?, zoneId?)`, and `getCustomHostname(customHostnameId, zoneId?)` methods on `CloudflareClient`. Zone name and account name filters accept Cloudflare's operator prefixes (`nameOperator: "contains"` sends `?name=contains:...`; `equal` is the default and sends the bare value). Adds Zod schemas (`Zone`, `ListZonesParams`, `CustomHostname`, `CustomHostnameSsl`, `ListCustomHostnamesParams`, …), a shared `ResultInfoSchema` for `result_info` pagination metadata, and permission hints for `/zones` (`Zone Read`) and `/zones/{id}/custom_hostnames` (`SSL and Certificates Read`).
+  - **CLI**: new `cloudflare zones list [name]` (exact match by default, `--operator contains` etc. for partial search, plus `--status`, `--type`, `--accountId`, `--accountName`, `--match`, `--order`, `--direction`, pagination) and `cloudflare zones get [zone-id]`. New `cloudflare custom-hostnames list` and `cloudflare custom-hostnames get <custom-hostname-id>`; the detail view prints hostname `status` and `ssl.status` side by side along with DCV validation records, validation errors, and ownership challenges, and states whether the hostname is ready for production traffic. Zone ID falls back to `CLOUDFLARE_ZONE_ID`.
+  - **MCP**: new `list_zones`, `get_zone`, `list_custom_hostnames`, and `get_custom_hostname` tools registered on the FastMCP server.
+
 ## 0.2.0
 
 ### Minor Changes
