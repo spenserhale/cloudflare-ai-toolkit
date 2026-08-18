@@ -43,6 +43,11 @@ locally; use `node packages/cli/dist/bin.js --help` for smoke tests.
 
 ## Release token requirements
 
+- The GitHub Release + binaries (the curl-install distribution) are cut on
+  every version-PR merge **whether or not npm publish succeeds** — `release.yml`
+  runs the changesets publish step with `continue-on-error` and creates the
+  `v*` release from `packages/cli/package.json` directly. An expired
+  `NPM_TOKEN` only breaks the npm tarballs, never the binary install path.
 - `NPM_TOKEN` secret should be a **Classic Automation token** or a Granular
   Access token with publish permission. The user's account 2FA must be set to
   "Authorization only" (not "Authorization and publishing"), otherwise CI

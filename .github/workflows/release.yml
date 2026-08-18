@@ -55,19 +55,43 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # npm publish may fail (expired/invalid NPM_TOKEN). The standalone
+        # binary distribution must not depend on npm: keep going and cut the
+        # GitHub Release from the merged version bump regardless.
+        continue-on-error: true
 
-      - name: Create GitHub Release for new tags
-        if: steps.changesets.outputs.published == 'true'
+      - name: Warn when npm publish failed
+        if: steps.changesets.outcome == 'failure'
+        run: |
+          echo "::warning::npm publish failed (check NPM_TOKEN). The GitHub Release and binaries are still being published so the curl install keeps working."
+
+      - name: Create GitHub Release for new versions
+        # Runs on version-PR merges (no pending changesets left) whether or
+        # not npm publish succeeded — the binary install path is npm-free.
+        if: always() && !cancelled()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
-          cli_version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[] | select(.name=="@cloudflare-ai-toolkit/cli") | .version')
-          if [ -n "$cli_version" ] && [ "$cli_version" != "null" ]; then
-            gh release create "v$cli_version" \
-              --title "v$cli_version" \
-              --notes "Release v$cli_version. Binary assets will be attached by the Binaries workflow."
-            # Releases created via GITHUB_TOKEN don't fire `release: published`
-            # downstream workflows, so dispatch Binaries explicitly.
-            gh workflow run binaries.yml -f tag="v$cli_version"
+          cli_version=$(node -e "console.log(require('./packages/cli/package.json').version)")
+          tag="v$cli_version"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; skipping."
+            exit 0
           fi
+
+          # Only cut a release when this run consumed the changesets (the
+          # version PR merge). If changeset files remain, this run only opened
+          # the version PR and the current package.json version is already
+          # released.
+          if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
+            echo "Pending changesets remain (version PR run); current version $cli_version not released here."
+            exit 0
+          fi
+
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes "Release $tag. Binary assets will be attached by the Binaries workflow."
+          # Releases created via GITHUB_TOKEN don't fire `release: published`
+          # downstream workflows, so dispatch Binaries explicitly.
+          gh workflow run binaries.yml -f tag="$tag"
