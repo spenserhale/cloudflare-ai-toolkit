@@ -44,6 +44,24 @@ jobs:
       - name: Smoke test built CLI
         run: node packages/cli/dist/bin.js --help
 
+      # Capture version + pending-changeset state from the PRISTINE checkout,
+      # BEFORE the changesets action runs `changeset version` in the working
+      # tree when it (re)builds the version PR branch. After the action, the
+      # tree may show a bumped version and consumed changesets even on runs
+      # that only opened/updated the version PR — releasing from that state
+      # would cut the tag from the wrong commit.
+      - name: Capture release state
+        id: state
+        run: |
+          version=$(node -e "console.log(require('./packages/cli/package.json').version)")
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ -n "$pending" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@v1
@@ -66,26 +84,18 @@ jobs:
           echo "::warning::npm publish failed (check NPM_TOKEN). The GitHub Release and binaries are still being published so the curl install keeps working."
 
       - name: Create GitHub Release for new versions
-        # Runs on version-PR merges (no pending changesets left) whether or
-        # not npm publish succeeded — the binary install path is npm-free.
-        if: always() && !cancelled()
+        # Runs on version-PR merges (pristine tree: no pending changesets,
+        # version bump present) whether or not npm publish succeeded — the
+        # binary install path is npm-free. Skips when the release already
+        # exists (e.g. docs-only pushes after a release).
+        if: always() && !cancelled() && steps.state.outputs.pending == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cli_version=$(node -e "console.log(require('./packages/cli/package.json').version)")
-          tag="v$cli_version"
+          tag="v${{ steps.state.outputs.version }}"
 
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; skipping."
-            exit 0
-          fi
-
-          # Only cut a release when this run consumed the changesets (the
-          # version PR merge). If changeset files remain, this run only opened
-          # the version PR and the current package.json version is already
-          # released.
-          if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
-            echo "Pending changesets remain (version PR run); current version $cli_version not released here."
             exit 0
           fi
 
