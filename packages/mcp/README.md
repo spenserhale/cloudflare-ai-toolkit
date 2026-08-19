@@ -26,6 +26,9 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `update_dns_record` | Update an existing DNS record |
 | `list_zones` | List, search, and filter zones — resolve a domain name to a zone ID |
 | `get_zone` | Get one zone's status, type, plan, and nameservers; falls back to `CLOUDFLARE_ZONE_ID` |
+| `get_zone_vanity_nameservers` | Read a zone's custom (vanity) nameservers and the glue addresses assigned to them |
+| `set_zone_vanity_nameservers` | Replace a zone's custom nameservers (Business/Enterprise; names must be subdomains of the zone) |
+| `clear_zone_vanity_nameservers` | Remove a zone's custom nameservers and their read-only A/AAAA records |
 | `list_custom_hostnames` | List custom hostnames (SSL for SaaS) with hostname and certificate status |
 | `get_custom_hostname` | Get one custom hostname's certificate state, DCV records, and ownership challenges |
 | `create_custom_hostname` | Create a custom hostname and request its certificate |

@@ -370,6 +370,7 @@ export interface ZonesGetFlags {
 }
 
 export function formatZoneDetails(zone: Zone): string {
+  const vanityNameServers = zone.vanity_name_servers ?? [];
   const account = zone.account?.name
     ? `${zone.account.name}${zone.account.id ? ` (${zone.account.id})` : ""}`
     : orDash(zone.account?.id);
@@ -383,6 +384,7 @@ export function formatZoneDetails(zone: Zone): string {
     `Account:     ${account}`,
     `Plan:        ${orDash(zone.plan?.name)}`,
     `Nameservers: ${zone.name_servers?.join(", ") ?? "-"}`,
+    `Vanity NS:   ${vanityNameServers.length > 0 ? vanityNameServers.join(", ") : "-"}`,
     `Original NS: ${zone.original_name_servers?.join(", ") ?? "-"}`,
     `Registrar:   ${orDash(zone.original_registrar)}`,
     `Created:     ${orDash(zone.created_on)}`,

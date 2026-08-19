@@ -43,6 +43,7 @@ import type {
   TokenVerificationResult,
   Zone,
   ZoneNameFilterOperator,
+  ZoneVanityNameServers,
 } from "./types.js";
 import {
   AuditLogSchema,
@@ -79,12 +80,14 @@ import {
   PaginatedResponseSchema,
   ErrorResponseSchema,
   RulesetSchema,
+  SetZoneVanityNameServersParamsSchema,
   UpdateCustomHostnameParamsSchema,
   UpdateDnsRecordParamsSchema,
   UpdateFirewallRuleParamsSchema,
   UpdateLogExplorerDatasetParamsSchema,
   UpdateRedirectRuleParamsSchema,
   TokenVerificationResultSchema,
+  VanityNameServerIpsSchema,
   ZoneSchema,
 } from "./types.js";
 import {
@@ -127,6 +130,12 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     pathPattern: /^\/client\/v4\/zones\/[^/]+$/u,
     requiredPermissions: ["Zone Read"],
     docsUrl: "https://developers.cloudflare.com/api/resources/zones/methods/get/",
+  },
+  {
+    method: "PATCH",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+$/u,
+    requiredPermissions: ["Zone Write"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/zones/methods/edit/",
   },
   {
     method: "GET",
@@ -589,6 +598,63 @@ export class CloudflareClient {
     );
 
     return ZoneSchema.parse(result);
+  }
+
+  // -------------------------------------------------------------------------
+  // Zone custom (vanity) nameservers
+  // -------------------------------------------------------------------------
+
+  private toZoneVanityNameServers(zone: Zone): ZoneVanityNameServers {
+    const nameServers = zone.vanity_name_servers ?? [];
+    return {
+      zoneId: zone.id,
+      zoneName: zone.name,
+      enabled: nameServers.length > 0,
+      nameServers,
+      ips: VanityNameServerIpsSchema.parse(zone["vanity_name_servers_ips"]) ?? [],
+      assignedNameServers: zone.name_servers ?? [],
+    };
+  }
+
+  /**
+   * Read a zone's custom (vanity) nameservers plus the glue-record addresses
+   * Cloudflare assigned to them.
+   */
+  async getZoneVanityNameServers(zoneId?: string): Promise<ZoneVanityNameServers> {
+    return this.toZoneVanityNameServers(await this.getZone(zoneId));
+  }
+
+  /**
+   * Replace a zone's custom (vanity) nameservers. Every name must be a
+   * subdomain of the zone, and the zone must be on a Business or Enterprise
+   * plan. Passing an empty array removes them — prefer
+   * {@link clearZoneVanityNameServers} for that.
+   *
+   * @see https://developers.cloudflare.com/dns/nameservers/custom-nameservers/zone-custom-nameservers/
+   */
+  async setZoneVanityNameServers(
+    nameServers: string[],
+    zoneId?: string
+  ): Promise<ZoneVanityNameServers> {
+    const parsed = SetZoneVanityNameServersParamsSchema.parse({ nameServers });
+    const resolvedZoneId = this.resolveZoneId(zoneId);
+
+    // The Edit Zone endpoint only accepts one zone property per request.
+    const result = await this.requestResult<unknown>(
+      "PATCH",
+      `/client/v4/zones/${encodeURIComponent(resolvedZoneId)}`,
+      { body: { vanity_name_servers: parsed.nameServers } }
+    );
+
+    return this.toZoneVanityNameServers(ZoneSchema.parse(result));
+  }
+
+  /**
+   * Remove a zone's custom nameservers and the read-only A/AAAA records
+   * Cloudflare created for them.
+   */
+  async clearZoneVanityNameServers(zoneId?: string): Promise<ZoneVanityNameServers> {
+    return this.setZoneVanityNameServers([], zoneId);
   }
 
   // -------------------------------------------------------------------------

@@ -27,7 +27,7 @@ env | grep -E '^(CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|CLOUDFLARE_EMAIL)=' | s
 Optional defaults so you don't have to pass IDs each time:
 
 - `CLOUDFLARE_ACCOUNT_ID` — default for `audit` commands
-- `CLOUDFLARE_ZONE_ID` — default for `cache`, `custom-hostnames`, `zones get`, and `log-explorer` commands
+- `CLOUDFLARE_ZONE_ID` — default for `cache`, `custom-hostnames`, `zones get`, `zones vanity-ns`, and `log-explorer` commands
 
 If no credential is set, stop and ask the user which they want to configure — don't guess at one.
 
@@ -36,6 +36,9 @@ If no credential is set, stop and ask the user which they want to configure — 
 ```
 cloudflare zones list [name]                           # search/filter zones, get zone IDs
 cloudflare zones get [zone-id]                         # zone status, type, plan, nameservers
+cloudflare zones vanity-ns get [zone-id]               # custom (vanity) nameservers + glue records
+cloudflare zones vanity-ns set <ns>...                 # replace custom nameservers
+cloudflare zones vanity-ns clear                       # revert to Cloudflare's nameservers
 cloudflare audit logs list                             # audit log queries
 cloudflare dns records list <zone-id>                  # list DNS records
 cloudflare dns records update <zone-id> <record-id>    # edit a DNS record
@@ -94,6 +97,24 @@ cloudflare custom-hostnames get <custom-hostname-id> --zoneId <zone-id>
 ```
 
 These need a token with `SSL and Certificates Read`; `zones list` needs `Zone Read`.
+
+## Zone custom (vanity) nameservers
+
+`cloudflare zones vanity-ns` reads and modifies zone custom nameservers (ZCNS) —
+the zone is served from names under itself (`ns1.example.com`) instead of
+Cloudflare's assigned pair.
+
+- Every name must be a subdomain of the zone, and the zone must be on a Business or Enterprise plan.
+- `set` replaces the whole list; there is no partial update. Read with `get` first.
+- Setting or clearing them changes authoritative DNS. Both prompt unless `--yes`; don't pass `--yes` on the user's behalf without saying what will change.
+- Cloudflare creates the read-only `A`/`AAAA` records, but the user must add the nameservers and matching glue records at their registrar or lookups for the domain fail. Say so after a `set`.
+
+```bash
+cloudflare zones vanity-ns get --json
+cloudflare zones vanity-ns set ns1.example.com ns2.example.com --zoneId <zone-id>
+```
+
+Reads need `Zone Read`; writes need `Zone Write`.
 
 ## WAF firewall rules
 

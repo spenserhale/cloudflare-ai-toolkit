@@ -82,4 +82,55 @@ export function registerZoneTools(server: FastMCP) {
       return JSON.stringify(result, null, 2);
     },
   });
+
+  server.addTool({
+    name: "get_zone_vanity_nameservers",
+    description:
+      "Read a zone's custom (vanity) nameservers, the glue-record addresses Cloudflare assigned to them, and the Cloudflare nameservers they replace. Defaults to CLOUDFLARE_ZONE_ID.",
+    parameters: z.object({
+      zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const result = await client.getZoneVanityNameServers(args.zoneId);
+      return JSON.stringify(result, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "set_zone_vanity_nameservers",
+    description:
+      "Replace a zone's custom (vanity) nameservers. Every name must be a subdomain of the zone itself (ns1.example.com for zone example.com), and the zone must be on a Business or Enterprise plan. This changes authoritative DNS: resolution breaks until the same nameservers and their glue records are set at the registrar. Requires a 'Zone Write' API token.",
+    parameters: z.object({
+      nameServers: z
+        .array(z.string())
+        .nonempty()
+        .describe(
+          "Fully qualified nameserver names, each a subdomain of the zone. To remove them, use clear_zone_vanity_nameservers."
+        ),
+      zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const result = await client.setZoneVanityNameServers(
+        args.nameServers,
+        args.zoneId
+      );
+      return JSON.stringify(result, null, 2);
+    },
+  });
+
+  server.addTool({
+    name: "clear_zone_vanity_nameservers",
+    description:
+      "Remove a zone's custom (vanity) nameservers and the read-only A/AAAA records Cloudflare created for them. The zone falls back to its assigned Cloudflare nameservers, which must then be set at the registrar. Requires a 'Zone Write' API token.",
+    parameters: z.object({
+      zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      const result = await client.clearZoneVanityNameServers(args.zoneId);
+      return JSON.stringify(result, null, 2);
+    },
+  });
 }

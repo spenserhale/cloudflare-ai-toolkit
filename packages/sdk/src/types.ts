@@ -881,7 +881,7 @@ export const ZoneSchema = z
     original_name_servers: z.array(z.string()).nullable().optional(),
     original_registrar: z.string().nullable().optional(),
     original_dnshost: z.string().nullable().optional(),
-    vanity_name_servers: z.array(z.string()).optional(),
+    vanity_name_servers: z.array(z.string()).nullable().optional(),
     development_mode: z.number().optional(),
     created_on: z.string().optional(),
     activated_on: z.string().nullable().optional(),
@@ -948,3 +948,81 @@ export const ListZonesResultSchema = z.object({
 });
 
 export type ListZonesResult = z.infer<typeof ListZonesResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Zone custom (vanity) nameserver schemas
+// ---------------------------------------------------------------------------
+
+/**
+ * Cloudflare's Zone details response carries a `vanity_name_servers_ips` field
+ * that is absent from the public OpenAPI schema, so `ZoneSchema` lets it
+ * through untyped (the schema is `passthrough`) and we parse it leniently here.
+ * A shape we do not recognise degrades to an empty list rather than throwing.
+ */
+export const VanityNameServerIpSchema = z
+  .object({
+    ns_name: z.string().optional(),
+    ipv4: z.string().nullable().optional(),
+    ipv6: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export type VanityNameServerIp = z.infer<typeof VanityNameServerIpSchema>;
+
+export const VanityNameServerIpsSchema = z
+  .array(VanityNameServerIpSchema)
+  .nullable()
+  .optional()
+  .catch(undefined);
+
+/**
+ * Zone custom nameservers (ZCNS), historically "vanity nameservers". Each name
+ * must be a subdomain of the zone it is configured on, and the feature is
+ * gated to Business and Enterprise plans.
+ *
+ * @see https://developers.cloudflare.com/dns/nameservers/custom-nameservers/zone-custom-nameservers/
+ */
+export const VanityNameServerNameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, "Nameserver name is empty")
+  .max(253, "Nameserver name exceeds 253 characters")
+  .regex(
+    /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/u,
+    "Nameserver must be a fully qualified hostname (e.g. ns1.example.com)"
+  );
+
+/**
+ * Cloudflare does not document a maximum count, so we only enforce uniqueness
+ * and let the API reject anything beyond its own limit.
+ */
+export const VanityNameServersSchema = z
+  .array(VanityNameServerNameSchema)
+  .refine(
+    (names) => new Set(names).size === names.length,
+    "Nameserver names must be unique"
+  );
+
+export const SetZoneVanityNameServersParamsSchema = z.object({
+  nameServers: VanityNameServersSchema,
+});
+
+export type SetZoneVanityNameServersParams = z.infer<
+  typeof SetZoneVanityNameServersParamsSchema
+>;
+
+export const ZoneVanityNameServersSchema = z.object({
+  zoneId: z.string(),
+  zoneName: z.string(),
+  /** `true` when the zone has at least one custom nameserver configured. */
+  enabled: z.boolean(),
+  /** Configured custom nameservers; empty when the zone uses Cloudflare's. */
+  nameServers: z.array(z.string()),
+  /** Cloudflare-assigned glue record addresses, one entry per nameserver. */
+  ips: z.array(VanityNameServerIpSchema),
+  /** Cloudflare's assigned nameservers, which ZCNS replace at the registrar. */
+  assignedNameServers: z.array(z.string()),
+});
+
+export type ZoneVanityNameServers = z.infer<typeof ZoneVanityNameServersSchema>;

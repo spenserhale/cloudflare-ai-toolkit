@@ -1,4 +1,4 @@
-# Guidance for Claude sessions in this repo
+# Guidance for AI coding agents in this repo
 
 ## Do not try to validate `bun build --compile` binaries on local macOS
 
@@ -63,3 +63,27 @@ We do not publish with provenance attestations. `bun publish` doesn't yet
 support npm OIDC / sigstore (see oven-sh/bun#22423). The standalone binaries
 from GitHub Releases carry SHA256 checksums and are the primary distribution
 path; npm tarballs are a secondary convenience.
+
+## Looking up Cloudflare API facts
+
+Never guess an endpoint path, field name, or response shape. Two sources, in
+order:
+
+1. **The Cloudflare Docs MCP server** — declared in `.mcp.json` as
+   `cloudflare-docs` (`https://docs.mcp.cloudflare.com/mcp`, no auth). Use
+   `search_cloudflare_documentation` for product behavior, concepts, limits,
+   plan gating, and worked examples. It is semantic search over
+   developers.cloudflare.com, so it is good at "how does purge-by-tag work"
+   and weaker at "what is the exact request body for this one endpoint."
+2. **The REST API reference at <https://developers.cloudflare.com/api/>** —
+   the canonical source for endpoint paths, HTTP methods, parameter names and
+   types, and the `{ success, errors, messages, result }` envelope. Go here
+   whenever the MCP search doesn't surface the specific endpoint you need, or
+   returns prose without the schema. Deep-link form is
+   `https://developers.cloudflare.com/api/resources/<resource>/methods/<method>/`
+   (e.g. `.../resources/cache/methods/purge/`); fetch it directly rather than
+   searching again.
+
+Because we wrap this API, (2) wins any disagreement with (1) for
+request/response shapes — the docs prose lags the reference. If neither has
+it, say so instead of inventing a signature.

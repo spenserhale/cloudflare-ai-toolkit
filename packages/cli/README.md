@@ -51,6 +51,9 @@ cloudflare audit logs list [flags]
 
 cloudflare zones list [name] [--operator <op>] [--status <status>] [flags]
 cloudflare zones get [zone-id] [--json]
+cloudflare zones vanity-ns get [zone-id] [--json]
+cloudflare zones vanity-ns set <ns...> [--zoneId <id>] [--yes] [--json]
+cloudflare zones vanity-ns clear [--zoneId <id>] [--yes] [--json]
 
 cloudflare dns records list <zone-id> [flags]
 cloudflare dns records update <zone-id> <record-id> [flags]

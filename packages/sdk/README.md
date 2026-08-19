@@ -34,6 +34,25 @@ const matches = await cf.listZones({ name: "exam", nameOperator: "contains" });
 const zone = await cf.getZone("<zone-id>"); // omit to use CLOUDFLARE_ZONE_ID
 ```
 
+### Zone custom (vanity) nameservers
+
+Names must be subdomains of the zone, and the zone must be on a Business or
+Enterprise plan. Writes need a `Zone Write` token.
+
+```ts
+const current = await cf.getZoneVanityNameServers("<zone-id>");
+// -> { zoneId, zoneName, enabled, nameServers, ips, assignedNameServers }
+
+// Replaces the whole list; `ips` carries the glue addresses Cloudflare assigns.
+await cf.setZoneVanityNameServers(
+  ["ns1.example.com", "ns2.example.com"],
+  "<zone-id>"
+);
+
+// Removes them plus the read-only A/AAAA records Cloudflare created.
+await cf.clearZoneVanityNameServers("<zone-id>");
+```
+
 ### Custom hostnames (SSL for SaaS)
 
 ```ts

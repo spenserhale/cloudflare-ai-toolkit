@@ -40,6 +40,11 @@ import {
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 import {
+  clearVanityNameServersCommand,
+  getVanityNameServersCommand,
+  setVanityNameServersCommand,
+} from "./commands/zone-vanity-ns.js";
+import {
   createFirewallRuleCommand,
   deleteFirewallRuleCommand,
   getFirewallRuleCommand,
@@ -99,13 +104,25 @@ const cacheRoutes = buildRouteMap({
   },
 });
 
+const zoneVanityNsRoutes = buildRouteMap({
+  routes: {
+    get: getVanityNameServersCommand,
+    set: setVanityNameServersCommand,
+    clear: clearVanityNameServersCommand,
+  },
+  docs: {
+    brief: "Read and modify zone custom (vanity) nameservers",
+  },
+});
+
 const zoneRoutes = buildRouteMap({
   routes: {
     list: listZonesCommand,
     get: getZoneCommand,
+    "vanity-ns": zoneVanityNsRoutes,
   },
   docs: {
-    brief: "Zone lookups",
+    brief: "Zone lookups and custom nameservers",
   },
 });
 

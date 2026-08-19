@@ -114,7 +114,8 @@ CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
 CLOUDFLARE_ACCOUNT_ID    default for audit-log commands/tools
 CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
-                         custom hostnames, `zones get`, log-explorer)
+                         custom hostnames, `zones get`, `zones vanity-ns`,
+                         log-explorer)
 CLOUDFLARE_BASE_URL      override (default https://api.cloudflare.com)
 ```
 
@@ -150,6 +151,30 @@ cloudflare zones get <zone-id>                              # or CLOUDFLARE_ZONE
 `--operator` accepts Cloudflare's name filter operators: `equal` (default),
 `not_equal`, `starts_with`, `ends_with`, `contains`, and the
 `*_case_sensitive` variants.
+
+### Zone custom (vanity) nameservers
+
+Zone custom nameservers — ZCNS, historically "vanity nameservers" — serve a
+zone from names under the zone itself (`ns1.example.com`) instead of
+Cloudflare's assigned pair. Every name must be a subdomain of the zone, and the
+zone must be on a Business or Enterprise plan.
+
+```bash
+cloudflare zones vanity-ns get                              # or <zone-id>
+cloudflare zones vanity-ns set ns1.example.com ns2.example.com
+cloudflare zones vanity-ns clear
+```
+
+`get` prints the configured names alongside the IPv4/IPv6 glue addresses
+Cloudflare assigned to them. `set` and `clear` change authoritative DNS, so both
+prompt for confirmation and refuse to run non-interactively without `--yes`;
+`set` also checks the names against the zone before spending a request.
+
+Cloudflare only creates the read-only `A`/`AAAA` records — you still have to add
+the nameservers and their glue records at your registrar, or DNS lookups for the
+domain will fail. See the [zone custom nameservers
+docs](https://developers.cloudflare.com/dns/nameservers/custom-nameservers/zone-custom-nameservers/).
+Writing requires a `Zone Write` API token.
 
 ### DNS records
 
