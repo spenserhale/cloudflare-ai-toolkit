@@ -279,6 +279,42 @@ cloudflare log-explorer datasets delete <dataset-id> --yes
 takes the dataset name from `datasets available`. Requires a token with
 `Logs Read` (queries, listing) and `Logs Edit` (enable/update/delete).
 
+### API token permissions
+
+Ask what the configured token can actually do, instead of inferring it from a
+failed write.
+
+```bash
+cloudflare tokens verify                              # active? no extra permission needed
+cloudflare tokens show                                # name, status, validity window, policy count
+cloudflare tokens permissions                         # every permission group, with scope + resources
+cloudflare tokens groups --name Rules                 # catalog: resolve a name to its stable ID
+```
+
+`--check` turns "can I do X" into a gate:
+
+```bash
+cloudflare tokens permissions --check "Zone:Config Rules:Edit"
+cloudflare tokens permissions --check "Zone Read" --check "Logs Read" --quiet
+```
+
+Exit status follows `grep`: **0** every check granted, **1** at least one
+definitively not granted, **2** the question could not be answered. That third
+code matters — collapsing it into `1` would tell a script "you lack this
+permission" when the truth is "nobody could tell".
+
+A check matches a permission group by its **ID** (stable) or its **name**
+(which Cloudflare documents as cosmetic and subject to change). Name matching is
+case-insensitive, treats the dashboard's `Edit` as the API's `Write`, and accepts
+a leading scope word, so `Zone:Config Rules:Edit`, `Config Rules Write`, and the
+group's ID all match the same permission. A query is granted only if it matches
+an `allow` and no `deny`.
+
+`tokens verify` works with any token. Everything else here reads the token's own
+policies, which requires **User → API Tokens → Read** on the token itself —
+without it Cloudflare answers `403` code `9109`, and the CLI says exactly which
+permission to add.
+
 ## Local development
 
 ```bash

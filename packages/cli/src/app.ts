@@ -37,6 +37,12 @@ import {
   listLogExplorerDatasetsCommand,
   updateLogExplorerDatasetCommand,
 } from "./commands/log-explorer-datasets.js";
+import {
+  listPermissionGroupsCommand,
+  showTokenCommand,
+  tokenPermissionsCommand,
+  verifyTokenCommand,
+} from "./commands/tokens.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 import {
@@ -217,6 +223,18 @@ const logExplorerRoutes = buildRouteMap({
   },
 });
 
+const tokenRoutes = buildRouteMap({
+  routes: {
+    verify: verifyTokenCommand,
+    show: showTokenCommand,
+    permissions: tokenPermissionsCommand,
+    groups: listPermissionGroupsCommand,
+  },
+  docs: {
+    brief: "Inspect the configured API token and its permissions",
+  },
+});
+
 const routes = buildRouteMap({
   routes: {
     resources: resourceRoutes,
@@ -228,6 +246,7 @@ const routes = buildRouteMap({
     waf: wafRoutes,
     redirects: redirectsRoutes,
     "log-explorer": logExplorerRoutes,
+    tokens: tokenRoutes,
     upgrade: upgradeCommand,
   },
   docs: {

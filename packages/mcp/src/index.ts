@@ -8,6 +8,7 @@ import { registerCustomHostnameTools } from "./tools/custom-hostnames.js";
 import { registerDnsTools } from "./tools/dns.js";
 import { registerLogExplorerTools } from "./tools/log-explorer.js";
 import { registerRedirectTools } from "./tools/redirects.js";
+import { registerTokenTools } from "./tools/tokens.js";
 import { registerWafTools } from "./tools/waf.js";
 import { registerZoneTools } from "./tools/zones.js";
 
@@ -22,6 +23,7 @@ registerCacheTools(server);
 registerDnsTools(server);
 registerLogExplorerTools(server);
 registerRedirectTools(server);
+registerTokenTools(server);
 registerWafTools(server);
 registerZoneTools(server);
 registerCustomHostnameTools(server);

@@ -201,6 +201,141 @@ export const TokenVerificationResultSchema = z
 export type TokenVerificationResult = z.infer<typeof TokenVerificationResultSchema>;
 
 // ---------------------------------------------------------------------------
+// API token introspection
+// ---------------------------------------------------------------------------
+
+/**
+ * A permission group as returned either by the permission-group catalog or
+ * embedded in a token policy.
+ *
+ * The two sources disagree on where the scope lives: the catalog endpoint
+ * returns `scopes` as an array of strings, while groups embedded in a policy
+ * carry a single scope string under `meta.scopes`. Both are accepted here and
+ * normalised by `flattenTokenPolicies`.
+ *
+ * Cloudflare treats `id` as the stable key and documents `name` as "cosmetic
+ * and subject to change", which is why permission checks match on either.
+ *
+ * @see https://developers.cloudflare.com/fundamentals/api/how-to/create-via-api/
+ */
+export const TokenPermissionGroupSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional(),
+    scopes: z.array(z.string()).optional(),
+    meta: z
+      .object({
+        label: z.string().optional(),
+        scopes: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+export type TokenPermissionGroup = z.infer<typeof TokenPermissionGroupSchema>;
+
+/**
+ * Resources a policy applies to, keyed by Cloudflare resource identifier. The
+ * value is either `"*"` or a nested object for account-scoped zone wildcards
+ * (`{"com.cloudflare.api.account.<id>": {"com.cloudflare.api.account.zone.*": "*"}}`).
+ */
+export const TokenPolicyResourcesSchema = z.record(
+  z.union([z.string(), z.record(z.string())])
+);
+
+export type TokenPolicyResources = z.infer<typeof TokenPolicyResourcesSchema>;
+
+export const TokenPolicyEffectSchema = z.enum(["allow", "deny"]);
+
+export type TokenPolicyEffect = z.infer<typeof TokenPolicyEffectSchema>;
+
+export const TokenPolicySchema = z
+  .object({
+    id: z.string(),
+    effect: TokenPolicyEffectSchema,
+    permission_groups: z.array(TokenPermissionGroupSchema),
+    resources: TokenPolicyResourcesSchema,
+  })
+  .passthrough();
+
+export type TokenPolicy = z.infer<typeof TokenPolicySchema>;
+
+export const ApiTokenSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    issued_on: z.string().optional(),
+    modified_on: z.string().optional(),
+    not_before: z.string().optional(),
+    expires_on: z.string().optional(),
+    last_used_on: z.string().nullable().optional(),
+    policies: z.array(TokenPolicySchema).optional(),
+  })
+  .passthrough();
+
+export type ApiToken = z.infer<typeof ApiTokenSchema>;
+
+/**
+ * Which resource category a permission group applies to. Derived from the
+ * Cloudflare scope URNs: `com.cloudflare.api.user`,
+ * `com.cloudflare.api.account`, and `com.cloudflare.api.account.zone`.
+ */
+export const TokenPermissionScopeSchema = z.enum([
+  "user",
+  "account",
+  "zone",
+  "unknown",
+]);
+
+export type TokenPermissionScope = z.infer<typeof TokenPermissionScopeSchema>;
+
+/** One permission group flattened out of its enclosing policy. */
+export const TokenPermissionSchema = z.object({
+  policyId: z.string(),
+  effect: TokenPolicyEffectSchema,
+  id: z.string(),
+  name: z.string().optional(),
+  scope: TokenPermissionScopeSchema,
+  scopes: z.array(z.string()),
+  resources: z.array(z.string()),
+});
+
+export type TokenPermission = z.infer<typeof TokenPermissionSchema>;
+
+export const TokenPermissionsResultSchema = z.object({
+  tokenId: z.string().optional(),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  notBefore: z.string().optional(),
+  expiresOn: z.string().optional(),
+  permissions: z.array(TokenPermissionSchema),
+});
+
+export type TokenPermissionsResult = z.infer<typeof TokenPermissionsResultSchema>;
+
+export const ListTokenPermissionGroupsParamsSchema = z.object({
+  name: z.string().optional(),
+  scope: z.string().optional(),
+  accountId: z.string().optional(),
+});
+
+export type ListTokenPermissionGroupsParams = z.infer<
+  typeof ListTokenPermissionGroupsParamsSchema
+>;
+
+/** Outcome of matching one `--check` query against a token's permissions. */
+export const TokenPermissionCheckSchema = z.object({
+  query: z.string(),
+  granted: z.boolean(),
+  matched: z.array(TokenPermissionSchema),
+});
+
+export type TokenPermissionCheck = z.infer<typeof TokenPermissionCheckSchema>;
+
+// ---------------------------------------------------------------------------
 // DNS record schemas
 // ---------------------------------------------------------------------------
 

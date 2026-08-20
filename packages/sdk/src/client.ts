@@ -41,6 +41,10 @@ import type {
   UpdateLogExplorerDatasetParams,
   UpdateRedirectRuleParams,
   TokenVerificationResult,
+  ApiToken,
+  ListTokenPermissionGroupsParams,
+  TokenPermissionGroup,
+  TokenPermissionsResult,
   Zone,
   ZoneNameFilterOperator,
   ZoneVanityNameServers,
@@ -87,6 +91,9 @@ import {
   UpdateLogExplorerDatasetParamsSchema,
   UpdateRedirectRuleParamsSchema,
   TokenVerificationResultSchema,
+  ApiTokenSchema,
+  ListTokenPermissionGroupsParamsSchema,
+  TokenPermissionGroupSchema,
   VanityNameServerIpsSchema,
   ZoneSchema,
 } from "./types.js";
@@ -95,6 +102,7 @@ import {
   CloudflareAuthError,
   CloudflareNotFoundError,
 } from "./errors.js";
+import { flattenTokenPolicies } from "./token-permissions.js";
 import { z } from "zod";
 
 type QueryValue = string | number | boolean | undefined;
@@ -123,6 +131,20 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     requiredPermissions: ["Account Settings Read", "Account Settings Write"],
     docsUrl:
       "https://developers.cloudflare.com/api/resources/accounts/subresources/logs/subresources/audit/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/(user|accounts\/[^/]+)\/tokens\/permission_groups$/u,
+    requiredPermissions: ["API Tokens Read", "API Tokens Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/user/subresources/tokens/subresources/permission_groups/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/(user|accounts\/[^/]+)\/tokens\/(?!verify$|permission_groups$)[^/]+$/u,
+    requiredPermissions: ["API Tokens Read", "API Tokens Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/user/subresources/tokens/methods/get/",
   },
   {
     method: "GET",
@@ -530,7 +552,7 @@ export class CloudflareClient {
     return AuditLogListResultSchema.parse(responseBody);
   }
 
-  async verifyToken(): Promise<TokenVerificationResult> {
+  async verifyToken(accountId?: string): Promise<TokenVerificationResult> {
     if (this.config.auth.type !== "apiToken") {
       throw new CloudflareError(
         "Token verification is only available when using CLOUDFLARE_API_TOKEN auth.",
@@ -540,9 +562,104 @@ export class CloudflareClient {
 
     const result = await this.requestResult<TokenVerificationResult>(
       "GET",
-      "/client/v4/user/tokens/verify"
+      `${this.tokenBasePath(accountId)}/verify`
     );
     return TokenVerificationResultSchema.parse(result);
+  }
+
+  // -------------------------------------------------------------------------
+  // API token introspection
+  // -------------------------------------------------------------------------
+
+  /**
+   * Token introspection describes the *token*, so it is meaningless under
+   * legacy global-API-key auth, which has no token to describe.
+   */
+  private requireApiTokenAuth(operation: string): void {
+    if (this.config.auth.type !== "apiToken") {
+      throw new CloudflareError(
+        `${operation} is only available when using CLOUDFLARE_API_TOKEN auth.`,
+        "UNSUPPORTED_AUTH"
+      );
+    }
+  }
+
+  /**
+   * User-owned tokens live under `/user/tokens`; account-owned tokens under
+   * `/accounts/{id}/tokens`. Same shapes, different owner.
+   */
+  private tokenBasePath(accountId?: string): string {
+    return accountId === undefined
+      ? "/client/v4/user/tokens"
+      : `/client/v4/accounts/${accountId}/tokens`;
+  }
+
+  /**
+   * Fetch a token's full definition, including the policies that carry its
+   * permission groups. Defaults to the calling token, resolving its own ID via
+   * `verifyToken`.
+   *
+   * Unlike `verifyToken`, this needs `API Tokens Read` on the token itself;
+   * without it Cloudflare answers 403 with code 9109.
+   */
+  async getApiToken(tokenId?: string, accountId?: string): Promise<ApiToken> {
+    this.requireApiTokenAuth("Reading token details");
+
+    let resolvedTokenId = tokenId;
+    if (resolvedTokenId === undefined) {
+      const verified = await this.verifyToken(accountId);
+      resolvedTokenId = verified.id;
+    }
+    if (resolvedTokenId === undefined || resolvedTokenId.length === 0) {
+      throw new CloudflareError(
+        "Could not determine the token ID. /user/tokens/verify returned no id; pass an explicit token ID.",
+        "NOT_FOUND"
+      );
+    }
+
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${this.tokenBasePath(accountId)}/${encodeURIComponent(resolvedTokenId)}`
+    );
+    return ApiTokenSchema.parse(result);
+  }
+
+  /**
+   * The token's permission groups, flattened out of their enclosing policies
+   * so each entry carries its own effect, scope, and resources.
+   */
+  async getTokenPermissions(
+    tokenId?: string,
+    accountId?: string
+  ): Promise<TokenPermissionsResult> {
+    const token = await this.getApiToken(tokenId, accountId);
+    return {
+      tokenId: token.id,
+      name: token.name,
+      status: token.status,
+      notBefore: token.not_before,
+      expiresOn: token.expires_on,
+      permissions: flattenTokenPolicies(token),
+    };
+  }
+
+  /**
+   * The catalog of permission groups that can be assigned to a token. Useful
+   * for resolving a group name to the stable ID that `--check` prefers.
+   */
+  async listTokenPermissionGroups(
+    params: ListTokenPermissionGroupsParams = {}
+  ): Promise<TokenPermissionGroup[]> {
+    const parsed = ListTokenPermissionGroupsParamsSchema.parse(params);
+    this.requireApiTokenAuth("Listing token permission groups");
+
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${this.tokenBasePath(parsed.accountId)}/permission_groups`,
+      { query: { name: parsed.name, scope: parsed.scope } }
+    );
+    if (result === null || result === undefined) return [];
+    return z.array(TokenPermissionGroupSchema).parse(result);
   }
 
   // -------------------------------------------------------------------------

@@ -91,6 +91,11 @@ cloudflare log-explorer datasets enable <dataset> [flags]
 cloudflare log-explorer datasets update <dataset-id> --enabled true|false [--fields <a,b>] [--filter <expr>] [flags]
 cloudflare log-explorer datasets delete <dataset-id> [--yes]
 
+cloudflare tokens verify [--accountId <id>] [--json]
+cloudflare tokens show [--tokenId <id>] [--accountId <id>] [--json]
+cloudflare tokens permissions [--check "<name|id>"]... [--quiet] [--tokenId <id>] [--json]
+cloudflare tokens groups [--name <filter>] [--scope <urn>] [--json]
+
 cloudflare upgrade [--check] [--force] [--version <version>]
                    # binary installs self-update from GitHub Releases;
                    # npm/bun/pnpm installs upgrade via their package manager
