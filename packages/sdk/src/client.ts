@@ -102,6 +102,11 @@ type QueryValue = string | number | boolean | undefined;
 interface RequestOptions {
   query?: Record<string, QueryValue>;
   body?: unknown;
+  /**
+   * Raw request body sent verbatim as `text/plain`. Used by endpoints that take
+   * a bare payload instead of a JSON object (e.g. Log Explorer's SQL query).
+   */
+  textBody?: string;
 }
 
 interface RoutePermissionHint {
@@ -354,13 +359,18 @@ export class CloudflareClient {
   ): Promise<T> {
     const url = this.buildUrl(path, options.query);
 
+    const isTextBody = options.textBody !== undefined;
     const res = await fetch(url, {
       method,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": isTextBody ? "text/plain" : "application/json",
         ...this.getAuthHeaders(),
       },
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body: isTextBody
+        ? options.textBody
+        : options.body
+          ? JSON.stringify(options.body)
+          : undefined,
     });
 
     if (res.status === 204) {
@@ -1223,11 +1233,19 @@ export class CloudflareClient {
     const parsed = QueryLogExplorerParamsSchema.parse(params);
     const { base } = this.resolveLogExplorerBase(parsed.scope, overrides);
 
+    // The SQL is the request body, sent verbatim as text/plain. Passing it as a
+    // `?query=` string parameter is only valid on the GET form of this endpoint;
+    // POST ignores it and the API rejects the call with
+    // "invalid query: expected 1 statement, but got 0".
     const rows = await this.requestResult<unknown>(
       "POST",
       `${base}/logs/explorer/query/sql`,
-      { query: { query: parsed.sql } }
+      { textBody: parsed.sql }
     );
+
+    // `result` is nullable in the API schema: a query matching no rows comes
+    // back as null rather than [].
+    if (rows === null || rows === undefined) return { rows: [] };
 
     return {
       rows: z.array(LogExplorerRowSchema).parse(rows),

@@ -64,6 +64,78 @@ support npm OIDC / sigstore (see oven-sh/bun#22423). The standalone binaries
 from GitHub Releases carry SHA256 checksums and are the primary distribution
 path; npm tarballs are a secondary convenience.
 
+## Log Explorer SQL endpoint takes the query as a body, not a parameter
+
+`POST /{accounts,zones}/{id}/logs/explorer/query/sql` takes the SQL as a raw
+`text/plain` **request body**. The `?query=<sql>` string parameter shown in most
+of the Log Explorer docs examples only works on the `GET` form of the same path;
+`POST` ignores it and the API answers
+`invalid query: expected 1 statement, but got 0` (code 20002) — which reads like
+a SQL syntax error but actually means no SQL arrived. `GET` caps the query at
+4096 chars, so we use `POST` (see `textBody` in `CloudflareClient.requestRaw`).
+
+Other things worth knowing before debugging a query:
+
+- Column names are **case-insensitive** on input (`EdgeEndTimestamp` and
+  `edgeendtimestamp` both work) but always come back lowercased in `result`.
+- `result` is nullable. A query matching no rows returns `null`, not `[]`.
+- **`LIMIT` truncates silently.** There is no "more rows available" flag, so
+  `LIMIT 100` returning exactly 100 rows is indistinguishable from a complete
+  result. Cross-check with `COUNT(*)` over the same predicate before treating a
+  `LIMIT`ed result as the full picture — a 101-row result set read through
+  `LIMIT 100` silently lost a row in this repo's own debugging.
+- `specified table not found` (code 20005) means the dataset isn't enabled for
+  that account/zone, not that the table name is wrong. Check
+  `log-explorer datasets list`; datasets are enabled per *zone*, and
+  `--scope account` only shows them with `--includeZones`.
+- Queries frequently die with `HTTP 524`, Cloudflare's own gateway timeout on
+  query execution. It is returned as an HTML error page, not the JSON envelope,
+  so parse defensively when calling the endpoint by hand.
+
+  The gateway deadline is a fixed **~120.2s** (measured twice: 120.166s and
+  120.211s). It is the proxy's patience, not a query-engine limit — the engine's
+  own limit surfaces as a proper `507` API error ("Query exceeded internal memory
+  or resource limits"), which is a different signal entirely. There is no
+  async/job form of this endpoint (the OpenAPI schema exposes only `get`/`post`
+  on `query/sql`) and the success envelope carries no query ID, so nothing can be
+  polled and a 524'd query's work is unrecoverable — `log-explorer query` can
+  only report elapsed wall time, and re-running is the only recourse.
+
+  **Run-to-run variance dominates everything else. Retry before you rewrite.**
+  The same SQL was measured at 3.9s, 98.3s, and 120s (524) in one session — a
+  ~30x spread. Query shape barely registers against that:
+
+  | Query (identical filter, `COUNT(*)`) | Measurements |
+  | --- | --- |
+  | 3-minute window | 8.7s |
+  | 1-hour window | 2.4s, 18.3s, 2.5s |
+  | 24-hour window | 3.2s, 3.5s, 5.2s |
+  | 24-hour, 3-col projection + `LIMIT` | 3.9s (had been 98.3s, then 524) |
+
+  A *narrower* window measured slower than a 20x wider one, and a 24-hour scan
+  routinely finishes in under 5s. So a 524 means "this request lost the race,"
+  not "this query is too expensive." Do not narrow windows, drop columns, or
+  chunk the time range in response to one — just run it again. There is also no
+  result caching (a 200 in 98s was followed by a 524 on the byte-identical
+  query), so every attempt re-executes from scratch.
+
+### The dashboard is not doing anything smarter
+
+If a query is slow from the CLI, do not assume the Log Explorer dashboard has a
+better path — it was checked and it does not:
+
+- The dashboard calls `dash.cloudflare.com/api/v4/...`, not
+  `api.cloudflare.com/client/v4/...`, and uses the **`GET` + `?query=`** form.
+  Paired on an identical 7-day high-cardinality `GROUP BY`: dash 27.3s vs
+  api.cloudflare.com 25.5s and 30.7s. **No endpoint advantage.**
+- Its `{{timeFilter}}` template expands to a `Date = '<yyyy-mm-dd>'` equality
+  alongside the `edgeendtimestamp` bounds. That `Date` column looks like a
+  partition key but adding it changes nothing: over a 7-day window, without it
+  7.9s/12.1s/7.3s, with it 12.8s/7.8s/7.3s. **Do not add it for performance.**
+- The engine itself is fast when the backend is healthy — a 7-day full-zone scan
+  counting 373,501 matches across ~250M rows returned in 6.9s. This reinforces
+  that 524s are queueing/load, not compute.
+
 ## Looking up Cloudflare API facts
 
 Never guess an endpoint path, field name, or response shape. Two sources, in

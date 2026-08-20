@@ -33,8 +33,10 @@ describe("CloudflareClient.queryLogExplorer", () => {
     );
 
     let capturedUrl = "";
-    const restore = mockFetch((input) => {
+    let capturedInit: RequestInit | undefined;
+    const restore = mockFetch((input, init) => {
       capturedUrl = String(input);
+      capturedInit = init;
       return new Response(
         JSON.stringify({ success: true, errors: [], messages: [], result: [] }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -44,7 +46,53 @@ describe("CloudflareClient.queryLogExplorer", () => {
     try {
       await client.queryLogExplorer({ sql: "SELECT 1" });
       expect(capturedUrl).toContain("/zones/zone-1/logs/explorer/query/sql");
-      expect(new URL(capturedUrl).searchParams.get("query")).toBe("SELECT 1");
+      // The SQL is the body, not a query-string parameter. Sending it as
+      // `?query=` on a POST makes the API report
+      // "invalid query: expected 1 statement, but got 0".
+      expect(new URL(capturedUrl).searchParams.get("query")).toBeNull();
+      expect(capturedInit?.method).toBe("POST");
+      expect(capturedInit?.body).toBe("SELECT 1");
+    } finally {
+      restore();
+    }
+  });
+
+  it("sends the SQL as a text/plain body", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    let capturedInit: RequestInit | undefined;
+    const restore = mockFetch((_input, init) => {
+      capturedInit = init;
+      return new Response(
+        JSON.stringify({ success: true, errors: [], messages: [], result: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    try {
+      await client.queryLogExplorer({ sql: "SELECT 1" });
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers["Content-Type"]).toBe("text/plain");
+    } finally {
+      restore();
+    }
+  });
+
+  it("returns no rows when the API reports a null result", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    const restore = mockFetch(() =>
+      new Response(
+        JSON.stringify({ success: true, errors: [], messages: [], result: null }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    try {
+      const result = await client.queryLogExplorer({
+        sql: "SELECT * FROM http_requests LIMIT 1",
+      });
+      expect(result.rows).toEqual([]);
     } finally {
       restore();
     }
@@ -107,12 +155,12 @@ describe("CloudflareClient.queryLogExplorer", () => {
     }
   });
 
-  it("URL-encodes SQL containing special characters", async () => {
+  it("sends SQL containing special characters verbatim", async () => {
     const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
 
-    let capturedUrl = "";
-    const restore = mockFetch((input) => {
-      capturedUrl = String(input);
+    let capturedInit: RequestInit | undefined;
+    const restore = mockFetch((_input, init) => {
+      capturedInit = init;
       return new Response(
         JSON.stringify({ success: true, errors: [], messages: [], result: [] }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -120,13 +168,9 @@ describe("CloudflareClient.queryLogExplorer", () => {
     });
 
     try {
-      await client.queryLogExplorer({
-        sql: "SELECT * FROM t WHERE a = 'b c' AND d > 1",
-      });
-      const url = new URL(capturedUrl);
-      expect(url.searchParams.get("query")).toBe(
-        "SELECT * FROM t WHERE a = 'b c' AND d > 1"
-      );
+      const sql = "SELECT * FROM t WHERE a = 'b c' AND d > 1";
+      await client.queryLogExplorer({ sql });
+      expect(capturedInit?.body).toBe(sql);
     } finally {
       restore();
     }
