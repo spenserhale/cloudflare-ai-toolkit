@@ -220,6 +220,34 @@ describe("CloudflareClient.createRedirectRule", () => {
     }
   });
 
+  it("passes dry_run when it has to create the entrypoint ruleset", async () => {
+    const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
+
+    const calls: { method: string; url: string }[] = [];
+    const restore = mockFetch((input, init) => {
+      calls.push({ method: init?.method ?? "GET", url: String(input) });
+      if (calls.length === 1) return notFound();
+      return new Response(envelope(null), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    try {
+      const rule = await client.createRedirectRule({
+        expression: "true",
+        targetUrl: "https://example.com",
+        dryRun: true,
+      });
+      expect(calls[1]?.method).toBe("PUT");
+      expect(calls[1]?.url).toContain("/entrypoint");
+      expect(calls[1]?.url).toContain("dry_run=true");
+      expect(rule.id).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
   it("passes dry_run and returns the built rule when the result is null", async () => {
     const client = new CloudflareClient(tokenConfig({ zoneId: "zone-1" }));
 

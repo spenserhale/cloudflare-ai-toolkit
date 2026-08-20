@@ -1056,12 +1056,16 @@ export class CloudflareClient {
     };
 
     // If the phase has no entrypoint ruleset yet, create it with this rule.
+    // This path writes too, so it must honour dry_run just like the POST below.
     const entrypoint = await this.getRedirectEntrypoint(resolvedZoneId);
     if (!entrypoint) {
       const result = await this.requestResult<unknown>(
         "PUT",
         `/client/v4/zones/${resolvedZoneId}/rulesets/phases/${REDIRECT_RULE_PHASE}/entrypoint`,
-        { body: { rules: [rule] } }
+        {
+          query: { dry_run: parsed.dryRun },
+          body: { rules: [rule] },
+        }
       );
       return this.extractRedirectRule(result, rule);
     }
