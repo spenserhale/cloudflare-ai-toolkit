@@ -18,6 +18,24 @@ export interface LogExplorerQueryFlags {
   readonly accountId?: string;
   readonly zoneId?: string;
   readonly json: boolean;
+  readonly progress?: boolean;
+  readonly progressInterval?: number;
+}
+
+/**
+ * Log Explorer's SQL endpoint is synchronous — there is no job ID to poll for
+ * server-side progress — so the most we can honestly report is how long we have
+ * been waiting. Queries commonly run for minutes before returning or dying with
+ * an HTTP 524, so a heartbeat is the difference between "working" and "hung".
+ */
+const DEFAULT_PROGRESS_INTERVAL_SECONDS = 30;
+
+function parseProgressInterval(value: string): number {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new Error(`--progressInterval must be a positive number of seconds, got '${value}'`);
+  }
+  return seconds;
 }
 
 function parseScope(value: string): LogExplorerScope {
@@ -26,6 +44,8 @@ function parseScope(value: string): LogExplorerScope {
   }
   return value;
 }
+
+type IntervalHandle = ReturnType<typeof setInterval>;
 
 interface LogExplorerQueryDeps {
   readonly resolveConfig: typeof resolveConfig;
@@ -38,6 +58,10 @@ interface LogExplorerQueryDeps {
   readonly log: typeof console.log;
   readonly error: typeof console.error;
   readonly exit: (code: number) => never;
+  readonly isStderrTTY: () => boolean;
+  readonly setInterval: (fn: () => void, ms: number) => IntervalHandle;
+  readonly clearInterval: (handle: IntervalHandle) => void;
+  readonly now: () => number;
 }
 
 async function readStdinDefault(): Promise<string> {
@@ -56,6 +80,10 @@ const defaultDeps: LogExplorerQueryDeps = {
   log: console.log,
   error: console.error,
   exit: (code) => process.exit(code),
+  isStderrTTY: () => Boolean(process.stderr.isTTY),
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (handle) => clearInterval(handle),
+  now: () => Date.now(),
 };
 
 interface ZodLikeIssue {
@@ -139,6 +167,55 @@ async function resolveSql(
   return trimmed;
 }
 
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m${String(seconds).padStart(2, "0")}s`;
+}
+
+interface Heartbeat {
+  readonly stop: () => void;
+  readonly elapsed: () => number;
+  readonly enabled: boolean;
+}
+
+/**
+ * Emits "still running" notices on **stderr** while the query is in flight, so
+ * `--json` output on stdout stays byte-for-byte pipeable to a file.
+ *
+ * Defaults to on when stderr is a TTY and off otherwise, so redirected and CI
+ * runs stay quiet unless `--progress` asks for it explicitly.
+ */
+function startHeartbeat(
+  flags: LogExplorerQueryFlags,
+  deps: LogExplorerQueryDeps
+): Heartbeat {
+  const enabled = flags.progress ?? deps.isStderrTTY();
+  const startedAt = deps.now();
+  const elapsed = () => deps.now() - startedAt;
+
+  if (!enabled) return { stop: () => {}, elapsed, enabled: false };
+
+  const intervalMs =
+    (flags.progressInterval ?? DEFAULT_PROGRESS_INTERVAL_SECONDS) * 1000;
+  const handle = deps.setInterval(() => {
+    deps.error(`Still running... ${formatElapsed(elapsed())} elapsed.`);
+  }, intervalMs);
+
+  let stopped = false;
+  return {
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      deps.clearInterval(handle);
+    },
+    elapsed,
+    enabled: true,
+  };
+}
+
 function renderRows(result: QueryLogExplorerResult): string {
   return encode({ rows: result.rows }, { keyFolding: "safe" });
 }
@@ -151,10 +228,26 @@ export async function runLogExplorerQuery(
     const sql = await resolveSql(flags, deps);
     const config = deps.resolveConfig();
     const client = deps.createClient(config);
-    const result = await client.queryLogExplorer(
-      { sql, scope: flags.scope },
-      { accountId: flags.accountId, zoneId: flags.zoneId }
-    );
+
+    const heartbeat = startHeartbeat(flags, deps);
+    let result: QueryLogExplorerResult;
+    try {
+      result = await client.queryLogExplorer(
+        { sql, scope: flags.scope },
+        { accountId: flags.accountId, zoneId: flags.zoneId }
+      );
+    } finally {
+      heartbeat.stop();
+    }
+
+    if (heartbeat.enabled) {
+      const rowCount = result.rows.length;
+      deps.error(
+        `Completed in ${formatElapsed(heartbeat.elapsed())} (${rowCount} ${
+          rowCount === 1 ? "row" : "rows"
+        }).`
+      );
+    }
 
     if (flags.json) {
       deps.log(JSON.stringify(result, null, 2));
@@ -212,6 +305,19 @@ export const logExplorerQueryCommand = buildCommand({
         kind: "boolean",
         brief: "Output as JSON",
         default: false,
+      },
+      progress: {
+        kind: "boolean",
+        optional: true,
+        withNegated: true,
+        brief:
+          "Report elapsed time on stderr while the query runs (default: on when stderr is a TTY)",
+      },
+      progressInterval: {
+        kind: "parsed",
+        parse: parseProgressInterval,
+        optional: true,
+        brief: `Seconds between progress notices (default ${DEFAULT_PROGRESS_INTERVAL_SECONDS})`,
       },
     },
   },

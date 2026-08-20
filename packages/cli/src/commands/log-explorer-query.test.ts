@@ -40,7 +40,47 @@ function makeDeps(overrides: Partial<Parameters<typeof runLogExplorerQuery>[1]> 
       log,
       error,
       exit,
+      // Progress off by default so existing assertions see a clean stderr.
+      isStderrTTY: vi.fn(() => false),
+      setInterval: vi.fn(() => 0 as unknown as ReturnType<typeof setInterval>),
+      clearInterval: vi.fn(),
+      now: vi.fn(() => 0),
       ...overrides,
+    },
+  };
+}
+
+/**
+ * Fake clock + timer so heartbeat tests advance time explicitly instead of
+ * waiting on real intervals.
+ */
+function makeClock() {
+  const handle = 1 as unknown as ReturnType<typeof setInterval>;
+  const ticks: Array<() => void> = [];
+  let current = 0;
+  let registeredMs: number | undefined;
+  const cleared: Array<ReturnType<typeof setInterval>> = [];
+
+  return {
+    handle,
+    cleared,
+    registeredMs: () => registeredMs,
+    advance: (ms: number) => {
+      current += ms;
+    },
+    tick: () => {
+      for (const fn of ticks) fn();
+    },
+    deps: {
+      now: vi.fn(() => current),
+      setInterval: vi.fn((fn: () => void, ms: number) => {
+        ticks.push(fn);
+        registeredMs = ms;
+        return handle;
+      }),
+      clearInterval: vi.fn((h: ReturnType<typeof setInterval>) => {
+        cleared.push(h);
+      }),
     },
   };
 }
@@ -184,5 +224,111 @@ describe("runLogExplorerQuery", () => {
     expect(error).toHaveBeenCalledWith(
       "Error: Unexpected Cloudflare API response shape (rows.0.ts): Required"
     );
+  });
+});
+
+describe("runLogExplorerQuery progress reporting", () => {
+  it("stays silent by default when stderr is not a TTY", async () => {
+    const clock = makeClock();
+    const { error, deps } = makeDeps({ ...clock.deps, isStderrTTY: vi.fn(() => false) });
+
+    await runLogExplorerQuery(baseFlags({ sql: "SELECT 1" }), deps);
+
+    expect(clock.deps.setInterval).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("reports progress by default when stderr is a TTY", async () => {
+    const clock = makeClock();
+    const { deps } = makeDeps({ ...clock.deps, isStderrTTY: vi.fn(() => true) });
+
+    await runLogExplorerQuery(baseFlags({ sql: "SELECT 1" }), deps);
+
+    expect(clock.deps.setInterval).toHaveBeenCalled();
+    expect(clock.registeredMs()).toBe(30_000);
+  });
+
+  it("emits elapsed-time notices on stderr, never stdout", async () => {
+    const clock = makeClock();
+    const queryLogExplorer = vi.fn(async () => {
+      // Query is in flight: two heartbeat intervals pass.
+      clock.advance(30_000);
+      clock.tick();
+      clock.advance(45_000);
+      clock.tick();
+      return { rows: [{ a: 1 }] };
+    });
+    const { log, error, deps } = makeDeps({
+      ...clock.deps,
+      createClient: vi.fn(() => ({ queryLogExplorer })),
+    });
+
+    await runLogExplorerQuery(baseFlags({ sql: "SELECT 1", progress: true, json: true }), deps);
+
+    const stderr = error.mock.calls.map((c) => String(c[0]));
+    expect(stderr[0]).toBe("Still running... 30s elapsed.");
+    expect(stderr[1]).toBe("Still running... 1m15s elapsed.");
+    expect(stderr[2]).toBe("Completed in 1m15s (1 row).");
+
+    // stdout carries only the JSON payload, so it stays pipeable to a file.
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ rows: [{ a: 1 }] });
+  });
+
+  it("honors --no-progress even when stderr is a TTY", async () => {
+    const clock = makeClock();
+    const { error, deps } = makeDeps({ ...clock.deps, isStderrTTY: vi.fn(() => true) });
+
+    await runLogExplorerQuery(baseFlags({ sql: "SELECT 1", progress: false }), deps);
+
+    expect(clock.deps.setInterval).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("honors a custom --progressInterval", async () => {
+    const clock = makeClock();
+    const { deps } = makeDeps({ ...clock.deps });
+
+    await runLogExplorerQuery(
+      baseFlags({ sql: "SELECT 1", progress: true, progressInterval: 5 }),
+      deps
+    );
+
+    expect(clock.registeredMs()).toBe(5_000);
+  });
+
+  it("stops the heartbeat when the query fails", async () => {
+    const clock = makeClock();
+    const queryLogExplorer = vi.fn(async () => {
+      throw new CloudflareError("HTTP 524", "UNKNOWN", 524);
+    });
+    const { error, deps } = makeDeps({
+      ...clock.deps,
+      createClient: vi.fn(() => ({ queryLogExplorer })),
+    });
+
+    await expect(
+      runLogExplorerQuery(baseFlags({ sql: "SELECT 1", progress: true }), deps)
+    ).rejects.toThrow("EXIT:1");
+
+    expect(clock.cleared).toEqual([clock.handle]);
+    // No bogus "Completed" line on the failure path.
+    const stderr = error.mock.calls.map((c) => String(c[0]));
+    expect(stderr.some((line) => line.startsWith("Completed"))).toBe(false);
+    expect(stderr.some((line) => line.includes("524"))).toBe(true);
+  });
+
+  it("pluralizes the completion row count", async () => {
+    const clock = makeClock();
+    const queryLogExplorer = vi.fn(async () => ({ rows: [{ a: 1 }, { a: 2 }] }));
+    const { error, deps } = makeDeps({
+      ...clock.deps,
+      createClient: vi.fn(() => ({ queryLogExplorer })),
+    });
+
+    await runLogExplorerQuery(baseFlags({ sql: "SELECT 1", progress: true }), deps);
+
+    const stderr = error.mock.calls.map((c) => String(c[0]));
+    expect(stderr.at(-1)).toBe("Completed in 0s (2 rows).");
   });
 });
