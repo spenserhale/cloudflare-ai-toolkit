@@ -82,4 +82,19 @@ export function registerDnsTools(server: FastMCP) {
       return JSON.stringify(result, null, 2);
     },
   });
+
+  server.addTool({
+    name: "delete_dns_record",
+    description:
+      "Delete a DNS record from a Cloudflare zone. Destructive: the name stops resolving to this record immediately.",
+    parameters: z.object({
+      zoneId: z.string().min(1).describe("Cloudflare zone ID"),
+      recordId: z.string().min(1).describe("DNS record ID"),
+    }),
+    execute: async (args) => {
+      const client = getClient();
+      await client.deleteDnsRecord(args.zoneId, args.recordId);
+      return JSON.stringify({ deleted: true, id: args.recordId }, null, 2);
+    },
+  });
 }

@@ -42,6 +42,7 @@ cloudflare zones vanity-ns clear                       # revert to Cloudflare's 
 cloudflare audit logs list                             # audit log queries
 cloudflare dns records list <zone-id>                  # list DNS records
 cloudflare dns records update <zone-id> <record-id>    # edit a DNS record
+cloudflare dns records delete <zone-id> <id>... --yes  # delete DNS record(s)
 cloudflare custom-hostnames list                       # SSL for SaaS hostnames + cert status
 cloudflare custom-hostnames get <custom-hostname-id>   # cert state, DCV + ownership records
 cloudflare custom-hostnames create <hostname>          # add hostname + request cert

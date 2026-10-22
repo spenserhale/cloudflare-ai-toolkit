@@ -21,6 +21,7 @@ import {
 } from "./commands/custom-hostnames.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
+import { deleteDnsRecordCommand } from "./commands/dns-delete.js";
 import { logExplorerQueryCommand } from "./commands/log-explorer-query.js";
 import { enableLogExplorerDatasetCommand } from "./commands/log-explorer-datasets-enable.js";
 import {
@@ -184,6 +185,7 @@ const dnsRecordRoutes = buildRouteMap({
   routes: {
     list: listDnsRecordsCommand,
     update: updateDnsRecordCommand,
+    delete: deleteDnsRecordCommand,
   },
   docs: {
     brief: "Manage DNS records",

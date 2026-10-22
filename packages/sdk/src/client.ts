@@ -179,6 +179,13 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
       "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/edit/",
   },
   {
+    method: "DELETE",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/dns_records\/[^/]+$/u,
+    requiredPermissions: ["DNS Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/delete/",
+  },
+  {
     method: "GET",
     pathPattern: /^\/client\/v4\/zones\/[^/]+\/custom_hostnames$/u,
     requiredPermissions: ["SSL and Certificates Read", "SSL and Certificates Write"],
@@ -848,6 +855,13 @@ export class CloudflareClient {
     );
 
     return DnsRecordSchema.parse(updated);
+  }
+
+  async deleteDnsRecord(zoneId: string, recordId: string): Promise<void> {
+    await this.requestResult<unknown>(
+      "DELETE",
+      `/client/v4/zones/${zoneId}/dns_records/${encodeURIComponent(recordId)}`
+    );
   }
 
   // -------------------------------------------------------------------------

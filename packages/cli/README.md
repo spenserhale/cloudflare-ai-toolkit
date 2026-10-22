@@ -57,6 +57,7 @@ cloudflare zones vanity-ns clear [--zoneId <id>] [--yes] [--json]
 
 cloudflare dns records list <zone-id> [flags]
 cloudflare dns records update <zone-id> <record-id> [flags]
+cloudflare dns records delete <zone-id> <record-id...> [--yes] [--json]
 
 cloudflare custom-hostnames list [--hostname <fqdn>] [--zoneId <id>] [flags]
 cloudflare custom-hostnames get <custom-hostname-id> [--zoneId <id>] [--json]

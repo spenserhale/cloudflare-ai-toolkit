@@ -181,6 +181,7 @@ Writing requires a `Zone Write` API token.
 ```bash
 cloudflare dns records list <zone-id> --type A --name app.example.com
 cloudflare dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
+cloudflare dns records delete <zone-id> <record-id> [<record-id>...] --yes
 ```
 
 ### Custom hostnames (SSL for SaaS)

@@ -24,6 +24,7 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `purge_cache_by_tags` | Purge cached content by cache tag(s); zone ID falls back to `CLOUDFLARE_ZONE_ID` |
 | `list_dns_records` | List DNS records for a zone |
 | `update_dns_record` | Update an existing DNS record |
+| `delete_dns_record` | Delete a DNS record from a zone |
 | `list_zones` | List, search, and filter zones — resolve a domain name to a zone ID |
 | `get_zone` | Get one zone's status, type, plan, and nameservers; falls back to `CLOUDFLARE_ZONE_ID` |
 | `get_zone_vanity_nameservers` | Read a zone's custom (vanity) nameservers and the glue addresses assigned to them |
