@@ -316,6 +316,21 @@ policies, which requires **User → API Tokens → Read** on the token itself �
 without it Cloudflare answers `403` code `9109`, and the CLI says exactly which
 permission to add.
 
+### Cloudflare Tunnels
+
+List an account's tunnels and see what is actually connected. `info` accepts a
+tunnel ID or name and shows each running `cloudflared` connector with its
+version, architecture, and the data centers and origin IP it connects through.
+Both read the account from `--accountId` or `CLOUDFLARE_ACCOUNT_ID`.
+
+```bash
+cloudflare tunnels list                               # deleted tunnels hidden; --includeDeleted to show
+cloudflare tunnels list --status down
+cloudflare tunnels info office-gateway
+```
+
+Requires a token with `Cloudflare Tunnel Read`.
+
 ## Local development
 
 ```bash

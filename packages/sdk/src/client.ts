@@ -24,6 +24,11 @@ import type {
   ListRedirectRulesResult,
   ListZonesParams,
   ListZonesResult,
+  ListTunnelsParams,
+  ListTunnelsResult,
+  Tunnel,
+  TunnelConnector,
+  TunnelInfo,
   LogExplorerDataset,
   LogExplorerScope,
   PurgeCacheResult,
@@ -73,6 +78,9 @@ import {
   ListFirewallRulesParamsSchema,
   ListLogExplorerDatasetsParamsSchema,
   ListZonesParamsSchema,
+  ListTunnelsParamsSchema,
+  TunnelSchema,
+  TunnelConnectorSchema,
   LogExplorerDatasetSchema,
   LogExplorerRowSchema,
   ResultInfoSchema,
@@ -301,6 +309,20 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
     requiredPermissions: ["Rulesets Edit"],
     docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/cfd_tunnel$/u,
+    requiredPermissions: ["Cloudflare Tunnel Read", "Cloudflare Tunnel Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/cfd_tunnel\/[^/]+(\/connections)?$/u,
+    requiredPermissions: ["Cloudflare Tunnel Read", "Cloudflare Tunnel Write"],
+    docsUrl:
+      "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/get/",
   },
 ];
 
@@ -862,6 +884,90 @@ export class CloudflareClient {
       "DELETE",
       `/client/v4/zones/${zoneId}/dns_records/${encodeURIComponent(recordId)}`
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Cloudflare Tunnels (cloudflared)
+  // -------------------------------------------------------------------------
+
+  async listTunnels(params: ListTunnelsParams = {}): Promise<ListTunnelsResult> {
+    const parsedParams = ListTunnelsParamsSchema.parse(params);
+    const resolvedAccountId = this.resolveAccountId(parsedParams.accountId);
+
+    const body = await this.requestRaw<unknown>(
+      "GET",
+      `/client/v4/accounts/${resolvedAccountId}/cfd_tunnel`,
+      {
+        query: {
+          name: parsedParams.name,
+          status: parsedParams.status,
+          is_deleted: parsedParams.isDeleted,
+          include_prefix: parsedParams.includePrefix,
+          exclude_prefix: parsedParams.excludePrefix,
+          uuid: parsedParams.uuid,
+          page: parsedParams.page,
+          per_page: parsedParams.perPage,
+        },
+      }
+    );
+
+    const parsedResponse = CloudflareResponseSchema(z.array(TunnelSchema)).safeParse(body);
+    if (!parsedResponse.success) {
+      throw new CloudflareError("Unexpected tunnels response shape", "INVALID_RESPONSE");
+    }
+
+    if (!parsedResponse.data.success) {
+      const first = parsedResponse.data.errors[0];
+      throw new CloudflareError(
+        first?.message ?? "Tunnels request failed",
+        String(first?.code ?? "API_ERROR")
+      );
+    }
+
+    const info = ResultInfoSchema.safeParse(parsedResponse.data.result_info);
+
+    return {
+      tunnels: parsedResponse.data.result,
+      resultInfo: info.success ? info.data : undefined,
+    };
+  }
+
+  async getTunnel(tunnelId: string, accountId?: string): Promise<Tunnel> {
+    const resolvedAccountId = this.resolveAccountId(accountId);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `/client/v4/accounts/${resolvedAccountId}/cfd_tunnel/${encodeURIComponent(tunnelId)}`
+    );
+
+    return TunnelSchema.parse(result);
+  }
+
+  /**
+   * Lists the cloudflared connectors currently running for a tunnel. The
+   * tunnel object's own `connections` field is deprecated and always empty, so
+   * this is the only way to see which colos and origins a tunnel is using.
+   */
+  async listTunnelConnections(
+    tunnelId: string,
+    accountId?: string
+  ): Promise<TunnelConnector[]> {
+    const resolvedAccountId = this.resolveAccountId(accountId);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `/client/v4/accounts/${resolvedAccountId}/cfd_tunnel/${encodeURIComponent(tunnelId)}/connections`
+    );
+
+    return z.array(TunnelConnectorSchema).parse(result ?? []);
+  }
+
+  /** A tunnel plus its active connectors, fetched concurrently. */
+  async getTunnelInfo(tunnelId: string, accountId?: string): Promise<TunnelInfo> {
+    const [tunnel, connectors] = await Promise.all([
+      this.getTunnel(tunnelId, accountId),
+      this.listTunnelConnections(tunnelId, accountId),
+    ]);
+
+    return { tunnel, connectors };
   }
 
   // -------------------------------------------------------------------------

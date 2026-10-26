@@ -7,6 +7,7 @@ import { registerLogExplorerTools } from "./log-explorer.js";
 import { registerRedirectTools } from "./redirects.js";
 import { registerResourceTools } from "./resources.js";
 import { registerTokenTools } from "./tokens.js";
+import { registerTunnelTools } from "./tunnels.js";
 import { registerWafTools } from "./waf.js";
 import { registerZoneTools } from "./zones.js";
 
@@ -35,6 +36,7 @@ describe("MCP tool registration", () => {
     registerLogExplorerTools(server as unknown as Parameters<typeof registerLogExplorerTools>[0]);
     registerRedirectTools(server as unknown as Parameters<typeof registerRedirectTools>[0]);
     registerTokenTools(server as unknown as Parameters<typeof registerTokenTools>[0]);
+    registerTunnelTools(server as unknown as Parameters<typeof registerTunnelTools>[0]);
     registerWafTools(server as unknown as Parameters<typeof registerWafTools>[0]);
     registerZoneTools(server as unknown as Parameters<typeof registerZoneTools>[0]);
     registerCustomHostnameTools(
@@ -85,6 +87,8 @@ describe("MCP tool registration", () => {
         "get_token_permissions",
         "check_token_permissions",
         "list_token_permission_groups",
+        "list_tunnels",
+        "get_tunnel",
       ])
     );
   });

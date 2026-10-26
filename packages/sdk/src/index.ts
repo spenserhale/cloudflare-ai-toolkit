@@ -91,6 +91,13 @@ export type {
   ZoneNameFilterOperator,
   ZoneStatus,
   ZoneType,
+  Tunnel,
+  TunnelConnection,
+  TunnelConnector,
+  TunnelInfo,
+  TunnelStatus,
+  ListTunnelsParams,
+  ListTunnelsResult,
 } from "./types.js";
 export {
   AuditLogListResultSchema,
@@ -176,6 +183,13 @@ export {
   ZoneNameFilterOperatorSchema,
   ZoneStatusSchema,
   ZoneTypeSchema,
+  TunnelSchema,
+  TunnelConnectionSchema,
+  TunnelConnectorSchema,
+  TunnelInfoSchema,
+  TunnelStatusSchema,
+  ListTunnelsParamsSchema,
+  ListTunnelsResultSchema,
 } from "./types.js";
 
 export {

@@ -52,6 +52,8 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `get_log_explorer_dataset` | Get one dataset's field configuration, filter, and ingest state |
 | `update_log_explorer_dataset` | Update a dataset: enable/disable ingest, restrict fields, set or clear a filter |
 | `delete_log_explorer_dataset` | Delete a dataset and stop its log ingest |
+| `list_tunnels` | List Cloudflare Tunnels (cloudflared) in an account with their health status |
+| `get_tunnel` | Get one tunnel plus its running connectors, their versions, colos, and origin IPs |
 
 ## Setup with Claude Desktop
 

@@ -1161,3 +1161,95 @@ export const ZoneVanityNameServersSchema = z.object({
 });
 
 export type ZoneVanityNameServers = z.infer<typeof ZoneVanityNameServersSchema>;
+
+// ---------------------------------------------------------------------------
+// Cloudflare Tunnel (cloudflared) schemas
+// ---------------------------------------------------------------------------
+
+export const TunnelStatusSchema = z.enum(["inactive", "degraded", "healthy", "down"]);
+
+export type TunnelStatus = z.infer<typeof TunnelStatusSchema>;
+
+/** One edge connection a running cloudflared holds open to a Cloudflare data center. */
+export const TunnelConnectionSchema = z
+  .object({
+    id: z.string().optional(),
+    client_id: z.string().optional(),
+    client_version: z.string().optional(),
+    colo_name: z.string().optional(),
+    is_pending_reconnect: z.boolean().optional(),
+    opened_at: z.string().optional(),
+    origin_ip: z.string().optional(),
+    uuid: z.string().optional(),
+  })
+  .passthrough();
+
+export type TunnelConnection = z.infer<typeof TunnelConnectionSchema>;
+
+export const TunnelSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    account_tag: z.string().optional(),
+    status: z.string().optional(),
+    tun_type: z.string().optional(),
+    config_src: z.string().optional(),
+    remote_config: z.boolean().optional(),
+    created_at: z.string().optional(),
+    deleted_at: z.string().nullable().optional(),
+    conns_active_at: z.string().nullable().optional(),
+    conns_inactive_at: z.string().nullable().optional(),
+    /** Deprecated by Cloudflare and now always empty; use `listTunnelConnections`. */
+    connections: z.array(TunnelConnectionSchema).optional(),
+    metadata: z.unknown().optional(),
+  })
+  .passthrough();
+
+export type Tunnel = z.infer<typeof TunnelSchema>;
+
+/**
+ * One cloudflared process (a "connector") running for a tunnel, with the edge
+ * connections it holds. A highly available tunnel has several connectors.
+ */
+export const TunnelConnectorSchema = z
+  .object({
+    id: z.string().optional(),
+    arch: z.string().optional(),
+    version: z.string().optional(),
+    config_version: z.number().optional(),
+    run_at: z.string().optional(),
+    features: z.array(z.string()).optional(),
+    conns: z.array(TunnelConnectionSchema).optional(),
+  })
+  .passthrough();
+
+export type TunnelConnector = z.infer<typeof TunnelConnectorSchema>;
+
+export const ListTunnelsParamsSchema = z.object({
+  name: z.string().optional(),
+  status: TunnelStatusSchema.optional(),
+  /** `true` returns only deleted tunnels, `false` excludes them, omitted returns both. */
+  isDeleted: z.boolean().optional(),
+  includePrefix: z.string().optional(),
+  excludePrefix: z.string().optional(),
+  uuid: z.string().optional(),
+  page: z.number().int().positive().optional(),
+  perPage: z.number().int().min(1).max(1000).optional(),
+  accountId: z.string().optional(),
+});
+
+export type ListTunnelsParams = z.infer<typeof ListTunnelsParamsSchema>;
+
+export const ListTunnelsResultSchema = z.object({
+  tunnels: z.array(TunnelSchema),
+  resultInfo: ResultInfoSchema.optional(),
+});
+
+export type ListTunnelsResult = z.infer<typeof ListTunnelsResultSchema>;
+
+export const TunnelInfoSchema = z.object({
+  tunnel: TunnelSchema,
+  connectors: z.array(TunnelConnectorSchema),
+});
+
+export type TunnelInfo = z.infer<typeof TunnelInfoSchema>;

@@ -97,6 +97,9 @@ cloudflare tokens show [--tokenId <id>] [--accountId <id>] [--json]
 cloudflare tokens permissions [--check "<name|id>"]... [--quiet] [--tokenId <id>] [--json]
 cloudflare tokens groups [--name <filter>] [--scope <urn>] [--json]
 
+cloudflare tunnels list [<name>] [--status <status>] [--includeDeleted] [--accountId <id>] [--json]
+cloudflare tunnels info <tunnel-id|name> [--accountId <id>] [--json]
+
 cloudflare upgrade [--check] [--force] [--version <version>]
                    # binary installs self-update from GitHub Releases;
                    # npm/bun/pnpm installs upgrade via their package manager

@@ -44,6 +44,7 @@ import {
   tokenPermissionsCommand,
   verifyTokenCommand,
 } from "./commands/tokens.js";
+import { listTunnelsCommand, tunnelInfoCommand } from "./commands/tunnels.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 import {
@@ -237,6 +238,16 @@ const tokenRoutes = buildRouteMap({
   },
 });
 
+const tunnelRoutes = buildRouteMap({
+  routes: {
+    list: listTunnelsCommand,
+    info: tunnelInfoCommand,
+  },
+  docs: {
+    brief: "Inspect Cloudflare Tunnels (cloudflared)",
+  },
+});
+
 const routes = buildRouteMap({
   routes: {
     resources: resourceRoutes,
@@ -249,6 +260,7 @@ const routes = buildRouteMap({
     redirects: redirectsRoutes,
     "log-explorer": logExplorerRoutes,
     tokens: tokenRoutes,
+    tunnels: tunnelRoutes,
     upgrade: upgradeCommand,
   },
   docs: {
