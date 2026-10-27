@@ -890,6 +890,10 @@ export class CloudflareClient {
   // Cloudflare Tunnels (cloudflared)
   // -------------------------------------------------------------------------
 
+  /**
+   * Lists the account's Cloudflare Tunnels (cloudflared), filtered by name,
+   * status, or deletion state. The account defaults to CLOUDFLARE_ACCOUNT_ID.
+   */
   async listTunnels(params: ListTunnelsParams = {}): Promise<ListTunnelsResult> {
     const parsedParams = ListTunnelsParamsSchema.parse(params);
     const resolvedAccountId = this.resolveAccountId(parsedParams.accountId);
@@ -932,6 +936,7 @@ export class CloudflareClient {
     };
   }
 
+  /** Fetches one tunnel by UUID. Its `connections` field is always empty. */
   async getTunnel(tunnelId: string, accountId?: string): Promise<Tunnel> {
     const resolvedAccountId = this.resolveAccountId(accountId);
     const result = await this.requestResult<unknown>(

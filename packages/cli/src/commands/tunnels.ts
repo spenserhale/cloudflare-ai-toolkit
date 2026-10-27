@@ -106,6 +106,7 @@ export interface TunnelsListFlags {
   readonly json: boolean;
 }
 
+/** One `tunnels list` row: ID, name, then key=value fields. */
 function formatTunnelLine(tunnel: Tunnel): string {
   const fields = [
     `status=${orDash(tunnel.status)}`,
@@ -118,6 +119,7 @@ function formatTunnelLine(tunnel: Tunnel): string {
   return `${tunnel.id}  ${orDash(tunnel.name)}  ${fields.join(" ")}`;
 }
 
+/** The count line above `tunnels list` output, with the total when paged. */
 function formatTunnelsSummary(result: ListTunnelsResult): string {
   const info = result.resultInfo;
   const count = result.tunnels.length;
@@ -129,6 +131,7 @@ function formatTunnelsSummary(result: ListTunnelsResult): string {
   return `Showing ${count} ${noun}`;
 }
 
+/** Runs `tunnels list`. Deleted tunnels are excluded unless --includeDeleted. */
 export async function runListTunnels(
   name: string | undefined,
   flags: TunnelsListFlags,
@@ -243,6 +246,7 @@ export interface TunnelsInfoFlags {
   readonly json: boolean;
 }
 
+/** Lines for one cloudflared connector and each edge connection it holds. */
 function formatConnector(connector: TunnelConnector): string[] {
   const lines = [
     `  Connector ${orDash(connector.id)}`,
@@ -261,6 +265,7 @@ function formatConnector(connector: TunnelConnector): string[] {
   return lines;
 }
 
+/** Human-readable `tunnels info` output: tunnel fields, then connectors. */
 export function formatTunnelInfo(info: TunnelInfo): string {
   const { tunnel, connectors } = info;
   const lines = [
@@ -290,6 +295,10 @@ export function formatTunnelInfo(info: TunnelInfo): string {
   return lines.join("\n");
 }
 
+/**
+ * Returns a UUID unchanged; otherwise looks up a live tunnel by exact name and
+ * throws when none or more than one match.
+ */
 async function resolveTunnelId(
   client: Pick<CloudflareClient, "listTunnels">,
   idOrName: string,
@@ -319,6 +328,7 @@ async function resolveTunnelId(
   return first.id;
 }
 
+/** Runs `tunnels info`, accepting either a tunnel ID or a tunnel name. */
 export async function runTunnelInfo(
   idOrName: string,
   flags: TunnelsInfoFlags,

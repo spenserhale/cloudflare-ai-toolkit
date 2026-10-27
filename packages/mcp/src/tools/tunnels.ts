@@ -11,6 +11,7 @@ function getClient(): CloudflareClient {
   return new CloudflareClient(config);
 }
 
+/** Registers the read-only `list_tunnels` and `get_tunnel` tools. */
 export function registerTunnelTools(server: FastMCP) {
   server.addTool({
     name: "list_tunnels",
