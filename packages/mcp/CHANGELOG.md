@@ -1,5 +1,30 @@
 # @cloudflare-ai-toolkit/mcp
 
+## 0.7.0
+
+### Minor Changes
+
+- [#10](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/10) [`503fa92`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/503fa928a7a75c800b1d5c078c1cebb2876d5905) Thanks [@spenserhale](https://github.com/spenserhale)! - Add read-only Cloudflare Tunnel (cloudflared) inspection
+
+  - SDK: `CloudflareClient.listTunnels(params)` calls
+    `GET /accounts/{account_id}/cfd_tunnel` with name, status, deleted, prefix,
+    and paging filters. `getTunnel(tunnelId)` and
+    `listTunnelConnections(tunnelId)` fetch one tunnel and its running
+    connectors; `getTunnelInfo(tunnelId)` returns both. The tunnel object's own
+    `connections` field is deprecated by Cloudflare and always empty, so
+    connectors come from `/cfd_tunnel/{tunnel_id}/connections`. A 403 reports
+    the required `Cloudflare Tunnel Read` permission.
+  - CLI: `cloudflare tunnels list [<name>]` lists tunnels, hiding deleted ones
+    unless `--includeDeleted` is passed. `cloudflare tunnels info <tunnel-id|name>`
+    shows the tunnel's status and each connector's version, architecture, colos,
+    and origin IP. A name that matches no tunnel, or more than one, is an error.
+  - MCP: new `list_tunnels` and `get_tunnel` tools.
+
+### Patch Changes
+
+- Updated dependencies [[`503fa92`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/503fa928a7a75c800b1d5c078c1cebb2876d5905)]:
+  - @cloudflare-ai-toolkit/sdk@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
