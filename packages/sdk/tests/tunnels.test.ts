@@ -102,6 +102,30 @@ describe("CloudflareClient.listTunnels", () => {
     }
   });
 
+  it("normalizes Go zero-time timestamps to null", async () => {
+    const client = new CloudflareClient(tokenConfig());
+    const restore = mockFetch(() =>
+      envelope([
+        {
+          ...TUNNEL,
+          deleted_at: "0001-01-01T00:00:00Z",
+          conns_active_at: "0001-01-01T00:00:00Z",
+          conns_inactive_at: "0001-01-01T00:00:00Z",
+        },
+      ])
+    );
+
+    try {
+      const [tunnel] = (await client.listTunnels()).tunnels;
+      expect(tunnel!.deleted_at).toBeNull();
+      expect(tunnel!.conns_active_at).toBeNull();
+      expect(tunnel!.conns_inactive_at).toBeNull();
+      expect(tunnel!.created_at).toBe(TUNNEL.created_at);
+    } finally {
+      restore();
+    }
+  });
+
   it("omits is_deleted when it is not specified", async () => {
     const client = new CloudflareClient(tokenConfig());
 

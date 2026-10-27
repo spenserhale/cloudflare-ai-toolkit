@@ -1186,6 +1186,18 @@ export const TunnelConnectionSchema = z
 
 export type TunnelConnection = z.infer<typeof TunnelConnectionSchema>;
 
+/**
+ * The cfd_tunnel API is Go-backed, and its reference examples show unset
+ * timestamps as Go's zero time (`0001-01-01T00:00:00Z`) rather than `null`.
+ * Live responses send `null`, but normalize the sentinel so a live tunnel can
+ * never look deleted.
+ */
+const TunnelTimestampSchema = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.startsWith("0001-01-01") ? null : value,
+  z.string().nullable().optional()
+);
+
 export const TunnelSchema = z
   .object({
     id: z.string(),
@@ -1196,9 +1208,9 @@ export const TunnelSchema = z
     config_src: z.string().optional(),
     remote_config: z.boolean().optional(),
     created_at: z.string().optional(),
-    deleted_at: z.string().nullable().optional(),
-    conns_active_at: z.string().nullable().optional(),
-    conns_inactive_at: z.string().nullable().optional(),
+    deleted_at: TunnelTimestampSchema,
+    conns_active_at: TunnelTimestampSchema,
+    conns_inactive_at: TunnelTimestampSchema,
     /** Deprecated by Cloudflare and now always empty; use `listTunnelConnections`. */
     connections: z.array(TunnelConnectionSchema).optional(),
     metadata: z.unknown().optional(),
