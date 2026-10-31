@@ -218,6 +218,47 @@ describe("CloudflareClient", () => {
     }
   });
 
+  it("rejects unknown audit log filter fields instead of letting the API ignore them", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
+    await expect(
+      client.listAuditLogs({ filters: { resource_typ: { in: ["record"] } } })
+    ).rejects.toThrow("Unknown audit log filter field 'resource_typ'");
+  });
+
+  it("sends repeatable and .not audit log filters", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
+
+    let capturedUrl = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify({ success: true, errors: [], messages: [], result: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    try {
+      await client.listAuditLogs({
+        actionType: "create",
+        filters: {
+          resource_product: { in: ["custom_hostnames", "dns_records"], not: ["purge_cache"] },
+          action_type: { in: ["delete"] },
+        },
+      });
+
+      const url = new URL(capturedUrl);
+      expect(url.searchParams.getAll("resource_product")).toEqual([
+        "custom_hostnames",
+        "dns_records",
+      ]);
+      expect(url.searchParams.getAll("resource_product.not")).toEqual(["purge_cache"]);
+      expect(url.searchParams.getAll("action_type")).toEqual(["create", "delete"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("sends snake_case filter query params for audit logs", async () => {
     const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
 
@@ -259,10 +300,10 @@ describe("CloudflareClient", () => {
       const url = new URL(capturedUrl);
       expect(url.searchParams.get("action_type")).toBe("delete");
       expect(url.searchParams.get("action_result")).toBe("success");
-      expect(url.searchParams.get("resource.type")).toBe("dns_records");
+      expect(url.searchParams.get("resource_type")).toBe("dns_records");
       expect(url.searchParams.get("actor_email")).toBe("spenser@pbhs.com");
       expect(url.searchParams.get("actor_id")).toBe("actor-1");
-      expect(url.searchParams.get("actor_ip")).toBe("203.0.113.1");
+      expect(url.searchParams.get("actor_ip_address")).toBe("203.0.113.1");
       expect(url.searchParams.get("actor_token_id")).toBe("token-1");
       expect(url.searchParams.get("actor_token_name")).toBe("token-name");
       expect(url.searchParams.get("actor_token_type")).toBe("api_key");
@@ -273,7 +314,7 @@ describe("CloudflareClient", () => {
       expect(url.searchParams.has("action.type")).toBe(false);
       expect(url.searchParams.has("actor.email")).toBe(false);
       expect(url.searchParams.has("zone.name")).toBe(false);
-      expect(url.searchParams.has("resource_type")).toBe(false);
+      expect(url.searchParams.has("resource.type")).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }

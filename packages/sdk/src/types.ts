@@ -146,6 +146,40 @@ export const AuditLogSchema = z
 
 export type AuditLog = z.infer<typeof AuditLogSchema>;
 
+/**
+ * Server-side filter fields accepted by `GET /accounts/{id}/logs/audit`, using
+ * the API's own query parameter names. Each accepts repeated values (OR'd) and
+ * a `.not` form for exclusion.
+ *
+ * The endpoint silently ignores unknown params, so keep this list in sync with
+ * the API reference rather than guessing names.
+ */
+export const AUDIT_LOG_FILTER_FIELDS = [
+  "id",
+  "account_name",
+  "action_result",
+  "action_type",
+  "actor_context",
+  "actor_email",
+  "actor_id",
+  "actor_ip_address",
+  "actor_token_id",
+  "actor_token_name",
+  "actor_type",
+  "raw_cf_ray_id",
+  "raw_method",
+  "raw_status_code",
+  "raw_uri",
+  "resource_id",
+  "resource_product",
+  "resource_scope",
+  "resource_type",
+  "zone_id",
+  "zone_name",
+] as const;
+
+export type AuditLogFilterField = (typeof AUDIT_LOG_FILTER_FIELDS)[number];
+
 export const ListAuditLogsParamsSchema = z.object({
   since: z.string().optional(),
   before: z.string().optional(),
@@ -166,6 +200,34 @@ export const ListAuditLogsParamsSchema = z.object({
   actionResult: z.string().optional(),
   resourceType: z.string().optional(),
   zoneName: z.string().optional(),
+  /**
+   * Repeatable include/exclude filters keyed by the API's own query field
+   * names (e.g. `resource_product`, `raw_method`). Values in `in` are sent as
+   * repeated `field=value` params (OR'd by the API); values in `not` are sent
+   * as `field.not=value`.
+   */
+  filters: z
+    .record(
+      z.string(),
+      z.object({
+        in: z.array(z.string()).optional(),
+        not: z.array(z.string()).optional(),
+      })
+    )
+    .superRefine((filters, ctx) => {
+      for (const key of Object.keys(filters)) {
+        if (!(AUDIT_LOG_FILTER_FIELDS as readonly string[]).includes(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message:
+              `Unknown audit log filter field '${key}'. The API ignores unknown ` +
+              `fields instead of rejecting them. Valid: ${AUDIT_LOG_FILTER_FIELDS.join(", ")}`,
+          });
+        }
+      }
+    })
+    .optional(),
 });
 
 export type ListAuditLogsParams = z.infer<typeof ListAuditLogsParamsSchema>;

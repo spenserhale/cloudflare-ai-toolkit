@@ -6,6 +6,48 @@ export {
   mapAuditLogToTableRow,
   toAuditLogTable,
 } from "./audit-table.js";
+export {
+  AUDIT_FIELD_ALIASES,
+  AUDIT_LOG_FILTER_FIELDS,
+  AUDIT_LOG_FILTER_PATHS,
+  AuditFacetCounter,
+  DEFAULT_AUDIT_FACETS,
+  DEFAULT_AUDIT_FIELDS,
+  auditLogRetentionStart,
+  buildAuditLogPredicate,
+  diagnoseEmptyAuditSearch,
+  explainEmptyAuditFilters,
+  findOldestAuditLog,
+  formatAuditFieldValue,
+  getAuditField,
+  isRetryableAuditError,
+  parseAuditTime,
+  parseAuditWhere,
+  pickAuditFields,
+  planAuditWindows,
+  resolveAuditFieldPath,
+  resolveAuditRange,
+  searchAuditLogs,
+  DAY_MS,
+  WEEK_MS,
+} from "./audit-search.js";
+export type {
+  AuditFacetCounts,
+  AuditLogFilterValues,
+  AuditLogFilters,
+  AuditMatchOptions,
+  AuditSearchOptions,
+  AuditSearchProgress,
+  AuditTimeWindow,
+  AuditWhereClause,
+  ResolvedAuditRange,
+} from "./audit-search.js";
+export { getCustomHostnameHistory } from "./audit-history.js";
+export type {
+  AuditHistoryEntry,
+  CustomHostnameHistory,
+  CustomHostnameHistoryOptions,
+} from "./audit-history.js";
 export type {
   AuditLogTable,
   AuditLogTableColumn,
@@ -13,6 +55,7 @@ export type {
 } from "./audit-table.js";
 export type {
   AuditLog,
+  AuditLogFilterField,
   AuditLogListResult,
   CloudflareAuth,
   CloudflareConfig,

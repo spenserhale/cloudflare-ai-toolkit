@@ -19,7 +19,10 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `get_resource` | Get a resource by ID |
 | `create_resource` | Create a new resource |
 | `delete_resource` | Delete a resource |
-| `list_audit_logs` | List audit logs with user/action filters |
+| `list_audit_logs` | List one page of audit logs with user/action/product filters |
+| `search_audit_logs` | Search audit logs across all pages with server-side filters, client-side regex/where matching, and empty-result hints |
+| `audit_log_facets` | Count audit events by product, type, action, actor, and zone to discover filter values |
+| `custom_hostname_history` | Create/update/delete timeline for a custom hostname, flagging likely re-creates |
 | `purge_cache_by_prefixes` | Purge cached content by URL prefix(es); zone ID falls back to `CLOUDFLARE_ZONE_ID` |
 | `purge_cache_by_tags` | Purge cached content by cache tag(s); zone ID falls back to `CLOUDFLARE_ZONE_ID` |
 | `list_dns_records` | List DNS records for a zone |

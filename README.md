@@ -125,13 +125,48 @@ The SDK also walks parent directories looking for a `.env` file.
 
 ### Audit logs
 
+`audit logs search` follows pagination to the end of the range. It splits the
+range into time windows, queries them in parallel, and retries 429/5xx
+responses. Matches stream to stdout as NDJSON (or TSV), so if you stop a long
+search with Ctrl-C you keep the rows already printed. Progress goes to stderr.
+`purge_cache` events are excluded unless you pass `--include-purge`.
+
 ```bash
-cloudflare audit logs list \
-  --since 2026-02-01T00:00:00Z \
-  --before 2026-02-02T00:00:00Z \
-  --actorEmail alice@example.com \
-  --actionType zone.settings.update
+# When was this hostname created? Custom hostname events carry the product in
+# resource.product and leave resource.type empty, so filter with --product.
+cloudflare audit logs search --since 2026-03-01 --product custom_hostnames \
+  --action create --match www.example.com
+
+# Earliest matching event only
+cloudflare audit logs search --since 90d --direction asc --first --product dns_records
+
+# Pick columns; any dot path or alias (time, actor, action, product, uri, ...)
+cloudflare audit logs search --since 7d --format tsv --fields time,actor,action,product,uri
+
+# Which products/types/actions exist? Check before filtering
+cloudflare audit logs facets --since 7d
+
+# Create/update/delete timeline for one custom hostname, with delete-then-recreate pairs flagged
+cloudflare custom-hostnames history www.example.com --zoneId <zone-id>
+
+# One raw API page (pass --cursor yourself)
+cloudflare audit logs list --since 2026-02-01T00:00:00Z --before 2026-02-02T00:00:00Z \
+  --actorEmail alice@example.com --actionType update
 ```
+
+The search filter flags map onto the API's server-side filters. Every flag can
+repeat: `--product`, `--exclude-product`, `--resource-type`, `--resource-id`,
+`--zone`, `--zone-id`, `--actor`, `--actor-id`, `--actor-context`, `--action`,
+`--exclude-action`, `--result`, `--method`, `--status`, `--uri`, `--ray-id`.
+`--filter field=value` (or `field!=value`) reaches any other API field.
+`--match <regex>` and `--where path=value` filter on the client. `--since`
+accepts ISO-8601, `YYYY-MM-DD`, or relative times like `7d` and `24h`. Anything
+older than the API's 18-month limit is clamped, with a warning.
+
+When a search matches nothing, the CLI samples recent events and suggests the
+field you probably meant (for example, `--resource-type custom_hostnames` gets
+the hint "did you mean `--product custom_hostnames`?"). It also says when the
+range starts before the oldest event the account still holds.
 
 ### Zones
 
@@ -200,9 +235,11 @@ cloudflare custom-hostnames get <custom-hostname-id> --json
 cloudflare custom-hostnames create app.example.com --sslMethod http
 cloudflare custom-hostnames update <custom-hostname-id> --customOriginServer origin.example.com
 cloudflare custom-hostnames delete <custom-hostname-id> --yes
+cloudflare custom-hostnames history app.example.com     # audit-log timeline
 ```
 
-Requires a token with `SSL and Certificates Read` (or Write).
+Requires a token with `SSL and Certificates Read` (or Write). `history` also
+reads the account audit log, which needs `Account Settings Read` (or Write).
 
 ### WAF firewall rules
 

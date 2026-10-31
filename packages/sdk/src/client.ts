@@ -113,7 +113,20 @@ import {
 import { flattenTokenPolicies } from "./token-permissions.js";
 import { z } from "zod";
 
-type QueryValue = string | number | boolean | undefined;
+type QueryValue = string | number | boolean | readonly string[] | undefined;
+
+function mergeAuditFilterQuery(
+  base: Record<string, QueryValue>,
+  filters: Record<string, readonly string[]>
+): Record<string, QueryValue> {
+  const merged: Record<string, QueryValue> = { ...base };
+  for (const [key, values] of Object.entries(filters)) {
+    const existing = merged[key];
+    merged[key] =
+      existing === undefined ? values : [String(existing), ...values];
+  }
+  return merged;
+}
 
 interface RequestOptions {
   query?: Record<string, QueryValue>;
@@ -123,6 +136,7 @@ interface RequestOptions {
    * a bare payload instead of a JSON object (e.g. Log Explorer's SQL query).
    */
   textBody?: string;
+  signal?: AbortSignal;
 }
 
 interface RoutePermissionHint {
@@ -347,6 +361,10 @@ export class CloudflareClient {
     if (query) {
       for (const [key, value] of Object.entries(query)) {
         if (value === undefined) continue;
+        if (Array.isArray(value)) {
+          for (const item of value) url.searchParams.append(key, item);
+          continue;
+        }
         url.searchParams.set(key, String(value));
       }
     }
@@ -413,6 +431,7 @@ export class CloudflareClient {
     const isTextBody = options.textBody !== undefined;
     const res = await fetch(url, {
       method,
+      signal: options.signal,
       headers: {
         "Content-Type": isTextBody ? "text/plain" : "application/json",
         ...this.getAuthHeaders(),
@@ -428,7 +447,12 @@ export class CloudflareClient {
       return undefined as T;
     }
 
-    const body = await res.json().catch(() => null);
+    const body = await res.json().catch((err: unknown) => {
+      // An abort mid-body must surface as an abort, not as an empty body that
+      // later reads like a malformed response or a retryable server error.
+      if (options.signal?.aborted) throw err;
+      return null;
+    });
 
     if (!res.ok) {
       const parsedError = this.parseCloudflareError(body, `HTTP ${res.status}`);
@@ -504,36 +528,54 @@ export class CloudflareClient {
 
   async listAuditLogs(
     params: ListAuditLogsParams = {},
-    accountId?: string
+    accountId?: string,
+    options: { signal?: AbortSignal } = {}
   ): Promise<AuditLogListResult> {
     const parsedParams = ListAuditLogsParamsSchema.parse(params);
     const resolvedAccountId = this.resolveAccountId(accountId);
+
+    // The endpoint silently ignores unknown query params, so a misspelled
+    // filter returns unfiltered rows instead of an error. Names here must
+    // match the API reference exactly.
+    const filterQuery: Record<string, readonly string[]> = {};
+    for (const [field, values] of Object.entries(parsedParams.filters ?? {})) {
+      if (values.in && values.in.length > 0) {
+        filterQuery[field] = [...(filterQuery[field] ?? []), ...values.in];
+      }
+      if (values.not && values.not.length > 0) {
+        filterQuery[`${field}.not`] = values.not;
+      }
+    }
 
     const responseBody = await this.requestRaw<unknown>(
       "GET",
       `/client/v4/accounts/${resolvedAccountId}/logs/audit`,
       {
-        query: {
-          since: parsedParams.since,
-          before: parsedParams.before,
-          cursor: parsedParams.cursor,
-          direction: parsedParams.direction,
-          limit: parsedParams.limit,
-          id: parsedParams.id,
-          interface: parsedParams.interface,
-          actor_id: parsedParams.actorId,
-          actor_email: parsedParams.actorEmail,
-          actor_ip: parsedParams.actorIp,
-          actor_token_id: parsedParams.actorTokenId,
-          actor_token_name: parsedParams.actorTokenName,
-          actor_token_type: parsedParams.actorTokenType,
-          actor_user_email: parsedParams.actorUserEmail,
-          actor_user_id: parsedParams.actorUserId,
-          action_type: parsedParams.actionType,
-          action_result: parsedParams.actionResult,
-          "resource.type": parsedParams.resourceType,
-          zone_name: parsedParams.zoneName,
-        },
+        query: mergeAuditFilterQuery(
+          {
+            since: parsedParams.since,
+            before: parsedParams.before,
+            cursor: parsedParams.cursor,
+            direction: parsedParams.direction,
+            limit: parsedParams.limit,
+            id: parsedParams.id,
+            interface: parsedParams.interface,
+            actor_id: parsedParams.actorId,
+            actor_email: parsedParams.actorEmail,
+            actor_ip_address: parsedParams.actorIp,
+            actor_token_id: parsedParams.actorTokenId,
+            actor_token_name: parsedParams.actorTokenName,
+            actor_token_type: parsedParams.actorTokenType,
+            actor_user_email: parsedParams.actorUserEmail,
+            actor_user_id: parsedParams.actorUserId,
+            action_type: parsedParams.actionType,
+            action_result: parsedParams.actionResult,
+            resource_type: parsedParams.resourceType,
+            zone_name: parsedParams.zoneName,
+          },
+          filterQuery
+        ),
+        signal: options.signal,
       }
     );
 
