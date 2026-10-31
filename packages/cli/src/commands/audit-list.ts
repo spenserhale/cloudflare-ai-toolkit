@@ -22,6 +22,7 @@ export interface AuditListFlags {
   readonly actionType?: AuditActionType;
   readonly actionResult?: string;
   readonly resourceType?: string;
+  readonly product?: string;
   readonly limit: number;
   readonly cursor?: string;
   readonly direction: "asc" | "desc";
@@ -344,6 +345,9 @@ export async function runAuditLogsList(
         actionType: flags.actionType,
         actionResult: flags.actionResult,
         resourceType: flags.resourceType,
+        filters: flags.product
+          ? { resource_product: { in: [flags.product] } }
+          : undefined,
         cursor: flags.cursor,
         limit: flags.limit,
         direction: flags.direction,
@@ -423,7 +427,13 @@ export const listAuditLogsCommand = buildCommand({
         kind: "parsed",
         parse: parseResourceType,
         optional: true,
-        brief: "Filter by resource type (for example dns_records)",
+        brief: "Filter by resource.type (for example record); often empty, prefer --product",
+      },
+      product: {
+        kind: "parsed",
+        parse: parseResourceType,
+        optional: true,
+        brief: "Filter by resource.product (for example custom_hostnames, dns_records)",
       },
       cursor: {
         kind: "parsed",

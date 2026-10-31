@@ -5,6 +5,7 @@ import { getCommand } from "./commands/get.js";
 import { createCommand } from "./commands/create.js";
 import { deleteCommand } from "./commands/delete.js";
 import { listAuditLogsCommand } from "./commands/audit-list.js";
+import { auditLogFacetsCommand, searchAuditLogsCommand } from "./commands/audit-search.js";
 import {
   purgeCacheEverythingCommand,
   purgeCacheByUrlsCommand,
@@ -19,6 +20,7 @@ import {
   listCustomHostnamesCommand,
   updateCustomHostnameCommand,
 } from "./commands/custom-hostnames.js";
+import { customHostnameHistoryCommand } from "./commands/custom-hostnames-history.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
 import { deleteDnsRecordCommand } from "./commands/dns-delete.js";
@@ -75,6 +77,8 @@ const resourceRoutes = buildRouteMap({
 const auditLogRoutes = buildRouteMap({
   routes: {
     list: listAuditLogsCommand,
+    search: searchAuditLogsCommand,
+    facets: auditLogFacetsCommand,
   },
   docs: {
     brief: "Manage audit logs",
@@ -141,6 +145,7 @@ const customHostnameRoutes = buildRouteMap({
     create: createCustomHostnameCommand,
     update: updateCustomHostnameCommand,
     delete: deleteCustomHostnameCommand,
+    history: customHostnameHistoryCommand,
   },
   docs: {
     brief: "Custom hostname (SSL for SaaS) operations",
@@ -270,6 +275,10 @@ const routes = buildRouteMap({
 
 export const app = buildApplication(routes, {
   name: "cloudflare",
+  scanner: {
+    // Accept --resource-type as well as --resourceType.
+    caseStyle: "allow-kebab-for-camel",
+  },
   versionInfo: {
     currentVersion: pkg.version,
   },

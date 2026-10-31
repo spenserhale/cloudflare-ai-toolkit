@@ -48,6 +48,8 @@ export CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped command
 
 ```bash
 cloudflare audit logs list [flags]
+cloudflare audit logs search [--since 7d] [--product <p>...] [--action <a>...] [--first] [--format ndjson|tsv|json|toon] [flags]
+cloudflare audit logs facets [--since 7d] [--facets product,type,action] [flags]
 
 cloudflare zones list [name] [--operator <op>] [--status <status>] [flags]
 cloudflare zones get [zone-id] [--json]
@@ -64,6 +66,7 @@ cloudflare custom-hostnames get <custom-hostname-id> [--zoneId <id>] [--json]
 cloudflare custom-hostnames create <hostname> [--sslMethod http|txt|email] [--certificateAuthority <ca>] [flags]
 cloudflare custom-hostnames update <custom-hostname-id> [--customOriginServer <origin>] [--metadata <json>] [flags]
 cloudflare custom-hostnames delete <custom-hostname-id> [--zoneId <id>] [--yes]
+cloudflare custom-hostnames history <hostname> [--zoneId <id>] [--since <time>] [--json]
 
 cloudflare waf rules list [--action <action>] [--description <text>] [flags]
 cloudflare waf rules get <rule-id> [--zoneId <id>] [--json]

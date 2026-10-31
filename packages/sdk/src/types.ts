@@ -166,6 +166,21 @@ export const ListAuditLogsParamsSchema = z.object({
   actionResult: z.string().optional(),
   resourceType: z.string().optional(),
   zoneName: z.string().optional(),
+  /**
+   * Repeatable include/exclude filters keyed by the API's own query field
+   * names (e.g. `resource_product`, `raw_method`). Values in `in` are sent as
+   * repeated `field=value` params (OR'd by the API); values in `not` are sent
+   * as `field.not=value`.
+   */
+  filters: z
+    .record(
+      z.string(),
+      z.object({
+        in: z.array(z.string()).optional(),
+        not: z.array(z.string()).optional(),
+      })
+    )
+    .optional(),
 });
 
 export type ListAuditLogsParams = z.infer<typeof ListAuditLogsParamsSchema>;

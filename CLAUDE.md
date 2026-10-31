@@ -136,6 +136,34 @@ better path — it was checked and it does not:
   counting 373,501 matches across ~250M rows returned in 6.9s. This reinforces
   that 524s are queueing/load, not compute.
 
+## Audit log endpoint silently ignores unknown filters
+
+`GET /accounts/{id}/logs/audit` returns HTTP 200 with **unfiltered** rows when
+it gets a query param it doesn't recognize. A misspelled filter therefore looks
+like "the filter matched everything", or, combined with client-side filtering,
+like "the filter matched nothing". Until 0.8 this repo sent `resource.type` and
+`actor_ip`, and the API ignored both. The real names are flat snake_case
+(`resource_type`, `resource_product`, `actor_ip_address`, `raw_method`, ...).
+Values can repeat and are OR'd; exclusion is `field.not=value`. When you add a
+filter, verify it against a live account, e.g. confirm that the returned
+`resource.product` values all match the one you filtered on.
+
+Other facts from probing it:
+
+- `since` is inclusive and `before` is exclusive, so adjacent time windows
+  neither overlap nor drop boundary events.
+- A `since` older than 18 months is a 400 ("Audit Logs expire after 18
+  months"). An account's actual history can start much later (this account's
+  starts around 2026-03-10).
+- Most events leave `resource.type` empty. Custom hostname, DNS, and cache
+  purge events identify themselves by `resource.product`.
+- Custom hostname **create** events carry the hostname in
+  `resource.request.hostname` and have no `resource.id`. Update and delete
+  events have the ID but no hostname. `getCustomHostnameHistory` links the two.
+- One wide unsplit query can take 15-25s. Splitting the range into parallel
+  windows is several times faster (see `resolveWindowMs` in
+  `packages/cli/src/commands/audit-search.ts` for measurements).
+
 ## Looking up Cloudflare API facts
 
 Never guess an endpoint path, field name, or response shape. Two sources, in
