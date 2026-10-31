@@ -152,7 +152,7 @@ Other facts from probing it:
 
 - `since` is inclusive and `before` is exclusive, so adjacent time windows
   neither overlap nor drop boundary events.
-- A `since` more than **548 days** (365 + 183) before now is a 400. The error
+- A `since` **548 days** (365 + 183) or more before now is a 400. The error
   says "Audit Logs expire after 18 months", but the cutoff is a fixed day
   count, not calendar months: calendar math over-reaches by a day or more and
   gets rejected. An account's actual history can start much later (this

@@ -447,7 +447,12 @@ export class CloudflareClient {
       return undefined as T;
     }
 
-    const body = await res.json().catch(() => null);
+    const body = await res.json().catch((err: unknown) => {
+      // An abort mid-body must surface as an abort, not as an empty body that
+      // later reads like a malformed response or a retryable server error.
+      if (options.signal?.aborted) throw err;
+      return null;
+    });
 
     if (!res.ok) {
       const parsedError = this.parseCloudflareError(body, `HTTP ${res.status}`);

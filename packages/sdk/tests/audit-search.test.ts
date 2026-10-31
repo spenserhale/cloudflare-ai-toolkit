@@ -351,7 +351,10 @@ describe("getCustomHostnameHistory", () => {
 
 describe("searchAuditLogs edge cases", () => {
   const raceTimeout = <T>(promise: Promise<T>) =>
-    Promise.race([promise, new Promise<string>((resolve) => setTimeout(() => resolve("HUNG"), 1000))]);
+    Promise.race([
+      promise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("search hung")), 1000)),
+    ]);
 
   it("does not stall when parallel windows return empty pages", async () => {
     const client = { async listAuditLogs() { return { data: [] }; } };
