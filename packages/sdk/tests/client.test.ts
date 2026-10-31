@@ -218,6 +218,13 @@ describe("CloudflareClient", () => {
     }
   });
 
+  it("rejects unknown audit log filter fields instead of letting the API ignore them", async () => {
+    const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
+    await expect(
+      client.listAuditLogs({ filters: { resource_typ: { in: ["record"] } } })
+    ).rejects.toThrow("Unknown audit log filter field 'resource_typ'");
+  });
+
   it("sends repeatable and .not audit log filters", async () => {
     const client = new CloudflareClient(tokenClientConfig({ accountId: "acc-id" }));
 

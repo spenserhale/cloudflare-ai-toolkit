@@ -46,7 +46,7 @@ export interface AuditFilterFlags {
   readonly actorContext?: readonly string[];
   readonly action?: readonly string[];
   readonly excludeAction?: readonly string[];
-  readonly result?: string;
+  readonly result?: readonly string[];
   readonly method?: readonly string[];
   readonly status?: readonly string[];
   readonly uri?: readonly string[];
@@ -154,7 +154,7 @@ export function buildAuditFilters(flags: AuditFilterFlags): AuditLogFilters {
   add("actor_context", flags.actorContext);
   add("action_type", flags.action);
   add("action_type", flags.excludeAction, true);
-  add("action_result", flags.result ? [flags.result] : undefined);
+  add("action_result", flags.result);
   add("raw_method", flags.method?.map((method) => method.toUpperCase()));
   add("raw_status_code", flags.status);
   add("raw_uri", flags.uri);
@@ -211,12 +211,7 @@ export const auditFilterFlagParameters = {
   actorContext: multi("actor.context: api, api_key, api_token, dash, oauth, origin_ca_key"),
   action: multi("action.type: create, view, update, delete; repeatable"),
   excludeAction: multi("action.type to exclude, e.g. view; repeatable"),
-  result: {
-    kind: "parsed",
-    parse: parseNonEmpty,
-    optional: true,
-    brief: "action.result: success or failure",
-  },
+  result: multi("action.result: success or failure"),
   method: multi("raw.method (HTTP method); repeatable"),
   status: multi("raw.status_code; repeatable"),
   uri: multi("raw.uri (exact path); repeatable"),

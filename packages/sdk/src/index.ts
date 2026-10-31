@@ -33,7 +33,6 @@ export {
 } from "./audit-search.js";
 export type {
   AuditFacetCounts,
-  AuditLogFilterField,
   AuditLogFilterValues,
   AuditLogFilters,
   AuditMatchOptions,
@@ -56,6 +55,7 @@ export type {
 } from "./audit-table.js";
 export type {
   AuditLog,
+  AuditLogFilterField,
   AuditLogListResult,
   CloudflareAuth,
   CloudflareConfig,

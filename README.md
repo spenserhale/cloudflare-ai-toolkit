@@ -238,7 +238,8 @@ cloudflare custom-hostnames delete <custom-hostname-id> --yes
 cloudflare custom-hostnames history app.example.com     # audit-log timeline
 ```
 
-Requires a token with `SSL and Certificates Read` (or Write).
+Requires a token with `SSL and Certificates Read` (or Write). `history` also
+reads the account audit log, which needs `Account Settings Read` (or Write).
 
 ### WAF firewall rules
 

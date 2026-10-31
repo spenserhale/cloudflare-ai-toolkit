@@ -348,3 +348,98 @@ describe("getCustomHostnameHistory", () => {
     expect(history.notes.some((note) => note.includes("Likely re-create"))).toBe(true);
   });
 });
+
+describe("searchAuditLogs edge cases", () => {
+  const raceTimeout = <T>(promise: Promise<T>) =>
+    Promise.race([promise, new Promise<string>((resolve) => setTimeout(() => resolve("HUNG"), 1000))]);
+
+  it("does not stall when parallel windows return empty pages", async () => {
+    const client = { async listAuditLogs() { return { data: [] }; } };
+    const result = await raceTimeout(
+      collect(
+        searchAuditLogs(client, {
+          since: "2026-10-01",
+          before: "2026-10-20",
+          windowMs: DAY_MS,
+          concurrency: 2,
+          now: NOW,
+        })
+      )
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("yields nothing for maxResults 0", async () => {
+    const { client, calls } = fakeLister(() => ({ data: [event("2026-10-29T01:00:00Z")] }));
+    const logs = await collect(
+      searchAuditLogs(client, { since: "2026-10-29", before: "2026-10-30", maxResults: 0, now: NOW })
+    );
+    expect(logs).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("stops yielding buffered rows once the signal aborts", async () => {
+    const controller = new AbortController();
+    const { client } = fakeLister(() => ({
+      data: [event("2026-10-29T03:00:00Z"), event("2026-10-29T02:00:00Z"), event("2026-10-29T01:00:00Z")],
+    }));
+    const seen: AuditLog[] = [];
+    for await (const log of searchAuditLogs(client, {
+      since: "2026-10-29",
+      before: "2026-10-30",
+      signal: controller.signal,
+      now: NOW,
+    })) {
+      seen.push(log);
+      controller.abort();
+    }
+    expect(seen).toHaveLength(1);
+  });
+
+  it("passes an abort signal to in-flight requests", async () => {
+    let received: AbortSignal | undefined;
+    const client = {
+      async listAuditLogs(_params?: ListAuditLogsParams, _account?: string, options?: { signal?: AbortSignal }) {
+        received = options?.signal;
+        return { data: [event("2026-10-29T01:00:00Z")] };
+      },
+    };
+    await collect(searchAuditLogs(client, { since: "2026-10-29", before: "2026-10-30", maxResults: 1, now: NOW }));
+    expect(received?.aborted).toBe(true);
+  });
+
+  it("stops paging a window when the cursor repeats", async () => {
+    const warnings: string[] = [];
+    const { client, calls } = fakeLister(() => ({
+      data: [event("2026-10-29T02:00:00Z"), event("2026-10-29T01:00:00Z")],
+      cursor: "same",
+    }));
+    const logs = await raceTimeout(
+      collect(
+        searchAuditLogs(client, {
+          since: "2026-10-29",
+          before: "2026-10-30",
+          pageSize: 2,
+          onWarning: (message) => warnings.push(message),
+          now: NOW,
+        })
+      )
+    );
+    expect(calls).toHaveLength(2);
+    expect(logs).toHaveLength(4);
+    expect(warnings[0]).toContain("repeated a pagination cursor");
+  });
+});
+
+describe("time edge cases", () => {
+  it("uses the API's fixed 548-day limit plus a day of margin", () => {
+    const start = auditLogRetentionStart(Date.parse("2026-10-31T05:23:00Z"));
+    expect(new Date(start).toISOString()).toBe("2025-05-02T05:23:00.000Z");
+  });
+
+  it("keeps absurd relative durations inside the Date range", () => {
+    const range = resolveAuditRange("100000001d", undefined, NOW);
+    expect(range.sinceMs).toBe(auditLogRetentionStart(NOW));
+    expect(range.warnings).toHaveLength(1);
+  });
+});

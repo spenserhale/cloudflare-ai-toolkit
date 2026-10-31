@@ -136,6 +136,7 @@ interface RequestOptions {
    * a bare payload instead of a JSON object (e.g. Log Explorer's SQL query).
    */
   textBody?: string;
+  signal?: AbortSignal;
 }
 
 interface RoutePermissionHint {
@@ -430,6 +431,7 @@ export class CloudflareClient {
     const isTextBody = options.textBody !== undefined;
     const res = await fetch(url, {
       method,
+      signal: options.signal,
       headers: {
         "Content-Type": isTextBody ? "text/plain" : "application/json",
         ...this.getAuthHeaders(),
@@ -521,7 +523,8 @@ export class CloudflareClient {
 
   async listAuditLogs(
     params: ListAuditLogsParams = {},
-    accountId?: string
+    accountId?: string,
+    options: { signal?: AbortSignal } = {}
   ): Promise<AuditLogListResult> {
     const parsedParams = ListAuditLogsParamsSchema.parse(params);
     const resolvedAccountId = this.resolveAccountId(accountId);
@@ -567,6 +570,7 @@ export class CloudflareClient {
           },
           filterQuery
         ),
+        signal: options.signal,
       }
     );
 

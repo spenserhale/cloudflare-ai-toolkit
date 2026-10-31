@@ -152,9 +152,11 @@ Other facts from probing it:
 
 - `since` is inclusive and `before` is exclusive, so adjacent time windows
   neither overlap nor drop boundary events.
-- A `since` older than 18 months is a 400 ("Audit Logs expire after 18
-  months"). An account's actual history can start much later (this account's
-  starts around 2026-03-10).
+- A `since` more than **548 days** (365 + 183) before now is a 400. The error
+  says "Audit Logs expire after 18 months", but the cutoff is a fixed day
+  count, not calendar months: calendar math over-reaches by a day or more and
+  gets rejected. An account's actual history can start much later (this
+  account's starts around 2026-03-10).
 - Most events leave `resource.type` empty. Custom hostname, DNS, and cache
   purge events identify themselves by `resource.product`.
 - Custom hostname **create** events carry the hostname in

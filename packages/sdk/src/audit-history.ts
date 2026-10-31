@@ -186,11 +186,12 @@ export async function getCustomHostnameHistory(
   if (creates.length === 0) {
     const oldest = await findOldestAuditLog(client, { accountId: options.accountId, now });
     const oldestTime = readString(getAuditField(oldest ?? ({} as AuditLog), "action.time"));
+    const searched = `${new Date(range.sinceMs).toISOString()} to ${new Date(range.beforeMs).toISOString()}`;
     notes.push(
       oldestTime
-        ? `No create event found. Audit history for this account starts at ${oldestTime}, ` +
-            "so the hostname was probably created before then."
-        : "No create event found, and the account holds no audit history in the searched range."
+        ? `No create event found between ${searched}. The account's audit history starts at ` +
+            `${oldestTime}; a create before that has expired from the audit log.`
+        : `No create event found between ${searched}, and the account holds no audit history.`
     );
   }
   if (currentIds.length === 0 && options.zoneId) {

@@ -209,12 +209,18 @@ describe("runAuditLogsSearch", () => {
 
   it("exits 130 after Ctrl-C, keeping rows already written", async () => {
     let interrupt: () => void = () => {};
-    const { deps, out, err, exit } = createDeps(async () => {
-      interrupt();
-      return { data: Array.from({ length: 1000 }, (_, i) => event(`a${i}`)), pagination: { cursor: "c" } };
-    });
+    const { deps, out, err, exit } = createDeps(async () => ({
+      data: Array.from({ length: 1000 }, (_, i) => event(`a${i}`)),
+      pagination: { cursor: "c" },
+    }));
     const withInterrupt: AuditSearchDeps = {
       ...deps,
+      write: (text) => {
+        const ok = deps.write(text);
+        // Ctrl-C arrives after the third row is printed.
+        if (out.length === 3) interrupt();
+        return ok;
+      },
       onInterrupt: (handler) => {
         interrupt = handler;
         return () => {};
@@ -222,9 +228,16 @@ describe("runAuditLogsSearch", () => {
     };
 
     await expect(runAuditLogsSearch(baseFlags({ fields: "id" }), withInterrupt)).rejects.toThrow("exit 130");
-    expect(out.length).toBeLessThanOrEqual(1000);
-    expect(err.join("")).toContain("Interrupted");
+    expect(out.slice(0, 3)).toEqual(['{"id":"a0"}\n', '{"id":"a1"}\n', '{"id":"a2"}\n']);
+    expect(err.join("")).toContain("Interrupted; kept 3 events");
     expect(exit).toHaveBeenCalledWith(130);
+  });
+
+  it("accepts repeated --result values", () => {
+    expect(buildAuditFilters(baseFlags({ result: ["success", "failure"] })).action_result).toEqual({
+      in: ["success", "failure"],
+      not: [],
+    });
   });
 });
 

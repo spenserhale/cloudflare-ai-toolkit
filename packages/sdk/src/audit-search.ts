@@ -1,44 +1,19 @@
 import type { CloudflareClient } from "./client.js";
 import { CloudflareError } from "./errors.js";
-import type { AuditLog, ListAuditLogsParams } from "./types.js";
+import {
+  AUDIT_LOG_FILTER_FIELDS,
+  type AuditLog,
+  type AuditLogFilterField,
+  type ListAuditLogsParams,
+} from "./types.js";
+
+export { AUDIT_LOG_FILTER_FIELDS, type AuditLogFilterField };
 
 // ---------------------------------------------------------------------------
 // Filters
 // ---------------------------------------------------------------------------
 
-/**
- * Server-side filter fields accepted by `GET /accounts/{id}/logs/audit`, using
- * the API's own query parameter names. Each accepts repeated values (OR'd) and
- * a `.not` form for exclusion.
- *
- * The endpoint silently ignores unknown params, so keep this list in sync with
- * the API reference rather than guessing names.
- */
-export const AUDIT_LOG_FILTER_FIELDS = [
-  "id",
-  "account_name",
-  "action_result",
-  "action_type",
-  "actor_context",
-  "actor_email",
-  "actor_id",
-  "actor_ip_address",
-  "actor_token_id",
-  "actor_token_name",
-  "actor_type",
-  "raw_cf_ray_id",
-  "raw_method",
-  "raw_status_code",
-  "raw_uri",
-  "resource_id",
-  "resource_product",
-  "resource_scope",
-  "resource_type",
-  "zone_id",
-  "zone_name",
-] as const;
 
-export type AuditLogFilterField = (typeof AUDIT_LOG_FILTER_FIELDS)[number];
 
 export interface AuditLogFilterValues {
   readonly in?: readonly string[];
@@ -80,6 +55,7 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 export const DAY_MS = 24 * HOUR_MS;
 export const WEEK_MS = 7 * DAY_MS;
+const EARLIEST_DATE_MS = -8.64e15;
 
 const RELATIVE_UNITS: Record<string, number> = {
   m: MINUTE_MS,
@@ -98,7 +74,9 @@ export function parseAuditTime(value: string, now: number = Date.now()): number 
   const relative = /^(\d+)\s*([mhdw])$/iu.exec(trimmed);
   if (relative) {
     const unit = RELATIVE_UNITS[relative[2]!.toLowerCase()]!;
-    return now - Number(relative[1]) * unit;
+    // Keep absurd durations inside the Date range so the retention clamp,
+    // not a RangeError, handles them.
+    return Math.max(now - Number(relative[1]) * unit, EARLIEST_DATE_MS);
   }
   const parsed = Date.parse(trimmed);
   if (Number.isNaN(parsed)) {
@@ -110,15 +88,17 @@ export function parseAuditTime(value: string, now: number = Date.now()): number 
 }
 
 /**
- * Earliest `since` the API accepts. Requests older than this fail with
- * "Audit Logs expire after 18 months". Accounts often hold far less history
- * than this in practice, so it is an upper bound, not where data starts.
+ * Earliest `since` the API accepts. The API reports "Audit Logs expire after
+ * 18 months" but enforces a fixed 548 days (365 + 183), measured from now:
+ * on 2026-10-31T05:23Z it rejected 2025-05-01T05:23Z and accepted 06:00Z.
+ * Accounts often hold far less history than this in practice, so it is an
+ * upper bound, not where data starts.
  */
+const AUDIT_LOG_MAX_AGE_MS = 548 * DAY_MS;
+
 export function auditLogRetentionStart(now: number = Date.now()): number {
-  const limit = new Date(now);
-  limit.setUTCMonth(limit.getUTCMonth() - 18);
   // One day of margin so a request built now is still valid when it arrives.
-  return limit.getTime() + DAY_MS;
+  return now - AUDIT_LOG_MAX_AGE_MS + DAY_MS;
 }
 
 export interface AuditTimeWindow {
@@ -375,11 +355,17 @@ export function isRetryableAuditError(err: unknown): boolean {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** Pages a window may buffer ahead of the consumer before it pauses. */
+const MAX_BUFFERED_PAGES_PER_WINDOW = 8;
+
 interface WindowState {
   readonly pages: AuditLog[][];
   done: boolean;
   error?: unknown;
+  /** Resolves the consumer's wait for this window's next page. */
   wake?: () => void;
+  /** Resolves the producer's wait for buffer space. */
+  resume?: () => void;
 }
 
 class SearchStopped extends Error {}
@@ -388,7 +374,8 @@ class SearchStopped extends Error {}
  * Streams every audit log event matching `options`, following pagination
  * cursors automatically. When `windowMs` is set the range is split into
  * windows fetched `concurrency` at a time; events are still yielded in
- * `direction` order. Stops early at `maxResults` or when `signal` aborts.
+ * `direction` order. Stops early at `maxResults` or when `signal` aborts,
+ * cancelling in-flight requests.
  */
 export async function* searchAuditLogs(
   client: AuditLogLister,
@@ -404,17 +391,21 @@ export async function* searchAuditLogs(
 
   const range = resolveAuditRange(options.since, options.before, now);
   for (const warning of range.warnings) options.onWarning?.(warning);
+  if (options.maxResults !== undefined && options.maxResults <= 0) return;
 
   const windows = planAuditWindows(range.sinceMs, range.beforeMs, options.windowMs, direction);
   const filters: ListAuditLogsParams["filters"] = {};
   for (const [field, values] of Object.entries(options.filters ?? {})) {
     if (!values) continue;
-    filters[field] = {
+    filters[field as AuditLogFilterField] = {
       in: values.in ? [...values.in] : undefined,
       not: values.not ? [...values.not] : undefined,
     };
   }
 
+  // Aborted on caller abort and on our own early stop, so in-flight requests
+  // are cancelled instead of awaited.
+  const controller = new AbortController();
   let stopped = false;
   let pages = 0;
   let scanned = 0;
@@ -422,6 +413,18 @@ export async function* searchAuditLogs(
   let windowsDone = 0;
   let retries = 0;
   let currentTime: string | undefined;
+
+  const states: WindowState[] = windows.map(() => ({ pages: [], done: false }));
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    controller.abort();
+    for (const state of states) {
+      state.wake?.();
+      state.resume?.();
+    }
+  };
 
   const report = () =>
     options.onProgress?.({
@@ -437,7 +440,7 @@ export async function* searchAuditLogs(
 
   const fetchPage = async (window: AuditTimeWindow, cursor: string | undefined) => {
     for (let attempt = 1; ; attempt++) {
-      if (stopped || options.signal?.aborted) throw new SearchStopped();
+      if (stopped) throw new SearchStopped();
       try {
         return await client.listAuditLogs(
           {
@@ -448,9 +451,11 @@ export async function* searchAuditLogs(
             cursor,
             filters,
           },
-          options.accountId
+          options.accountId,
+          { signal: controller.signal }
         );
       } catch (err) {
+        if (stopped) throw new SearchStopped();
         if (attempt >= maxAttempts || !isRetryableAuditError(err)) throw err;
         retries++;
         report();
@@ -459,10 +464,14 @@ export async function* searchAuditLogs(
     }
   };
 
-  const states: WindowState[] = windows.map(() => ({ pages: [], done: false }));
+  // Counted synchronously (not via promise callbacks) so the consumer sees a
+  // finished window's slot as free the moment it is woken.
+  let active = 0;
+  const tasks: Promise<void>[] = [];
 
   const runWindow = async (index: number) => {
     const state = states[index]!;
+    const seenCursors = new Set<string>();
     try {
       let cursor: string | undefined;
       do {
@@ -472,13 +481,31 @@ export async function* searchAuditLogs(
         state.pages.push(result.data);
         state.wake?.();
         report();
+
         const next = result.pagination?.cursor;
         // A short page is the last one; some responses still carry a cursor.
         cursor = next && result.data.length >= pageSize ? next : undefined;
+        if (cursor && seenCursors.has(cursor)) {
+          options.onWarning?.(
+            `The API repeated a pagination cursor for ${windows[index]!.since}..${windows[index]!.before}; ` +
+              "stopped paging that window to avoid duplicates."
+          );
+          cursor = undefined;
+        }
+        if (cursor) seenCursors.add(cursor);
+
+        while (cursor && !stopped && state.pages.length >= MAX_BUFFERED_PAGES_PER_WINDOW) {
+          await new Promise<void>((resolve) => {
+            state.resume = resolve;
+            if (stopped || state.pages.length < MAX_BUFFERED_PAGES_PER_WINDOW) resolve();
+          });
+          state.resume = undefined;
+        }
       } while (cursor && !stopped);
     } catch (err) {
       if (!(err instanceof SearchStopped)) state.error = err;
     } finally {
+      active--;
       state.done = true;
       windowsDone++;
       state.wake?.();
@@ -487,46 +514,39 @@ export async function* searchAuditLogs(
   };
 
   let nextToStart = 0;
-  const running = new Set<Promise<void>>();
   const startMore = (head: number) => {
-    // Only run ahead of the window being emitted by `concurrency` windows so
-    // memory stays bounded on long ranges.
+    // Only run `concurrency` windows ahead of the one being emitted so memory
+    // stays bounded on long ranges.
     while (
       !stopped &&
       nextToStart < windows.length &&
-      running.size < concurrency &&
+      active < concurrency &&
       nextToStart < head + concurrency
     ) {
-      const task = runWindow(nextToStart++);
-      running.add(task);
-      void task.finally(() => {
-        running.delete(task);
-      });
+      active++;
+      tasks.push(runWindow(nextToStart++));
     }
   };
 
-  const onAbort = () => {
-    stopped = true;
-    for (const state of states) state.wake?.();
-  };
+  const onAbort = () => stop();
+  if (options.signal?.aborted) return;
   options.signal?.addEventListener("abort", onAbort);
 
   try {
-    for (let head = 0; head < windows.length; head++) {
+    for (let head = 0; head < windows.length && !stopped; head++) {
       const state = states[head]!;
       for (;;) {
         startMore(head);
         const page = state.pages.shift();
         if (page) {
+          state.resume?.();
           for (const log of page) {
+            if (stopped) return;
             if (options.predicate && !options.predicate(log)) continue;
             matched++;
             currentTime = typeof log.action?.time === "string" ? log.action.time : currentTime;
             yield log;
-            if (options.maxResults !== undefined && matched >= options.maxResults) {
-              stopped = true;
-              return;
-            }
+            if (options.maxResults !== undefined && matched >= options.maxResults) return;
           }
           continue;
         }
@@ -534,18 +554,17 @@ export async function* searchAuditLogs(
         if (state.done || stopped) break;
         await new Promise<void>((resolve) => {
           state.wake = resolve;
-          // Re-check after installing the waker in case the window finished
+          // Re-check after installing the waker in case the window changed
           // between the checks above and here.
           if (state.pages.length > 0 || state.done || stopped) resolve();
         });
         state.wake = undefined;
       }
-      if (stopped) return;
     }
   } finally {
-    stopped = true;
+    stop();
     options.signal?.removeEventListener("abort", onAbort);
-    await Promise.allSettled([...running]);
+    await Promise.allSettled(tasks);
     report();
   }
 }

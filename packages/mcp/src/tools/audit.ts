@@ -197,12 +197,15 @@ export function registerAuditTools(server: FastMCP) {
         direction: args.direction,
         filters,
         predicate,
-        maxResults: args.maxResults,
+        // One extra so `truncated` means a further match really exists.
+        maxResults: args.maxResults + 1,
         windowMs: windowFor(filters),
         concurrency: 8,
       })) {
         events.push(wholeEvents ? log : pickAuditFields(log, fields));
       }
+      const truncated = events.length > args.maxResults;
+      if (truncated) events.length = args.maxResults;
 
       const hints =
         events.length === 0
@@ -217,7 +220,7 @@ export function registerAuditTools(server: FastMCP) {
         since: new Date(range.sinceMs).toISOString(),
         before: new Date(range.beforeMs).toISOString(),
         count: events.length,
-        truncated: events.length >= args.maxResults,
+        truncated,
         warnings: range.warnings,
         hints,
         events,
