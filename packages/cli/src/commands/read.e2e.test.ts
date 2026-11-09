@@ -14,6 +14,7 @@ interface MockRoute {
   readonly pathname: string;
   readonly status: number;
   readonly body: unknown;
+  readonly expectedBody?: unknown;
   readonly expectedHeaders?: Record<string, string>;
   readonly forbiddenHeaders?: readonly string[];
 }
@@ -45,6 +46,10 @@ globalThis.fetch = async (input, init) => {
       }),
       { status: 404, headers: { "Content-Type": "application/json" } }
     );
+  }
+
+  if (route.expectedBody && JSON.stringify(await request.json()) !== JSON.stringify(route.expectedBody)) {
+    throw new Error("Request body mismatch");
   }
 
   if (route.expectedHeaders) {
@@ -386,5 +391,40 @@ describe("CLI read e2e", () => {
     expect(result.code).not.toBe(0);
     expect(result.stderr).toContain("Invalid action type 'zone.dns_record.delete'");
     expect(result.stderr).toContain("Valid values: create, view, update, delete");
+  });
+});
+
+
+describe("dns records create", () => {
+  const content = "v=spf1 include:_spf.paubox.com -all";
+  const env = { CLOUDFLARE_API_TOKEN: "test-token", CLOUDFLARE_BASE_URL: "https://mock.cloudflare.test" };
+  const args = ["dns", "records", "create", "zone-id", "--type", "TXT", "--name", "pbhsdevelop.com", "--content", content];
+  it("preserves shell-quoted content and returns the complete record as JSON", async () => {
+    const params = { type: "TXT", name: "pbhsdevelop.com", content, ttl: 300, proxied: false, comment: "SPF record" };
+    const record = { id: "rec-new", ...params };
+    const result = await runCliWithMockFetch([...args, "--ttl", "300", "--proxied", "false", "--comment", "SPF record", "--json"], env, [{ method: "POST", pathname: "/client/v4/zones/zone-id/dns_records", status: 200, expectedBody: params, body: { success: true, errors: [], messages: [], result: record } }]);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout)).toEqual(record);
+  });
+  it("prints the created ID in text output", async () => {
+    const result = await runCliWithMockFetch(args, env, [{ method: "POST", pathname: "/client/v4/zones/zone-id/dns_records", status: 200, body: { success: true, errors: [], messages: [], result: { id: "rec-new", type: "TXT", name: "pbhsdevelop.com", content } } }]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Created DNS record rec-new");
+  });
+  for (const status of [400, 403]) {
+    it(`reports HTTP ${status} errors on stderr with nonzero exit`, async () => {
+      const message = status === 400 ? "DNS Validation Error" : "Unauthorized to access requested resource";
+      const result = await runCliWithMockFetch([...args, "--json"], env, [{ method: "POST", pathname: "/client/v4/zones/zone-id/dns_records", status, body: { success: false, errors: [{ code: status === 400 ? 1004 : 9109, message }], messages: [], result: null } }]);
+      expect(result.code).not.toBe(0);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(message);
+      if (status === 403) expect(result.stderr).toContain("DNS Write");
+    });
+  }
+  it("requires content", async () => {
+    const result = await runCliWithMockFetch(args.slice(0, -2), env, []);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("content");
   });
 });

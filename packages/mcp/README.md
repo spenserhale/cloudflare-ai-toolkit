@@ -26,6 +26,7 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `purge_cache_by_prefixes` | Purge cached content by URL prefix(es); zone ID falls back to `CLOUDFLARE_ZONE_ID` |
 | `purge_cache_by_tags` | Purge cached content by cache tag(s); zone ID falls back to `CLOUDFLARE_ZONE_ID` |
 | `list_dns_records` | List DNS records for a zone |
+| `create_dns_record` | Create a DNS record and return its ID; TXT content preserves spaces |
 | `update_dns_record` | Update an existing DNS record |
 | `delete_dns_record` | Delete a DNS record from a zone |
 | `list_zones` | List, search, and filter zones — resolve a domain name to a zone ID |

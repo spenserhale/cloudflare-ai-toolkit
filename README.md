@@ -215,6 +215,7 @@ Writing requires a `Zone Write` API token.
 
 ```bash
 cloudflare dns records list <zone-id> --type A --name app.example.com
+cloudflare dns records create <zone-id> --type TXT --name pbhsdevelop.com --content 'v=spf1 include:_spf.paubox.com -all' --json
 cloudflare dns records update <zone-id> <record-id> --content 203.0.113.10 --proxied true
 cloudflare dns records delete <zone-id> <record-id> [<record-id>...] --yes
 ```
@@ -421,3 +422,10 @@ that means **no npm provenance attestations** on the published tarballs —
 [Bun doesn't yet support npm OIDC / sigstore](https://github.com/oven-sh/bun/issues/22423).
 The standalone binaries remain the primary distribution path and carry their
 own SHA256 verification against the GitHub Release.
+
+DNS record creation requires `--type`, `--name`, and `--content`. Optional flags:
+`--ttl <integer>`, `--proxied true|false`, `--comment <text>`, and `--json`.
+The command returns the created record including its ID. Quote TXT content with
+normal shell quoting to preserve spaces. For an apex record, use the zone name
+(e.g. `pbhsdevelop.com`). API failures exit nonzero and report validation messages
+or required permissions on stderr.

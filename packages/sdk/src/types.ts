@@ -456,6 +456,15 @@ export const UpdateDnsRecordParamsSchema = z.object({
 
 export type UpdateDnsRecordParams = z.infer<typeof UpdateDnsRecordParamsSchema>;
 
+export const CreateDnsRecordParamsSchema = UpdateDnsRecordParamsSchema.extend({
+  type: z.string().min(1),
+  name: z.string().min(1),
+  content: z.string(),
+});
+
+export type CreateDnsRecordParams = z.infer<typeof CreateDnsRecordParamsSchema>;
+
+
 // ---------------------------------------------------------------------------
 // API Response wrappers
 // ---------------------------------------------------------------------------

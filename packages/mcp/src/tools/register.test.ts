@@ -56,6 +56,7 @@ describe("MCP tool registration", () => {
         "purge_cache_by_prefixes",
         "purge_cache_by_tags",
         "list_dns_records",
+        "create_dns_record",
         "update_dns_record",
         "delete_dns_record",
         "query_log_explorer",

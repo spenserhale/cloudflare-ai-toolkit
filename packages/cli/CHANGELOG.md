@@ -1,5 +1,20 @@
 # @cloudflare-ai-toolkit/cli
 
+## 0.9.0
+
+- Declare the bundled SDK's zod runtime dependency directly for isolated Node installs.
+
+### Minor Changes
+
+- Add DNS record creation with required type, name and content, optional TTL, proxy status and comment, and JSON output including the created record ID. Preserve spaces in quoted TXT content and report API validation errors and DNS Write permission guidance.
+
+  Expose `create_dns_record` in MCP with the same SDK validation, returned ID, and API permission guidance.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudflare-ai-toolkit/sdk@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

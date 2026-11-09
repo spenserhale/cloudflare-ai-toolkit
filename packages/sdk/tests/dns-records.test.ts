@@ -65,3 +65,31 @@ describe("CloudflareClient.deleteDnsRecord", () => {
     }
   });
 });
+
+
+describe("CloudflareClient.createDnsRecord", () => {
+  it("POSTs TXT content unchanged and returns the created ID", async () => {
+    const record = { id: "rec-new", type: "TXT", name: "pbhsdevelop.com", content: "v=spf1 include:_spf.paubox.com -all", ttl: 300, proxied: false, comment: "SPF record" };
+    const { id, ...params } = record;
+    const restore = mockFetch((input, init) => {
+      expect(String(input)).toContain("/client/v4/zones/zone-1/dns_records");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual(params);
+      return Response.json({ success: true, errors: [], messages: [], result: record });
+    });
+    try {
+      expect(await new CloudflareClient(tokenConfig()).createDnsRecord("zone-1", params)).toEqual(record);
+    } finally { restore(); }
+  });
+
+  for (const status of [400, 403]) {
+    it(`surfaces API errors for HTTP ${status}`, async () => {
+      const message = status === 400 ? "DNS Validation Error" : "Unauthorized to access requested resource";
+      const restore = mockFetch(() => Response.json({ success: false, errors: [{ code: status === 400 ? 1004 : 9109, message }], messages: [], result: null }, { status }));
+      try {
+        const pending = new CloudflareClient(tokenConfig()).createDnsRecord("zone-1", { type: "TXT", name: "pbhsdevelop.com", content: "test" });
+        await expect(pending).rejects.toMatchObject({ message: expect.stringContaining(message), ...(status === 403 ? { requiredPermissions: ["DNS Write"] } : {}) });
+      } finally { restore(); }
+    });
+  }
+});

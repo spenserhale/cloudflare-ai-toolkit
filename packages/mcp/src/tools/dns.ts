@@ -1,6 +1,6 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, CloudflareError, CreateDnsRecordParamsSchema, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -8,6 +8,28 @@ function getClient(): CloudflareClient {
 }
 
 export function registerDnsTools(server: FastMCP) {
+  server.addTool({
+    name: "create_dns_record",
+    description: "Create a DNS record in a Cloudflare zone and return the created record including its ID. TXT content preserves spaces.",
+    parameters: CreateDnsRecordParamsSchema.extend({
+      zoneId: z.string().min(1).describe("Cloudflare zone ID"),
+    }),
+    execute: async ({ zoneId, ...params }) => {
+      try {
+        const record = await getClient().createDnsRecord(zoneId, params);
+        return JSON.stringify(record, null, 2);
+      } catch (err) {
+        if (err instanceof CloudflareError) {
+          const permission = err.requiredPermissions?.length
+            ? ` Required permission: ${err.requiredPermissions.join(" or ")}.`
+            : "";
+          throw new Error(`${err.message} (Cloudflare code: ${err.code}).${permission}`);
+        }
+        throw err;
+      }
+    },
+  });
+
   server.addTool({
     name: "list_dns_records",
     description: "List DNS records for a Cloudflare zone",

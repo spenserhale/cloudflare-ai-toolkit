@@ -22,6 +22,7 @@ import {
 } from "./commands/custom-hostnames.js";
 import { customHostnameHistoryCommand } from "./commands/custom-hostnames-history.js";
 import { listDnsRecordsCommand } from "./commands/dns-list.js";
+import { createDnsRecordCommand } from "./commands/dns-create.js";
 import { updateDnsRecordCommand } from "./commands/dns-update.js";
 import { deleteDnsRecordCommand } from "./commands/dns-delete.js";
 import { logExplorerQueryCommand } from "./commands/log-explorer-query.js";
@@ -190,6 +191,7 @@ const redirectsRoutes = buildRouteMap({
 const dnsRecordRoutes = buildRouteMap({
   routes: {
     list: listDnsRecordsCommand,
+    create: createDnsRecordCommand,
     update: updateDnsRecordCommand,
     delete: deleteDnsRecordCommand,
   },

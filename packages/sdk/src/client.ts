@@ -42,6 +42,7 @@ import type {
   Ruleset,
   UpdateCustomHostnameParams,
   UpdateDnsRecordParams,
+  CreateDnsRecordParams,
   UpdateFirewallRuleParams,
   UpdateLogExplorerDatasetParams,
   UpdateRedirectRuleParams,
@@ -95,6 +96,7 @@ import {
   SetZoneVanityNameServersParamsSchema,
   UpdateCustomHostnameParamsSchema,
   UpdateDnsRecordParamsSchema,
+  CreateDnsRecordParamsSchema,
   UpdateFirewallRuleParamsSchema,
   UpdateLogExplorerDatasetParamsSchema,
   UpdateRedirectRuleParamsSchema,
@@ -192,6 +194,12 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
     requiredPermissions: ["DNS Read", "DNS Write"],
     docsUrl:
       "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list/",
+  },
+  {
+    method: "POST",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/dns_records$/u,
+    requiredPermissions: ["DNS Write"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/",
   },
   {
     method: "PATCH",
@@ -902,6 +910,16 @@ export class CloudflareClient {
       records: parsedResponse.data.result,
       resultInfo: info.success ? info.data : undefined,
     };
+  }
+
+  async createDnsRecord(zoneId: string, params: CreateDnsRecordParams): Promise<DnsRecord> {
+    const parsedParams = CreateDnsRecordParamsSchema.parse(params);
+    const created = await this.requestResult<DnsRecord>(
+      "POST",
+      `/client/v4/zones/${zoneId}/dns_records`,
+      { body: parsedParams }
+    );
+    return DnsRecordSchema.parse(created);
   }
 
   async updateDnsRecord(

@@ -58,6 +58,7 @@ cloudflare zones vanity-ns set <ns...> [--zoneId <id>] [--yes] [--json]
 cloudflare zones vanity-ns clear [--zoneId <id>] [--yes] [--json]
 
 cloudflare dns records list <zone-id> [flags]
+cloudflare dns records create <zone-id> --type TXT --name pbhsdevelop.com --content 'v=spf1 include:_spf.paubox.com -all' --json
 cloudflare dns records update <zone-id> <record-id> [flags]
 cloudflare dns records delete <zone-id> <record-id...> [--yes] [--json]
 
@@ -113,3 +114,10 @@ Run `cloudflare <command> --help` for full flag docs.
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+DNS record creation requires `--type`, `--name`, and `--content`. Optional flags:
+`--ttl <integer>`, `--proxied true|false`, `--comment <text>`, and `--json`.
+The command returns the created record including its ID. Quote TXT content with
+normal shell quoting to preserve spaces. For an apex record, use the zone name
+(e.g. `pbhsdevelop.com`). API failures exit nonzero and report validation messages
+or required permissions on stderr.
