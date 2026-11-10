@@ -56,6 +56,7 @@ import {
   registrarStatusCommand,
 } from "./commands/registrar.js";
 import { listTunnelsCommand, tunnelInfoCommand } from "./commands/tunnels.js";
+import { authRoutes } from "./commands/auth.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 import {
@@ -279,6 +280,7 @@ const registrarRoutes = buildRouteMap({
 
 const routes = buildRouteMap({
   routes: {
+    auth: authRoutes,
     resources: resourceRoutes,
     audit: auditRoutes,
     cache: cacheRoutes,

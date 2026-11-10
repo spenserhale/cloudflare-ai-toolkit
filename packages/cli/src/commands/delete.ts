@@ -1,5 +1,5 @@
 import { buildCommand } from "@stricli/core";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 
 export const deleteCommand = buildCommand({
   docs: {
@@ -17,7 +17,7 @@ export const deleteCommand = buildCommand({
     },
   },
   async func(this: void, _flags: {}, id: string) {
-    const config = resolveConfig();
+    const config = await loadConfig();
     const client = new CloudflareClient(config);
 
     try {

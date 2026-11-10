@@ -3,7 +3,7 @@ import {
   checkTokenPermissions,
   CloudflareClient,
   CloudflareError,
-  resolveConfig,
+  loadConfig,
   suggestPermissionNames,
   type ApiToken,
   type TokenPermission,
@@ -12,6 +12,7 @@ import {
   type TokenPermissionsResult,
   type TokenVerificationResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -19,8 +20,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface TokensDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "verifyToken"
     | "getApiToken"
@@ -33,7 +34,7 @@ interface TokensDeps {
 }
 
 const defaultDeps: TokensDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -177,7 +178,7 @@ export async function runVerifyToken(
   deps: TokensDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.verifyToken(flags.accountId);
 
@@ -232,7 +233,7 @@ export async function runShowToken(
   deps: TokensDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const token = await client.getApiToken(flags.tokenId, flags.accountId);
 
@@ -302,7 +303,7 @@ export async function runTokenPermissions(
   deps: TokensDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.getTokenPermissions(flags.tokenId, flags.accountId);
 
@@ -404,7 +405,7 @@ export async function runListPermissionGroups(
   deps: TokensDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const groups = await client.listTokenPermissionGroups({
       name: flags.name,

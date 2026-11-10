@@ -2,16 +2,16 @@ import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   ZoneNameFilterOperatorSchema,
   ZoneStatusSchema,
   ZoneTypeSchema,
 } from "@cloudflare-ai-toolkit/sdk";
 import { DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 export function registerZoneTools(server: FastMCP) {
@@ -51,7 +51,7 @@ export function registerZoneTools(server: FastMCP) {
       perPage: z.number().int().min(5).max(50).optional().describe("Zones per page (5-50)"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listZones({
         name: args.name,
         nameOperator: args.nameOperator,
@@ -80,7 +80,7 @@ export function registerZoneTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getZone(args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -95,7 +95,7 @@ export function registerZoneTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getZoneVanityNameServers(args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -116,7 +116,7 @@ export function registerZoneTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.setZoneVanityNameServers(
         args.nameServers,
         args.zoneId
@@ -134,7 +134,7 @@ export function registerZoneTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.clearZoneVanityNameServers(args.zoneId);
       return JSON.stringify(result, null, 2);
     },

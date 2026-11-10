@@ -3,17 +3,45 @@ import { z } from "zod";
 import {
   checkTokenPermissions,
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   suggestPermissionNames,
 } from "@cloudflare-ai-toolkit/sdk";
 import { READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 export function registerTokenTools(server: FastMCP) {
+  server.addTool({
+    name: "get_credential_status",
+    annotations: READ_ONLY,
+    description:
+      "Report which credentials the server will use and where each one comes from (env, envfile:<path>, keychain, or missing), plus whether the OS keychain could be read. Never returns credential values and makes no Cloudflare API call. Use it to tell 'no credentials configured' apart from 'credentials rejected'. Credentials are managed outside MCP with the CLI: `cloudflare auth set api-token`.",
+    parameters: z.object({}),
+    execute: async () => {
+      const config = await loadConfig();
+      const configured =
+        config.auth.type === "apiToken"
+          ? config.auth.token.length > 0
+          : config.auth.apiKey.length > 0 && config.auth.email.length > 0;
+      return JSON.stringify(
+        {
+          configured,
+          authType: configured ? config.auth.type : null,
+          credentialSources: config.credentialSources,
+          keychain: config.keychain,
+          envFile: config.envFile,
+          accountId: config.accountId ?? null,
+          zoneId: config.zoneId ?? null,
+        },
+        null,
+        2
+      );
+    },
+  });
+
   server.addTool({
     name: "verify_api_token",
     annotations: READ_ONLY,
@@ -26,7 +54,7 @@ export function registerTokenTools(server: FastMCP) {
         .describe("Verify an account-owned token instead of a user-owned one"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.verifyToken(args.accountId);
       return JSON.stringify(result, null, 2);
     },
@@ -48,7 +76,7 @@ export function registerTokenTools(server: FastMCP) {
         .describe("Read an account-owned token instead of a user-owned one"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getApiToken(args.tokenId, args.accountId);
       return JSON.stringify(result, null, 2);
     },
@@ -70,7 +98,7 @@ export function registerTokenTools(server: FastMCP) {
         .describe("Read an account-owned token instead of a user-owned one"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getTokenPermissions(args.tokenId, args.accountId);
       return JSON.stringify(result, null, 2);
     },
@@ -98,7 +126,7 @@ export function registerTokenTools(server: FastMCP) {
         .describe("Read an account-owned token instead of a user-owned one"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getTokenPermissions(args.tokenId, args.accountId);
       const checks = checkTokenPermissions(result.permissions, args.permissions);
 
@@ -141,7 +169,7 @@ export function registerTokenTools(server: FastMCP) {
         .describe("List account-owned token permission groups"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const groups = await client.listTokenPermissionGroups({
         name: args.name,
         scope: args.scope,

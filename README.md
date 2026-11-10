@@ -92,19 +92,40 @@ const cf = new CloudflareClient({
 
 ## Use the MCP server
 
-For Claude Desktop and other MCP-compatible hosts. Add to your MCP config:
+For Claude Desktop and other MCP-compatible hosts. Store the token in the OS
+keychain once (`cloudflare auth set api-token`), then add the server with no
+`env` block. It must run on Bun to reach the keychain:
 
 ```json
 {
   "mcpServers": {
     "cloudflare": {
-      "command": "npx",
-      "args": ["-y", "@cloudflare-ai-toolkit/mcp"],
-      "env": { "CLOUDFLARE_API_TOKEN": "..." }
+      "command": "bunx",
+      "args": ["--bun", "@cloudflare-ai-toolkit/mcp"]
     }
   }
 }
 ```
+
+Under Node (`"command": "npx", "args": ["-y", "@cloudflare-ai-toolkit/mcp"]`),
+pass `"env": { "CLOUDFLARE_API_TOKEN": "..." }` instead.
+
+## Credentials
+
+Store credentials in the OS keychain (macOS Keychain, Linux Secret Service,
+Windows Credential Manager) instead of a plaintext file:
+
+```bash
+cloudflare auth set api-token                 # hidden prompt
+pbpaste | cloudflare auth set api-token --stdin
+cloudflare auth list                          # keychain state + active source, no values
+cloudflare auth migrate                       # copy .env credentials into the keychain
+```
+
+Precedence is process env > nearest `.env` > keychain, so `op run`, CI, and
+project `.env` files keep working and win. See the
+[configuration guide](./docs/guides/configuration.md) and
+[security notes](./docs/guides/security.md).
 
 ## Environment variables
 
@@ -117,9 +138,11 @@ CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purg
                          custom hostnames, `zones get`, `zones vanity-ns`,
                          log-explorer)
 CLOUDFLARE_BASE_URL      override (default https://api.cloudflare.com)
+CLOUDFLARE_KEYCHAIN      0/false/no/off skips the OS keychain lookup
 ```
 
-The SDK also walks parent directories looking for a `.env` file.
+The SDK also walks parent directories looking for a `.env` file, and looks up
+credentials neither supplies in the OS keychain.
 
 ## Commands
 

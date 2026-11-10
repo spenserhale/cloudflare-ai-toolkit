@@ -58,7 +58,7 @@ describe("runAuditLogsList", () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -113,7 +113,7 @@ describe("runAuditLogsList", () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -152,7 +152,7 @@ describe("runAuditLogsList", () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -184,7 +184,7 @@ describe("runAuditLogsList", () => {
 
   it("handles ZodError from client construction with a clear config message", async () => {
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -210,7 +210,7 @@ describe("runAuditLogsList", () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -241,7 +241,7 @@ describe("runAuditLogsList", () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -281,7 +281,7 @@ describe("runAuditLogsList", () => {
     });
     const getAuthType = vi.fn(() => "apiToken" as const);
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -311,7 +311,7 @@ describe("runAuditLogsList", () => {
   it("skips token verification for legacy global API key auth failures", async () => {
     const verifyToken = vi.fn(async () => ({ status: "active" }));
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "globalApiKey" as const, apiKey: "legacy-key", email: "dev@example.com" },
         baseUrl: "https://api.cloudflare.com",
       })),
@@ -338,7 +338,7 @@ describe("runAuditLogsList", () => {
 
   it("shows response-validation errors as response shape issues, not config issues", async () => {
     const deps = {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),

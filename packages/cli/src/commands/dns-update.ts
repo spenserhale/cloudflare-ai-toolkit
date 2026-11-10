@@ -1,7 +1,7 @@
 import { buildCommand } from "@stricli/core";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type UpdateDnsRecordParams,
 } from "@cloudflare-ai-toolkit/sdk";
 
@@ -99,7 +99,7 @@ export const updateDnsRecordCommand = buildCommand({
     },
   },
   async func(this: void, flags: DnsUpdateFlags, zoneId: string, recordId: string) {
-    const config = resolveConfig();
+    const config = await loadConfig();
     const client = new CloudflareClient(config);
 
     const update: UpdateDnsRecordParams = {

@@ -3,10 +3,11 @@ import { buildCommand } from "@stricli/core";
 import { encode } from "@toon-format/toon";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type LogExplorerScope,
   type QueryLogExplorerResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 export interface LogExplorerQueryFlags {
@@ -47,8 +48,8 @@ function parseScope(value: string): LogExplorerScope {
 type IntervalHandle = ReturnType<typeof setInterval>;
 
 interface LogExplorerQueryDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     "queryLogExplorer"
   >;
@@ -72,7 +73,7 @@ async function readStdinDefault(): Promise<string> {
 }
 
 const defaultDeps: LogExplorerQueryDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   readFile: (path) => readFileSync(path, "utf8"),
   readStdin: readStdinDefault,
@@ -208,7 +209,7 @@ export async function runLogExplorerQuery(
 ): Promise<void> {
   try {
     const sql = await resolveSql(flags, deps);
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
 
     const heartbeat = startHeartbeat(flags, deps);

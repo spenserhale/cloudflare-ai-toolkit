@@ -34,7 +34,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   const getTunnelInfo = vi.fn(async (_id: string, _accountId?: string) => ({ tunnel: TUNNEL, connectors: [CONNECTOR] }));
 
   return {
-    resolveConfig: vi.fn(() => ({
+    loadConfig: vi.fn(async () => ({
       auth: { type: "apiToken" as const, token: "test-token" },
       baseUrl: "https://api.cloudflare.com",
       accountId: "acc-1",

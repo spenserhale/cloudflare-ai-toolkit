@@ -1,11 +1,11 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, CreateDnsRecordParamsSchema, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, CreateDnsRecordParamsSchema, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 export function registerDnsTools(server: FastMCP) {
@@ -17,7 +17,7 @@ export function registerDnsTools(server: FastMCP) {
       zoneId: z.string().min(1).describe("Cloudflare zone ID"),
     }),
     execute: async ({ zoneId, ...params }) => {
-      const record = await getClient().createDnsRecord(zoneId, params);
+      const record = await (await getClient()).createDnsRecord(zoneId, params);
       return JSON.stringify(record, null, 2);
     },
   });
@@ -43,7 +43,7 @@ export function registerDnsTools(server: FastMCP) {
       perPage: z.number().int().positive().max(5000000).optional().describe("Items per page"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listDnsRecords(args.zoneId, {
         type: args.type,
         name: args.name,
@@ -77,7 +77,7 @@ export function registerDnsTools(server: FastMCP) {
       tags: z.array(z.string()).optional().describe("Record tags"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
 
       const update = {
         type: args.type,
@@ -109,7 +109,7 @@ export function registerDnsTools(server: FastMCP) {
       recordId: z.string().min(1).describe("DNS record ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteDnsRecord(args.zoneId, args.recordId);
       return JSON.stringify({ deleted: true, id: args.recordId }, null, 2);
     },

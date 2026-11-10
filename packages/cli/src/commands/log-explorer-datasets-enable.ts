@@ -1,10 +1,11 @@
 import { buildCommand } from "@stricli/core";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type LogExplorerDataset,
   type LogExplorerScope,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 export interface EnableDatasetFlags {
@@ -22,8 +23,8 @@ function parseScope(value: string): LogExplorerScope {
 }
 
 interface EnableDatasetDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     "enableLogExplorerDataset"
   >;
@@ -33,7 +34,7 @@ interface EnableDatasetDeps {
 }
 
 const defaultDeps: EnableDatasetDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -67,7 +68,7 @@ export async function runEnableLogExplorerDataset(
     if (datasetName.length === 0) {
       throw new Error("Dataset name is empty.");
     }
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.enableLogExplorerDataset(
       { dataset: datasetName, scope: flags.scope },

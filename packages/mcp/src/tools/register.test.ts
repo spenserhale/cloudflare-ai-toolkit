@@ -117,6 +117,7 @@ describe("MCP tool registration", () => {
         "create_redirect_rule",
         "update_redirect_rule",
         "delete_redirect_rule",
+        "get_credential_status",
         "verify_api_token",
         "get_api_token",
         "get_token_permissions",
@@ -159,5 +160,17 @@ describe("MCP tool registration", () => {
       .filter((tool) => tool.annotations?.readOnlyHint !== false)
       .map((tool) => tool.name);
     expect(readOnlyWriters).toEqual([]);
+  });
+
+  // Credentials are written only by the CLI (`cloudflare auth`), never by an
+  // agent through MCP.
+  test("no tool can write or delete stored credentials", () => {
+    const server = makeFakeServer();
+    registerAll(server);
+    const credentialTools = server.registered.filter((tool) =>
+      /credential|keychain|secret/u.test(tool.name)
+    );
+    expect(credentialTools.map((tool) => tool.name)).toEqual(["get_credential_status"]);
+    expect(credentialTools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
   });
 });

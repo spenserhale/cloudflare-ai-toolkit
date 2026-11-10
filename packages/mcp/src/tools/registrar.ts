@@ -5,13 +5,13 @@ import {
   PrivacyModeSchema,
   RegistrationContactsSchema,
   prepareDomainRegistration,
-  resolveConfig,
+  loadConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 import { DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 const accountId = z
@@ -51,7 +51,7 @@ export function registerRegistrarTools(server: FastMCP) {
       sandbox,
     }),
     execute: async (args) => {
-      const result = await getClient().searchDomains(args);
+      const result = await (await getClient()).searchDomains(args);
       return JSON.stringify(result, null, 2);
     },
   });
@@ -67,7 +67,7 @@ export function registerRegistrarTools(server: FastMCP) {
       sandbox,
     }),
     execute: async (args) => {
-      const result = await getClient().checkDomains(args);
+      const result = await (await getClient()).checkDomains(args);
       return JSON.stringify(result, null, 2);
     },
   });
@@ -118,7 +118,7 @@ export function registerRegistrarTools(server: FastMCP) {
       sandbox,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const target = { accountId: args.accountId, sandbox: args.sandbox };
       const assessment = await prepareDomainRegistration(client, args.domainName, {
         ...target,
@@ -168,7 +168,7 @@ export function registerRegistrarTools(server: FastMCP) {
     annotations: READ_ONLY,
     parameters: z.object({ domainName, accountId, sandbox }),
     execute: async (args) => {
-      const result = await getClient().getRegistrationStatus(args.domainName, args);
+      const result = await (await getClient()).getRegistrationStatus(args.domainName, args);
       return JSON.stringify(result, null, 2);
     },
   });
@@ -180,7 +180,7 @@ export function registerRegistrarTools(server: FastMCP) {
     annotations: READ_ONLY,
     parameters: z.object({ domainName, accountId, sandbox }),
     execute: async (args) => {
-      const result = await getClient().getRegistration(args.domainName, args);
+      const result = await (await getClient()).getRegistration(args.domainName, args);
       return JSON.stringify(result, null, 2);
     },
   });
@@ -202,7 +202,7 @@ export function registerRegistrarTools(server: FastMCP) {
       sandbox,
     }),
     execute: async (args) => {
-      const result = await getClient().listRegistrations(args);
+      const result = await (await getClient()).listRegistrations(args);
       return JSON.stringify(result, null, 2);
     },
   });

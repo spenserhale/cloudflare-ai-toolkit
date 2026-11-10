@@ -4,11 +4,12 @@ import {
   CloudflareAuthError,
   CloudflareError,
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   toAuditLogTable,
   type AuditLog,
   type TokenVerificationResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 const allowedActionTypes = ["create", "view", "update", "delete"] as const;
@@ -133,8 +134,8 @@ export function resolveDateRange(flags: AuditListFlags): { since: string; before
 }
 
 interface AuditListDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     "listAuditLogs" | "verifyToken" | "getAuthType"
   >;
@@ -144,7 +145,7 @@ interface AuditListDeps {
 }
 
 const defaultDeps: AuditListDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -317,7 +318,7 @@ export async function runAuditLogsList(
 ): Promise<void> {
   let client: Pick<CloudflareClient, "listAuditLogs" | "verifyToken" | "getAuthType"> | undefined;
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     client = deps.createClient(config);
     const { since, before } = resolveDateRange(flags);
     const result = await client.listAuditLogs(

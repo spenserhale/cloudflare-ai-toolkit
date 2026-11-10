@@ -2,10 +2,11 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type VanityNameServerIp,
   type ZoneVanityNameServers,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -13,8 +14,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface VanityNsDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "getZoneVanityNameServers"
     | "setZoneVanityNameServers"
@@ -28,7 +29,7 @@ interface VanityNsDeps {
 }
 
 const defaultDeps: VanityNsDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -107,7 +108,7 @@ export async function runGetVanityNameServers(
   deps: VanityNsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.getZoneVanityNameServers(zoneId);
 
@@ -180,7 +181,7 @@ export async function runSetVanityNameServers(
       );
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const current = await client.getZoneVanityNameServers(flags.zoneId);
 
@@ -286,7 +287,7 @@ export async function runClearVanityNameServers(
   deps: VanityNsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const current = await client.getZoneVanityNameServers(flags.zoneId);
 

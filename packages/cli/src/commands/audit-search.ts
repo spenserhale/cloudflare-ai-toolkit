@@ -15,7 +15,7 @@ import {
   parseAuditWhere,
   pickAuditFields,
   resolveAuditRange,
-  resolveConfig,
+  loadConfig,
   searchAuditLogs,
   type AuditLog,
   type AuditLogFilterField,
@@ -23,6 +23,7 @@ import {
   type AuditSearchProgress,
   type AuditWhereClause,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -253,7 +254,7 @@ export const auditFilterFlagParameters = {
 // ---------------------------------------------------------------------------
 
 export interface AuditSearchDeps {
-  readonly resolveConfig: () => ConstructorParameters<typeof CloudflareClient>[0];
+  readonly loadConfig: () => Promise<CloudflareConfig>;
   readonly createClient: (
     config: ConstructorParameters<typeof CloudflareClient>[0]
   ) => Pick<CloudflareClient, "listAuditLogs">;
@@ -275,7 +276,7 @@ function createDefaultDeps(): AuditSearchDeps {
     else throw err;
   });
   return {
-    resolveConfig,
+    loadConfig,
     createClient: (config) => new CloudflareClient(config),
     write: (text) => {
       if (stdoutClosed) return false;
@@ -498,7 +499,7 @@ export async function runAuditLogsSearch(
 ): Promise<void> {
   let client: Pick<CloudflareClient, "listAuditLogs">;
   try {
-    client = deps.createClient(deps.resolveConfig());
+    client = deps.createClient(await deps.loadConfig());
   } catch (err) {
     deps.writeErr(`Error: ${formatError(err)}\n`);
     return deps.exit(1);
@@ -623,7 +624,7 @@ export async function runAuditLogsFacets(
 ): Promise<void> {
   let client: Pick<CloudflareClient, "listAuditLogs">;
   try {
-    client = deps.createClient(deps.resolveConfig());
+    client = deps.createClient(await deps.loadConfig());
   } catch (err) {
     deps.writeErr(`Error: ${formatError(err)}\n`);
     return deps.exit(1);

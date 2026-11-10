@@ -1,13 +1,14 @@
 import { buildCommand } from "@stricli/core";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type ListZonesResult,
   type Zone,
   type ZoneNameFilterOperator,
   type ZoneStatus,
   type ZoneType,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -15,8 +16,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface ZonesDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     "listZones" | "getZone"
   >;
@@ -26,7 +27,7 @@ interface ZonesDeps {
 }
 
 const defaultDeps: ZonesDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -205,7 +206,7 @@ export async function runListZones(
       return;
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.listZones({
       name,
@@ -382,7 +383,7 @@ export async function runGetZone(
   deps: ZonesDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const zone = await client.getZone(zoneId);
 

@@ -15,7 +15,7 @@ import {
   parseAuditWhere,
   pickAuditFields,
   resolveAuditRange,
-  resolveConfig,
+  loadConfig,
   searchAuditLogs,
   toAuditLogTable,
   type AuditLogFilterField,
@@ -24,9 +24,9 @@ import {
 } from "@cloudflare-ai-toolkit/sdk";
 import { READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 const outputFormatSchema = z.enum(["json", "toon"]);
@@ -133,7 +133,7 @@ export function registerAuditTools(server: FastMCP) {
       format: outputFormatSchema.default("toon").describe("Output format: toon or json"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listAuditLogs(
         {
           since: args.since,
@@ -182,7 +182,7 @@ export function registerAuditTools(server: FastMCP) {
       format: outputFormatSchema.default("toon").describe("Output format: toon or json"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const filters = withPurgeDefault(args);
       const range = resolveAuditRange(args.since, args.before);
       const predicate = buildAuditLogPredicate({
@@ -248,7 +248,7 @@ export function registerAuditTools(server: FastMCP) {
       top: z.number().int().positive().max(200).default(20).describe("Values per field"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const filters = withPurgeDefault(args);
       const range = resolveAuditRange(args.since, args.before);
       const counter = new AuditFacetCounter(args.facets ?? [...DEFAULT_AUDIT_FACETS]);
@@ -291,7 +291,7 @@ export function registerAuditTools(server: FastMCP) {
       before: z.string().optional().describe("End (exclusive). Defaults to now"),
     }),
     execute: async (args) => {
-      const config = resolveConfig();
+      const config = await loadConfig();
       const client = new CloudflareClient(config);
       const history = await getCustomHostnameHistory(client, {
         hostname: args.hostname,

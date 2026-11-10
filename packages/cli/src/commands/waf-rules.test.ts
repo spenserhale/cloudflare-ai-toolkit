@@ -40,7 +40,7 @@ function makeDeps(methods: Partial<WafClientMethods> = {}) {
     error,
     exit,
     deps: {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),

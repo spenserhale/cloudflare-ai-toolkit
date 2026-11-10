@@ -1,11 +1,11 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 const zoneIdParam = z
@@ -42,7 +42,7 @@ export function registerRedirectTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listRedirectRules(args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -57,7 +57,7 @@ export function registerRedirectTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getRedirectRule(args.ruleId, args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -80,7 +80,7 @@ export function registerRedirectTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.createRedirectRule(
         {
           expression: args.expression.trim(),
@@ -112,7 +112,7 @@ export function registerRedirectTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.updateRedirectRule(
         args.ruleId,
         {
@@ -139,7 +139,7 @@ export function registerRedirectTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteRedirectRule(args.ruleId, args.zoneId);
       return JSON.stringify({ deleted: true, id: args.ruleId }, null, 2);
     },

@@ -48,7 +48,7 @@ function createDeps(
     throw new Error(`exit ${code}`);
   });
   const deps: AuditSearchDeps = {
-    resolveConfig: () => ({ auth: { type: "apiToken", token: "t" }, baseUrl: "https://x", accountId: "acc" }),
+    loadConfig: async () => ({ auth: { type: "apiToken", token: "t" }, baseUrl: "https://x", accountId: "acc" }),
     createClient: () => ({ listAuditLogs: listAuditLogs as never }),
     write: (text) => {
       out.push(text);

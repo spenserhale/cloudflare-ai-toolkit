@@ -3,9 +3,10 @@ import {
   CloudflareClient,
   getCustomHostnameHistory,
   parseAuditTime,
-  resolveConfig,
+  loadConfig,
   type CustomHostnameHistory,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 export interface CustomHostnameHistoryFlags {
@@ -17,9 +18,9 @@ export interface CustomHostnameHistoryFlags {
 }
 
 interface CustomHostnameHistoryDeps {
-  readonly resolveConfig: typeof resolveConfig;
+  readonly loadConfig: () => Promise<CloudflareConfig>;
   readonly createClient: (
-    config: ReturnType<typeof resolveConfig>
+    config: CloudflareConfig
   ) => Pick<CloudflareClient, "listAuditLogs" | "listCustomHostnames">;
   readonly log: typeof console.log;
   readonly error: typeof console.error;
@@ -27,7 +28,7 @@ interface CustomHostnameHistoryDeps {
 }
 
 const defaultDeps: CustomHostnameHistoryDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -81,7 +82,7 @@ export async function runCustomHostnameHistory(
   deps: CustomHostnameHistoryDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const history = await getCustomHostnameHistory(client, {
       hostname,

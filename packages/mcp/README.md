@@ -91,7 +91,30 @@ contact, and a docs link.
 
 ## Setup with Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Recommended: store the token in the OS keychain once with the CLI
+(`cloudflare auth set api-token`), then run the server on Bun with no `env`
+block. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "cloudflare-ai-toolkit": {
+      "command": "bunx",
+      "args": ["--bun", "@cloudflare-ai-toolkit/mcp"]
+    }
+  }
+}
+```
+
+From a checkout, use `"command": "bun"` with
+`"args": ["run", "/abs/path/cloudflare-ai-toolkit/packages/mcp/src/index.ts"]`.
+
+The server reads env, `.env`, and the keychain on every tool call, so a rotated
+key applies without a restart. `get_credential_status` reports where each
+credential comes from (never the values). No tool writes or deletes
+credentials. The first keychain read from a GUI host may show a macOS access
+dialog; choose **Always Allow**. Under Node (`npx`), the keychain is not
+available, so pass credentials through `env`:
 
 ```json
 {

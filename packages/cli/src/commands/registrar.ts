@@ -7,7 +7,7 @@ import {
   prepareDomainRegistration,
   RegistrationContactSchema,
   RegistrationContactsSchema,
-  resolveConfig,
+  loadConfig,
   waitForRegistration,
   type DomainAvailability,
   type DomainRegistration,
@@ -15,6 +15,7 @@ import {
   type RegistrationContacts,
   type RegistrationWorkflowStatus,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -32,8 +33,8 @@ type RegistrarClient = Pick<
 >;
 
 export interface RegistrarDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => RegistrarClient;
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => RegistrarClient;
   readonly log: typeof console.log;
   readonly error: typeof console.error;
   readonly exit: (code: number) => never;
@@ -44,7 +45,7 @@ export interface RegistrarDeps {
 }
 
 const defaultDeps: RegistrarDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -237,7 +238,7 @@ async function withClient(
   action: (client: RegistrarClient) => Promise<void>
 ): Promise<void> {
   try {
-    const client = deps.createClient(deps.resolveConfig());
+    const client = deps.createClient(await deps.loadConfig());
     await action(client);
   } catch (err) {
     deps.error(`Error: ${formatError(err)}`);

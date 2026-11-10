@@ -1,5 +1,5 @@
 import { buildCommand } from "@stricli/core";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 
 interface GetFlags {
   readonly json: boolean;
@@ -28,7 +28,7 @@ export const getCommand = buildCommand({
     },
   },
   async func(this: void, flags: GetFlags, id: string) {
-    const config = resolveConfig();
+    const config = await loadConfig();
     const client = new CloudflareClient(config);
 
     try {

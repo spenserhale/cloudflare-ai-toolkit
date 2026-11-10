@@ -2,9 +2,10 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type PurgeCacheResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -12,8 +13,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface CachePurgeDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "purgeCacheEverything"
     | "purgeCacheByUrls"
@@ -29,7 +30,7 @@ interface CachePurgeDeps {
 }
 
 const defaultDeps: CachePurgeDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -97,7 +98,7 @@ export async function runPurgeCacheEverything(
       return;
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.purgeCacheEverything(flags.zoneId);
 
@@ -156,7 +157,7 @@ export async function runPurgeCacheByUrls(
   deps: CachePurgeDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.purgeCacheByUrls([...urls], flags.zoneId);
 
@@ -221,7 +222,7 @@ export async function runPurgeCacheByTags(
   deps: CachePurgeDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.purgeCacheByTags([...tags], flags.zoneId);
 
@@ -299,7 +300,7 @@ export async function runPurgeCacheByPrefixes(
       return;
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.purgeCacheByPrefixes([...prefixes], flags.zoneId);
 
@@ -382,7 +383,7 @@ export async function runPurgeCacheByHosts(
       return;
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.purgeCacheByHosts([...hosts], flags.zoneId);
 

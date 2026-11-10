@@ -3,10 +3,11 @@ import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
   REDIRECT_STATUS_CODES,
-  resolveConfig,
+  loadConfig,
   type RedirectRule,
   type RedirectStatusCode,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface RedirectsDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "listRedirectRules"
     | "getRedirectRule"
@@ -31,7 +32,7 @@ interface RedirectsDeps {
 }
 
 const defaultDeps: RedirectsDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -138,7 +139,7 @@ export async function runListRedirectRules(
   deps: RedirectsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.listRedirectRules(flags.zoneId);
 
@@ -201,7 +202,7 @@ export async function runGetRedirectRule(
   deps: RedirectsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.getRedirectRule(ruleId.trim(), flags.zoneId);
 
@@ -282,7 +283,7 @@ export async function runCreateRedirectRule(
       );
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.createRedirectRule(
       {
@@ -429,7 +430,7 @@ export async function runUpdateRedirectRule(
       );
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.updateRedirectRule(
       trimmed,
@@ -574,7 +575,7 @@ export async function runDeleteRedirectRule(
       }
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     await client.deleteRedirectRule(trimmed, flags.zoneId);
 

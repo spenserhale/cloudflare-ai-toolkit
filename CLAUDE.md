@@ -208,6 +208,26 @@ Errors should explain themselves by default. MCP wraps every tool with
 SDK's `describeError`. Put new error advice there (status explanations or
 `KNOWN_ERROR_HINTS`), not in individual commands.
 
+## Credentials live in the OS keychain; tests must never touch it
+
+`loadConfig()` (SDK) resolves each credential as process env > nearest `.env` >
+OS keychain (`Bun.secrets`, service `cloudflare-ai-toolkit`, entries named by
+env var). See `docs/decisions/0001-os-keychain-credential-store.md`.
+
+- Never let a test read or write the real keychain. Inject an in-memory
+  `SecretStore`, or set `CLOUDFLARE_KEYCHAIN=0` in every spawned CLI/MCP env.
+  The CLI's `vitest.config.ts` and the MCP `bunfig.toml` preload set it
+  globally; keep it that way.
+- Bun copies `./.env` into `process.env` at startup, so under Bun a `.env`
+  value looks like a process env var. `resolveConfig` attributes a value equal
+  to the nearest `.env`'s to the file; don't remove that check or `auth
+  migrate` and the `shadowed_by` warning break.
+- Under Node (npm global install, `npx`, `node dist/bin.js`) `Bun.secrets`
+  doesn't exist: the keychain reports `unavailable` and `auth set` exits 3.
+  Smoke-test keychain behavior with `bun packages/cli/src/bin.ts ...`.
+- Only secrets go in the keychain (token, global key, email). Account and zone
+  IDs stay in env. Don't add an MCP tool that writes or deletes credentials.
+
 ## Looking up Cloudflare API facts
 
 Never guess an endpoint path, field name, or response shape. Two sources, in

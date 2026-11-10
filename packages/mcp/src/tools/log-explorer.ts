@@ -4,14 +4,14 @@ import { encode } from "@toon-format/toon";
 import {
   CloudflareClient,
   LogExplorerScopeSchema,
-  resolveConfig,
+  loadConfig,
   type QueryLogExplorerResult,
 } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 const outputFormatSchema = z.enum(["json", "toon"]);
@@ -42,7 +42,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       if (sql.length === 0) {
         throw new Error("SQL query is empty.");
       }
-      const client = getClient();
+      const client = await getClient();
       const result = await client.queryLogExplorer(
         { sql, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
@@ -70,7 +70,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       if (dataset.length === 0) {
         throw new Error("Dataset name is empty.");
       }
-      const client = getClient();
+      const client = await getClient();
       const result = await client.enableLogExplorerDataset(
         { dataset, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
@@ -94,7 +94,7 @@ export function registerLogExplorerTools(server: FastMCP) {
         .describe("Include zone-scoped datasets belonging to the account"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const datasets = await client.listLogExplorerDatasets(
         { scope: args.scope, includeZones: args.includeZones },
         { accountId: args.accountId, zoneId: args.zoneId }
@@ -114,7 +114,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const datasets = await client.listAvailableLogExplorerDatasets(
         { scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
@@ -135,7 +135,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const dataset = await client.getLogExplorerDataset(
         { datasetId: args.datasetId, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }
@@ -166,7 +166,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const dataset = await client.updateLogExplorerDataset(
         {
           datasetId: args.datasetId,
@@ -194,7 +194,7 @@ export function registerLogExplorerTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Override CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteLogExplorerDataset(
         { datasetId: args.datasetId, scope: args.scope },
         { accountId: args.accountId, zoneId: args.zoneId }

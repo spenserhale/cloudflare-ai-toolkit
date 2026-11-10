@@ -2,14 +2,15 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 interface DnsDeleteDeps {
-  readonly resolveConfig: typeof resolveConfig;
+  readonly loadConfig: () => Promise<CloudflareConfig>;
   readonly createClient: (
-    config: ReturnType<typeof resolveConfig>
+    config: CloudflareConfig
   ) => Pick<CloudflareClient, "deleteDnsRecord">;
   readonly log: typeof console.log;
   readonly error: typeof console.error;
@@ -19,7 +20,7 @@ interface DnsDeleteDeps {
 }
 
 const defaultDeps: DnsDeleteDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -77,7 +78,7 @@ export async function runDeleteDnsRecords(
       }
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
 
     // Delete sequentially so a failure stops the run and the output says

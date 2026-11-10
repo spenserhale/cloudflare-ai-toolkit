@@ -35,6 +35,23 @@ Cloudflare, cache purging, DNS records, or audit logs.
 
 ## Configure
 
+Store the token once in the OS keychain (macOS Keychain, Linux Secret Service,
+Windows Credential Manager). The prompt hides what you type:
+
+```bash
+cloudflare auth set api-token                                  # hidden prompt
+op read 'op://Private/Cloudflare/credential' | cloudflare auth set api-token --stdin
+cloudflare auth list                                           # which source is active
+cloudflare auth migrate --dry-run                              # move .env credentials into the keychain
+cloudflare auth delete api-token --yes
+```
+
+Env vars and `.env` still work and take precedence over the keychain
+(env > nearest `.env` > keychain). Keychain lookup needs the Bun runtime: the
+standalone binary or `bunx --bun`; under Node it reports `unavailable`. Set
+`CLOUDFLARE_KEYCHAIN=0` to skip it. See the
+[configuration guide](../../docs/guides/configuration.md).
+
 ```bash
 export CLOUDFLARE_API_TOKEN=...       # preferred
 # or legacy Global API Key auth:
@@ -47,6 +64,11 @@ export CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped command
 ## Commands
 
 ```bash
+cloudflare auth set <api-token|global-api-key> [--key NAME] [--stdin] [--dry-run] [--json]
+cloudflare auth list [--json|--csv]
+cloudflare auth delete <api-token|global-api-key> [--key NAME] --yes [--dry-run] [--json]
+cloudflare auth migrate [--dry-run] [--overwrite] [--json]
+
 cloudflare audit logs list [flags]
 cloudflare audit logs search [--since 7d] [--product <p>...] [--action <a>...] [--first] [--format ndjson|tsv|json|toon] [flags]
 cloudflare audit logs facets [--since 7d] [--facets product,type,action] [flags]

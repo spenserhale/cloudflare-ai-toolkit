@@ -1,11 +1,11 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 interface SslToolArgs {
@@ -53,7 +53,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listCustomHostnames(
         {
           hostname: args.hostname,
@@ -81,7 +81,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getCustomHostname(args.customHostnameId, args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -117,7 +117,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.createCustomHostname(
         {
           hostname: args.hostname.trim(),
@@ -157,7 +157,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.updateCustomHostname(
         args.customHostnameId,
         {
@@ -182,7 +182,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
       zoneId: z.string().optional().describe("Zone ID; defaults to CLOUDFLARE_ZONE_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteCustomHostname(args.customHostnameId, args.zoneId);
       return JSON.stringify({ deleted: true, id: args.customHostnameId }, null, 2);
     },

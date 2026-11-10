@@ -2,7 +2,7 @@ import { buildCommand } from "@stricli/core";
 import {
   CloudflareClient,
   CloudflareError,
-  resolveConfig,
+  loadConfig,
   type CreateDnsRecordParams,
 } from "@cloudflare-ai-toolkit/sdk";
 
@@ -86,7 +86,7 @@ export const createDnsRecordCommand = buildCommand({
     },
   },
   async func(this: void, flags: DnsCreateFlags, zoneId: string) {
-    const config = resolveConfig();
+    const config = await loadConfig();
     const client = new CloudflareClient(config);
 
     const record: CreateDnsRecordParams = {

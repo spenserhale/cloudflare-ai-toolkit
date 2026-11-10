@@ -30,7 +30,7 @@ function makeDeps(overrides: Partial<Parameters<typeof runLogExplorerQuery>[1]> 
     error,
     exit,
     deps: {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "token" },
         baseUrl: "https://api.cloudflare.com",
       })),

@@ -1,5 +1,5 @@
 import { buildCommand } from "@stricli/core";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 
 interface DnsListFlags {
   readonly type?: string;
@@ -133,7 +133,7 @@ export const listDnsRecordsCommand = buildCommand({
     },
   },
   async func(this: void, flags: DnsListFlags, zoneId: string) {
-    const config = resolveConfig();
+    const config = await loadConfig();
     const client = new CloudflareClient(config);
 
     try {

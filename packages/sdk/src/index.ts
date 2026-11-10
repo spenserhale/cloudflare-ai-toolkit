@@ -1,6 +1,32 @@
 export { CloudflareClient } from "./client.js";
-export { resolveConfig } from "./config.js";
-export { CloudflareError, CloudflareAuthError, CloudflareNotFoundError, describeError } from "./errors.js";
+export { loadConfig, readDotEnv, resolveConfig } from "./config.js";
+export type { DotEnvFile, Env, LoadConfigOptions, ResolveConfigOptions, ResolvedConfig } from "./config.js";
+export {
+  bunSecretStore,
+  CREDENTIAL_KEYS,
+  CREDENTIAL_RESOURCES,
+  isKeychainDisabled,
+  KEYCHAIN_SERVICE,
+  KEYCHAIN_SWITCH_ENV,
+  keychainErrorText,
+  readKeychainValues,
+  resourceCredentialKeys,
+  resourceForCredentialKey,
+} from "./secrets.js";
+export type {
+  CredentialResource,
+  KeychainReadResult,
+  KeychainState,
+  KeychainStatus,
+  SecretStore,
+} from "./secrets.js";
+export {
+  CloudflareError,
+  CloudflareAuthError,
+  CloudflareConfigError,
+  CloudflareNotFoundError,
+  describeError,
+} from "./errors.js";
 export {
   AUDIT_LOG_TABLE_COLUMNS,
   mapAuditLogToTableRow,

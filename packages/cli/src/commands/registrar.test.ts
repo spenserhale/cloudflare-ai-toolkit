@@ -53,7 +53,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
     listRegistrations: vi.fn(async (): Promise<{ registrations: (typeof REGISTRATION)[]; nextCursor?: string }> => ({ registrations: [REGISTRATION] })),
   };
   return {
-    resolveConfig: vi.fn(() => ({
+    loadConfig: vi.fn(async () => ({
       auth: { type: "apiToken" as const, token: "t" },
       baseUrl: "https://api.cloudflare.com",
       accountId: "acc-1",

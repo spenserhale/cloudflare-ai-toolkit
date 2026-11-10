@@ -31,7 +31,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   const clearZoneVanityNameServers = vi.fn(async () => DISABLED);
 
   return {
-    resolveConfig: vi.fn(() => ({
+    loadConfig: vi.fn(async () => ({
       auth: { type: "apiToken" as const, token: "test-token" },
       baseUrl: "https://api.cloudflare.com",
       zoneId: "zone-from-env",

@@ -2,14 +2,14 @@ import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   TunnelStatusSchema,
 } from "@cloudflare-ai-toolkit/sdk";
 import { READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 /** Registers the read-only `list_tunnels` and `get_tunnel` tools. */
@@ -44,7 +44,7 @@ export function registerTunnelTools(server: FastMCP) {
         .describe("Account ID; defaults to CLOUDFLARE_ACCOUNT_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listTunnels(args);
       return JSON.stringify(result, null, 2);
     },
@@ -63,7 +63,7 @@ export function registerTunnelTools(server: FastMCP) {
         .describe("Account ID; defaults to CLOUDFLARE_ACCOUNT_ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getTunnelInfo(args.tunnelId, args.accountId);
       return JSON.stringify(result, null, 2);
     },

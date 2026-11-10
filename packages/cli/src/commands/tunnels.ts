@@ -1,13 +1,14 @@
 import { buildCommand } from "@stricli/core";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type ListTunnelsResult,
   type Tunnel,
   type TunnelConnector,
   type TunnelInfo,
   type TunnelStatus,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -15,8 +16,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface TunnelsDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     "listTunnels" | "getTunnelInfo"
   >;
@@ -26,7 +27,7 @@ interface TunnelsDeps {
 }
 
 const defaultDeps: TunnelsDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -120,7 +121,7 @@ export async function runListTunnels(
   deps: TunnelsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.listTunnels({
       name,
@@ -317,7 +318,7 @@ export async function runTunnelInfo(
   deps: TunnelsDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const tunnelId = await resolveTunnelId(client, idOrName, flags.accountId);
     const info = await client.getTunnelInfo(tunnelId, flags.accountId);

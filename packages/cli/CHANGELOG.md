@@ -1,5 +1,21 @@
 # @cloudflare-ai-toolkit/cli
 
+## 0.11.0
+
+### Minor Changes
+
+- Store Cloudflare credentials in the OS keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager) through `Bun.secrets`, so the CLI and MCP server work with no `.env` and no MCP `env` block.
+
+  - **SDK:** new async `loadConfig()` reads credentials that the process env and nearest `.env` did not supply from the keychain (service `cloudflare-ai-toolkit`, entries named by env var). Precedence is env > `.env` > keychain; when a token and a Global API Key both resolve, the higher source wins. The result adds `credentialSources`, `keychain` (`ok`, `disabled`, `unavailable`), and `envFile`. A keychain failure is reported, never thrown; `CLOUDFLARE_KEYCHAIN=0` or `secretStore: null` skips it. Also exports `SecretStore`, `bunSecretStore()`, `readKeychainValues()`, `readDotEnv()`, and `CloudflareConfigError`. `resolveConfig()` stays synchronous and keychain-free.
+  - **CLI:** `cloudflare auth set|list|delete|migrate`. `set` reads from a hidden prompt or `--stdin`, never argv, and warns when env or `.env` still shadows the stored value. `delete` requires `--yes`; mutations take `--dry-run`. `migrate` copies `.env` credentials into the keychain and lists the files to clean up without editing them. Exit codes: 2 usage, 3 keychain unavailable. Every command now loads config through `loadConfig()`.
+  - **MCP:** every tool reads the keychain on each call, so rotated keys apply without a restart. New read-only `get_credential_status` reports credential sources and keychain state without values. No tool writes or deletes credentials.
+  - Keychain lookup needs the Bun runtime (standalone binary, `bun run`, `bunx --bun`). Under Node it reports `unavailable` and env/`.env` credentials keep working.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudflare-ai-toolkit/sdk@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes

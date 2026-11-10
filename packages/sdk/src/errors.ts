@@ -43,6 +43,28 @@ export class CloudflareNotFoundError extends CloudflareError {
   }
 }
 
+/**
+ * Local configuration problem (for example the OS keychain is locked or
+ * missing), not an API response. CLIs map it to exit code 3.
+ */
+export class CloudflareConfigError extends CloudflareError {
+  public readonly hint?: string;
+  public readonly detail?: string;
+
+  constructor(
+    message: string,
+    options: { readonly hint?: string; readonly detail?: string; readonly cause?: unknown } = {}
+  ) {
+    super(message, "CONFIG_ERROR");
+    this.name = "CloudflareConfigError";
+    this.hint = options.hint;
+    this.detail = options.detail;
+    if (options.cause !== undefined) {
+      (this as Error & { cause?: unknown }).cause = options.cause;
+    }
+  }
+}
+
 interface KnownErrorHint {
   readonly pattern: RegExp;
   readonly hint: (accountId: string) => string;
@@ -120,9 +142,16 @@ function statusExplanation(err: CloudflareError): string | undefined {
 export function describeError(err: unknown): string {
   if (isMissingCredentialsError(err)) {
     return (
-      "No Cloudflare credentials configured. Set CLOUDFLARE_API_TOKEN, or set both " +
-      "CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL. Set CLOUDFLARE_ACCOUNT_ID too for account-level commands."
+      "No Cloudflare credentials configured. Store a token in the OS keychain with " +
+      "`cloudflare auth set api-token`, or set CLOUDFLARE_API_TOKEN (or both CLOUDFLARE_API_KEY and " +
+      "CLOUDFLARE_EMAIL) in the environment or a .env file. Set CLOUDFLARE_ACCOUNT_ID too for " +
+      "account-level commands."
     );
+  }
+  if (err instanceof CloudflareConfigError) {
+    return [err.message, err.detail ? `Got: ${err.detail}` : "", err.hint ?? ""]
+      .filter((line) => line.length > 0)
+      .join("\n");
   }
   if (!(err instanceof CloudflareError)) {
     return err instanceof Error ? err.message : String(err);

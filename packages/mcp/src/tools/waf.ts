@@ -3,13 +3,13 @@ import { z } from "zod";
 import {
   CloudflareClient,
   FirewallRuleActionSchema,
-  resolveConfig,
+  loadConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 const zoneIdParam = z
@@ -35,7 +35,7 @@ export function registerWafTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listFirewallRules(
         {
           action: args.action,
@@ -60,7 +60,7 @@ export function registerWafTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.getFirewallRule(args.ruleId, args.zoneId);
       return JSON.stringify(result, null, 2);
     },
@@ -85,7 +85,7 @@ export function registerWafTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.createFirewallRule(
         {
           expression: args.expression.trim(),
@@ -115,7 +115,7 @@ export function registerWafTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.updateFirewallRule(
         args.ruleId,
         {
@@ -141,7 +141,7 @@ export function registerWafTools(server: FastMCP) {
       zoneId: zoneIdParam,
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteFirewallRule(args.ruleId, args.zoneId);
       return JSON.stringify({ deleted: true, id: args.ruleId }, null, 2);
     },

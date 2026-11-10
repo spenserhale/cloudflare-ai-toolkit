@@ -1,11 +1,11 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 export function registerResourceTools(server: FastMCP) {
@@ -24,7 +24,7 @@ export function registerResourceTools(server: FastMCP) {
         .describe("Items per page"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.listResources({
         page: args.page,
         limit: args.limit,
@@ -42,7 +42,7 @@ export function registerResourceTools(server: FastMCP) {
       id: z.string().describe("The resource ID"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const resource = await client.getResource(args.id);
       return JSON.stringify(resource, null, 2);
     },
@@ -56,7 +56,7 @@ export function registerResourceTools(server: FastMCP) {
       name: z.string().min(1).describe("Name for the new resource"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const resource = await client.createResource({ name: args.name });
       return JSON.stringify(resource, null, 2);
     },
@@ -70,7 +70,7 @@ export function registerResourceTools(server: FastMCP) {
       id: z.string().describe("The resource ID to delete"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       await client.deleteResource(args.id);
       return `Successfully deleted resource ${args.id}`;
     },

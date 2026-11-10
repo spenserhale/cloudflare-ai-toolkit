@@ -15,14 +15,24 @@ cloudflare <command> <subcommand> --help
 
 ## Authentication
 
-Check which credential the user has configured before running a command:
+Check which credential the user has configured before running a command. This
+shows every source (env, `.env`, OS keychain) without printing values:
 
 ```bash
-env | grep -E '^(CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|CLOUDFLARE_EMAIL)=' | sed 's/=.*$/=<set>/'
+cloudflare auth list
 ```
 
 - `CLOUDFLARE_API_TOKEN` — preferred (scoped token from the Cloudflare dashboard)
 - `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` — legacy Global API Key
+
+Precedence is process env > nearest `.env` > OS keychain (service
+`cloudflare-ai-toolkit`). To store a credential, have the user run
+`cloudflare auth set api-token` in their own terminal (hidden prompt), or pipe
+it: `op read 'op://...' | cloudflare auth set api-token --stdin`. Never put a
+credential in a command argument. `cloudflare auth migrate` moves `.env`
+credentials into the keychain; `cloudflare auth delete <credential> --yes`
+removes them. Exit code 2 means a usage error, 3 means the keychain is
+unavailable (for example, running under Node instead of Bun).
 
 Optional defaults so you don't have to pass IDs each time:
 
@@ -78,6 +88,10 @@ cloudflare registrar register <domain> --maxPrice <n>  # BUYS the domain (billab
 cloudflare registrar status <domain> --wait            # follow an API-started registration
 cloudflare registrar get <domain>                      # registered domain: expiry, auto-renew, lock
 cloudflare registrar list --all                        # all registered domains
+cloudflare auth list                                   # credential sources + keychain state (no values)
+cloudflare auth set api-token --stdin                  # store a piped value in the OS keychain
+cloudflare auth migrate --dry-run                      # .env credentials -> keychain
+cloudflare auth delete <credential> --yes              # remove keychain entries
 cloudflare upgrade                                     # self-update: binary→GitHub Releases, npm/bun/pnpm→package manager
 ```
 

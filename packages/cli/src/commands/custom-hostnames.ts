@@ -2,11 +2,12 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type CustomHostname,
   type CustomHostnameSslInput,
   type ListCustomHostnamesResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface CustomHostnamesDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "listCustomHostnames"
     | "getCustomHostname"
@@ -31,7 +32,7 @@ interface CustomHostnamesDeps {
 }
 
 const defaultDeps: CustomHostnamesDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -141,7 +142,7 @@ export async function runListCustomHostnames(
   deps: CustomHostnamesDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result = await client.listCustomHostnames(
       {
@@ -343,7 +344,7 @@ export async function runGetCustomHostname(
   deps: CustomHostnamesDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const hostname = await client.getCustomHostname(customHostnameId, flags.zoneId);
 
@@ -480,7 +481,7 @@ export async function runCreateCustomHostname(
       throw new Error("Hostname is empty.");
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const created = await client.createCustomHostname(
       {
@@ -618,7 +619,7 @@ export async function runUpdateCustomHostname(
       );
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const updated = await client.updateCustomHostname(
       trimmed,
@@ -748,7 +749,7 @@ export async function runDeleteCustomHostname(
       }
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     await client.deleteCustomHostname(trimmed, flags.zoneId);
 

@@ -2,11 +2,12 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type FirewallRule,
   type FirewallRuleAction,
   type ListFirewallRulesResult,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,8 @@ import {
 // ---------------------------------------------------------------------------
 
 interface WafRulesDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "listFirewallRules"
     | "getFirewallRule"
@@ -31,7 +32,7 @@ interface WafRulesDeps {
 }
 
 const defaultDeps: WafRulesDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -138,7 +139,7 @@ export async function runListFirewallRules(
   deps: WafRulesDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const result: ListFirewallRulesResult = await client.listFirewallRules(
       {
@@ -251,7 +252,7 @@ export async function runGetFirewallRule(
   deps: WafRulesDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.getFirewallRule(ruleId.trim(), flags.zoneId);
 
@@ -324,7 +325,7 @@ export async function runCreateFirewallRule(
       throw new Error("Filter expression is empty.");
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.createFirewallRule(
       {
@@ -434,7 +435,7 @@ export async function runUpdateFirewallRule(
       throw new Error("Filter expression is empty.");
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const rule = await client.updateFirewallRule(
       trimmedId,
@@ -558,7 +559,7 @@ export async function runDeleteFirewallRule(
       }
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     await client.deleteFirewallRule(trimmed, flags.zoneId);
 

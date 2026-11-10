@@ -62,7 +62,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   const getCustomHostname = vi.fn(async () => PENDING_HOSTNAME);
 
   return {
-    resolveConfig: vi.fn(() => ({
+    loadConfig: vi.fn(async () => ({
       auth: { type: "apiToken" as const, token: "test-token" },
       baseUrl: "https://api.cloudflare.com",
       zoneId: "zone-from-env",
@@ -91,7 +91,7 @@ function makeTypedDeps(
     error,
     exit,
     deps: {
-      resolveConfig: vi.fn(() => ({
+      loadConfig: vi.fn(async () => ({
         auth: { type: "apiToken" as const, token: "test-token" },
         baseUrl: "https://api.cloudflare.com",
         zoneId: "zone-from-env",

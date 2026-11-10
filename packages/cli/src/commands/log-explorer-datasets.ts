@@ -2,12 +2,13 @@ import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
   CloudflareClient,
-  resolveConfig,
+  loadConfig,
   type AvailableLogExplorerDataset,
   type LogExplorerDataset,
   type LogExplorerDatasetField,
   type LogExplorerScope,
   describeError,
+  type CloudflareConfig,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -46,8 +47,8 @@ function parseFieldList(value: string): [LogExplorerDatasetField, ...LogExplorer
 }
 
 interface DatasetDeps {
-  readonly resolveConfig: typeof resolveConfig;
-  readonly createClient: (config: ReturnType<typeof resolveConfig>) => Pick<
+  readonly loadConfig: () => Promise<CloudflareConfig>;
+  readonly createClient: (config: CloudflareConfig) => Pick<
     CloudflareClient,
     | "listLogExplorerDatasets"
     | "listAvailableLogExplorerDatasets"
@@ -63,7 +64,7 @@ interface DatasetDeps {
 }
 
 const defaultDeps: DatasetDeps = {
-  resolveConfig,
+  loadConfig,
   createClient: (config) => new CloudflareClient(config),
   log: console.log,
   error: console.error,
@@ -161,7 +162,7 @@ export async function runListLogExplorerDatasets(
   deps: DatasetDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const datasets = await client.listLogExplorerDatasets(
       { scope: flags.scope, includeZones: flags.includeZones },
@@ -242,7 +243,7 @@ export async function runListAvailableLogExplorerDatasets(
   deps: DatasetDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const datasets = await client.listAvailableLogExplorerDatasets(
       { scope: flags.scope },
@@ -317,7 +318,7 @@ export async function runGetLogExplorerDataset(
   deps: DatasetDeps = defaultDeps
 ): Promise<void> {
   try {
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const dataset = await client.getLogExplorerDataset(
       { datasetId: datasetId.trim(), scope: flags.scope },
@@ -408,7 +409,7 @@ export async function runUpdateLogExplorerDataset(
       );
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     const dataset = await client.updateLogExplorerDataset(
       {
@@ -544,7 +545,7 @@ export async function runDeleteLogExplorerDataset(
       }
     }
 
-    const config = deps.resolveConfig();
+    const config = await deps.loadConfig();
     const client = deps.createClient(config);
     await client.deleteLogExplorerDataset(
       { datasetId: trimmedId, scope: flags.scope },

@@ -118,6 +118,8 @@ async function runCliWithMockFetch(
         env: {
           ...inheritedEnv,
           ...envOverrides,
+          // Never let a spawned CLI read the developer's real OS keychain.
+          CLOUDFLARE_KEYCHAIN: "0",
           MOCK_ROUTES: JSON.stringify(routes),
         },
         stdio: ["ignore", "pipe", "pipe"],

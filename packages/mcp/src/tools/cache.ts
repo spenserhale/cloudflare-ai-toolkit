@@ -1,11 +1,11 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 import { DESTRUCTIVE_WRITE } from "./annotations.js";
 
-function getClient(): CloudflareClient {
-  const config = resolveConfig();
-  return new CloudflareClient(config);
+/** Reads env, .env, and the OS keychain on every call, so rotated keys apply without a restart. */
+async function getClient(): Promise<CloudflareClient> {
+  return new CloudflareClient(await loadConfig());
 }
 
 export function registerCacheTools(server: FastMCP) {
@@ -26,7 +26,7 @@ export function registerCacheTools(server: FastMCP) {
         .describe("URL prefix(es) to purge, e.g. example.com/assets"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.purgeCacheByPrefixes(
         [...args.prefixes],
         args.zoneId
@@ -52,7 +52,7 @@ export function registerCacheTools(server: FastMCP) {
         .describe("Cache tag(s) to purge"),
     }),
     execute: async (args) => {
-      const client = getClient();
+      const client = await getClient();
       const result = await client.purgeCacheByTags(
         [...args.tags],
         args.zoneId

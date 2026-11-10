@@ -162,16 +162,26 @@ const cf = new CloudflareClient({
 });
 ```
 
-### Config from environment
+### Config from environment and the OS keychain
 
 ```ts
-import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareClient, loadConfig } from "@cloudflare-ai-toolkit/sdk";
 
-const cf = new CloudflareClient(resolveConfig());
+const cf = new CloudflareClient(await loadConfig());
 ```
 
 Reads `CLOUDFLARE_API_TOKEN` (preferred), `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL`,
-`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, and `CLOUDFLARE_BASE_URL`.
+`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, and `CLOUDFLARE_BASE_URL` from
+the process environment and the nearest `.env`. Credentials neither supplies are
+looked up in the OS keychain (service `cloudflare-ai-toolkit`) through
+`Bun.secrets`; under Node the lookup is skipped and reported as `unavailable`.
+Precedence is env > `.env` > keychain.
+
+The result also carries `credentialSources` (`env`, `envfile:<path>`,
+`keychain`, or `missing` per key, never values) and `keychain.status`
+(`ok`, `disabled`, `unavailable`). Pass `secretStore: null` or set
+`CLOUDFLARE_KEYCHAIN=0` to skip the keychain, or pass your own `SecretStore`.
+`resolveConfig()` is the synchronous variant without the keychain.
 
 ## License
 
