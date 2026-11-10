@@ -104,6 +104,17 @@ cloudflare tokens groups [--name <filter>] [--scope <urn>] [--json]
 cloudflare tunnels list [<name>] [--status <status>] [--includeDeleted] [--accountId <id>] [--json]
 cloudflare tunnels info <tunnel-id|name> [--accountId <id>] [--json]
 
+cloudflare registrar search <query> [--extensions com,dev] [--limit <n>] [--sandbox] [--json]
+cloudflare registrar check <domain...> [--sandbox] [--json]
+cloudflare registrar register <domain> [--maxPrice <amount>] [--years <n>] [--autoRenew]
+                   [--privacy redaction|off] [--contact <file.json>] [--yes] [--noWait]
+                   [--timeout <s>] [--sandbox] [--json]
+                   # BILLABLE and non-refundable outside --sandbox; re-checks the price
+                   # and asks you to type 'yes' unless --yes
+cloudflare registrar status <domain> [--wait] [--timeout <s>] [--sandbox] [--json]
+cloudflare registrar get <domain> [--sandbox] [--json]
+cloudflare registrar list [--sort created|expires|name] [--desc] [--all] [--cursor <c>] [--sandbox] [--json]
+
 cloudflare upgrade [--check] [--force] [--version <version>]
                    # binary installs self-update from GitHub Releases;
                    # npm/bun/pnpm installs upgrade via their package manager

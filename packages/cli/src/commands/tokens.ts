@@ -1,7 +1,6 @@
 import { buildCommand } from "@stricli/core";
 import {
   checkTokenPermissions,
-  CloudflareAuthError,
   CloudflareClient,
   CloudflareError,
   resolveConfig,
@@ -12,6 +11,7 @@ import {
   type TokenPermissionGroup,
   type TokenPermissionsResult,
   type TokenVerificationResult,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -58,27 +58,11 @@ function isForbidden(err: unknown): boolean {
 }
 
 function formatError(err: unknown): string {
-  const base =
-    err instanceof CloudflareAuthError
-      ? `Authentication failed: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-
-  if (!(err instanceof CloudflareError)) return base;
-
-  const parts = [base];
-  if (err.requiredPermissions && err.requiredPermissions.length > 0) {
-    const perms = err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
-    parts.push(`Required permission: ${perms}`);
-  }
-  if (isForbidden(err)) {
-    parts.push(MISSING_INTROSPECTION_HINT);
-  }
-  if (err.docsUrl) {
-    parts.push(`Docs: ${err.docsUrl}`);
-  }
-  return parts.join("\n");
+  const description = describeError(err);
+  return err instanceof CloudflareError && isForbidden(err)
+    ? `${description}
+${MISSING_INTROSPECTION_HINT}`
+    : description;
 }
 
 function orDash(value: string | null | undefined): string {

@@ -5,6 +5,7 @@ import {
   FirewallRuleActionSchema,
   resolveConfig,
 } from "@cloudflare-ai-toolkit/sdk";
+import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -19,6 +20,7 @@ const zoneIdParam = z
 export function registerWafTools(server: FastMCP) {
   server.addTool({
     name: "list_firewall_rules",
+    annotations: READ_ONLY,
     description:
       "List firewall (WAF custom) rules in a zone with their actions, filter expressions, and paused state.",
     parameters: z.object({
@@ -50,6 +52,7 @@ export function registerWafTools(server: FastMCP) {
 
   server.addTool({
     name: "get_firewall_rule",
+    annotations: READ_ONLY,
     description:
       "Get one firewall rule by ID, including its filter expression and priority.",
     parameters: z.object({
@@ -65,6 +68,7 @@ export function registerWafTools(server: FastMCP) {
 
   server.addTool({
     name: "create_firewall_rule",
+    annotations: ADDITIVE_WRITE,
     description:
       "Create a firewall (WAF custom) rule from a Cloudflare rules-language filter expression, e.g. 'ip.src.country eq \"CN\"'. Prefer paused=true to stage rules before enforcing them.",
     parameters: z.object({
@@ -98,6 +102,7 @@ export function registerWafTools(server: FastMCP) {
 
   server.addTool({
     name: "update_firewall_rule",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Replace a firewall rule (PUT). Action and expression are required on every update — fetch the current values with get_firewall_rule first and resend unchanged fields.",
     parameters: z.object({
@@ -128,6 +133,7 @@ export function registerWafTools(server: FastMCP) {
 
   server.addTool({
     name: "delete_firewall_rule",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Delete a firewall rule. Destructive: matched traffic immediately loses the rule's action.",
     parameters: z.object({

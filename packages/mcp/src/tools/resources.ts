@@ -1,6 +1,7 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -10,6 +11,7 @@ function getClient(): CloudflareClient {
 export function registerResourceTools(server: FastMCP) {
   server.addTool({
     name: "list_resources",
+    annotations: READ_ONLY,
     description: "List Cloudflare resources with pagination",
     parameters: z.object({
       page: z.number().int().positive().default(1).describe("Page number"),
@@ -34,6 +36,7 @@ export function registerResourceTools(server: FastMCP) {
 
   server.addTool({
     name: "get_resource",
+    annotations: READ_ONLY,
     description: "Get a Cloudflare resource by its ID",
     parameters: z.object({
       id: z.string().describe("The resource ID"),
@@ -47,6 +50,7 @@ export function registerResourceTools(server: FastMCP) {
 
   server.addTool({
     name: "create_resource",
+    annotations: ADDITIVE_WRITE,
     description: "Create a new Cloudflare resource",
     parameters: z.object({
       name: z.string().min(1).describe("Name for the new resource"),
@@ -60,6 +64,7 @@ export function registerResourceTools(server: FastMCP) {
 
   server.addTool({
     name: "delete_resource",
+    annotations: DESTRUCTIVE_WRITE,
     description: "Delete a Cloudflare resource by its ID",
     parameters: z.object({
       id: z.string().describe("The resource ID to delete"),

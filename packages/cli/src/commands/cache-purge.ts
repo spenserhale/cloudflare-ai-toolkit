@@ -1,10 +1,10 @@
 import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
-  CloudflareError,
   CloudflareClient,
   resolveConfig,
   type PurgeCacheResult,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -62,18 +62,7 @@ async function confirmDestructive(
 }
 
 function formatError(err: unknown): string {
-  if (err instanceof CloudflareError) {
-    const parts = [err.message];
-    if (err.requiredPermissions && err.requiredPermissions.length > 0) {
-      const perms = err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
-      parts.push(`Required permission: ${perms}`);
-    }
-    if (err.docsUrl) {
-      parts.push(`Docs: ${err.docsUrl}`);
-    }
-    return parts.join("\n");
-  }
-  return err instanceof Error ? err.message : String(err);
+  return describeError(err);
 }
 
 function formatSuccess(result: PurgeCacheResult, description: string): string {

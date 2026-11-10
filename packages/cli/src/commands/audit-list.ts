@@ -8,6 +8,7 @@ import {
   toAuditLogTable,
   type AuditLog,
   type TokenVerificationResult,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 const allowedActionTypes = ["create", "view", "update", "delete"] as const;
@@ -241,18 +242,6 @@ function formatZodValidationError(issues: readonly ZodLikeIssue[]): string {
   return `Unexpected Cloudflare API response shape (${path}): ${message}`;
 }
 
-function formatPermissionHint(err: unknown): string | undefined {
-  if (!(err instanceof CloudflareError)) return undefined;
-  if (!err.requiredPermissions || err.requiredPermissions.length === 0) return undefined;
-
-  const permissionClause =
-    err.requiredPermissions.length === 1
-      ? `'${err.requiredPermissions[0]}'`
-      : err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
-  const docsClause = err.docsUrl ? ` Docs: ${err.docsUrl}` : "";
-
-  return `Required permission for this endpoint: ${permissionClause}.${docsClause}`;
-}
 
 function formatTokenVerifyResult(result: TokenVerificationResult): string {
   if (result.status.toLowerCase() === "active") {
@@ -308,13 +297,8 @@ function formatAuditError(err: unknown, authDiagnostic?: string): string {
     }
     return formatZodValidationError(zodIssues);
   }
-  const base = err instanceof Error ? err.message : String(err);
-  const permissionHint = formatPermissionHint(err);
-  const details = [authDiagnostic, permissionHint].filter(
-    (value): value is string => Boolean(value && value.length > 0)
-  );
-  if (details.length === 0) return base;
-  return `${base}\n${details.join("\n")}`;
+  const description = describeError(err);
+  return authDiagnostic ? `${description}\n${authDiagnostic}` : description;
 }
 
 function renderAuditLogsToon(logs: readonly AuditLog[], nextCursor?: string): string {

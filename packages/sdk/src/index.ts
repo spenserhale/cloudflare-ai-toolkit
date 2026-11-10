@@ -1,6 +1,6 @@
 export { CloudflareClient } from "./client.js";
 export { resolveConfig } from "./config.js";
-export { CloudflareError, CloudflareAuthError, CloudflareNotFoundError } from "./errors.js";
+export { CloudflareError, CloudflareAuthError, CloudflareNotFoundError, describeError } from "./errors.js";
 export {
   AUDIT_LOG_TABLE_COLUMNS,
   mapAuditLogToTableRow,
@@ -43,6 +43,19 @@ export type {
   ResolvedAuditRange,
 } from "./audit-search.js";
 export { getCustomHostnameHistory } from "./audit-history.js";
+export {
+  assessRegistration,
+  isTerminalRegistrationState,
+  parsePriceMicros,
+  prepareDomainRegistration,
+  waitForRegistration,
+} from "./registrar.js";
+export type {
+  RegistrationAssessment,
+  RegistrationPriceLimit,
+  WaitForRegistrationOptions,
+  WaitForRegistrationResult,
+} from "./registrar.js";
 export type {
   AuditHistoryEntry,
   CustomHostnameHistory,
@@ -142,6 +155,23 @@ export type {
   TunnelStatus,
   ListTunnelsParams,
   ListTunnelsResult,
+  CheckDomainsParams,
+  CursorResultInfo,
+  DomainAvailability,
+  DomainAvailabilityResult,
+  DomainPricing,
+  DomainRegistration,
+  DomainTier,
+  ListDomainRegistrationsParams,
+  ListDomainRegistrationsResult,
+  PrivacyMode,
+  RegisterDomainParams,
+  RegistrarTarget,
+  RegistrationContact,
+  RegistrationContacts,
+  RegistrationWorkflowState,
+  RegistrationWorkflowStatus,
+  SearchDomainsParams,
 } from "./types.js";
 export {
   AuditLogListResultSchema,
@@ -235,6 +265,25 @@ export {
   TunnelStatusSchema,
   ListTunnelsParamsSchema,
   ListTunnelsResultSchema,
+  CheckDomainsParamsSchema,
+  CursorResultInfoSchema,
+  DOMAIN_UNREGISTRABLE_REASONS,
+  DomainAvailabilityResultSchema,
+  DomainAvailabilitySchema,
+  DomainPricingSchema,
+  DomainRegistrationSchema,
+  DomainTierSchema,
+  ListDomainRegistrationsParamsSchema,
+  ListDomainRegistrationsResultSchema,
+  PrivacyModeSchema,
+  RegisterDomainParamsSchema,
+  RegistrarTargetSchema,
+  RegistrationContactSchema,
+  RegistrationContactsSchema,
+  RegistrationWorkflowStateSchema,
+  RegistrationWorkflowStatusSchema,
+  SearchDomainsParamsSchema,
+  TERMINAL_REGISTRATION_STATES,
 } from "./types.js";
 
 export {

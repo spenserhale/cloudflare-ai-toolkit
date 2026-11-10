@@ -203,7 +203,7 @@ describe("runLogExplorerQuery", () => {
       runLogExplorerQuery(baseFlags({ sql: "SELECT 1" }), deps)
     ).rejects.toThrow("EXIT:1");
     expect(error).toHaveBeenCalledWith(
-      expect.stringContaining("Required permission for this endpoint: 'Logs Read'")
+      expect.stringContaining("Required permission: 'Logs Read'")
     );
   });
 

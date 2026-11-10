@@ -1,12 +1,11 @@
 import { buildCommand } from "@stricli/core";
 import {
-  CloudflareAuthError,
   CloudflareClient,
-  CloudflareError,
   getCustomHostnameHistory,
   parseAuditTime,
   resolveConfig,
   type CustomHostnameHistory,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 export interface CustomHostnameHistoryFlags {
@@ -36,19 +35,7 @@ const defaultDeps: CustomHostnameHistoryDeps = {
 };
 
 function formatError(err: unknown): string {
-  const base =
-    err instanceof CloudflareAuthError
-      ? `Authentication failed: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-  if (!(err instanceof CloudflareError)) return base;
-  const parts = [base];
-  if (err.requiredPermissions && err.requiredPermissions.length > 0) {
-    parts.push(`Required permission: ${err.requiredPermissions.map((p) => `'${p}'`).join(" or ")}`);
-  }
-  if (err.docsUrl) parts.push(`Docs: ${err.docsUrl}`);
-  return parts.join("\n");
+  return describeError(err);
 }
 
 function parseTime(value: string): string {

@@ -7,6 +7,7 @@ import {
   ZoneStatusSchema,
   ZoneTypeSchema,
 } from "@cloudflare-ai-toolkit/sdk";
+import { DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -16,6 +17,7 @@ function getClient(): CloudflareClient {
 export function registerZoneTools(server: FastMCP) {
   server.addTool({
     name: "list_zones",
+    annotations: READ_ONLY,
     description:
       "List, search, and filter Cloudflare zones. Use this to resolve a domain name to a zone ID before calling zone-scoped tools.",
     parameters: z.object({
@@ -71,6 +73,7 @@ export function registerZoneTools(server: FastMCP) {
 
   server.addTool({
     name: "get_zone",
+    annotations: READ_ONLY,
     description:
       "Get details for one Cloudflare zone (status, type, plan, nameservers). Defaults to CLOUDFLARE_ZONE_ID.",
     parameters: z.object({
@@ -85,6 +88,7 @@ export function registerZoneTools(server: FastMCP) {
 
   server.addTool({
     name: "get_zone_vanity_nameservers",
+    annotations: READ_ONLY,
     description:
       "Read a zone's custom (vanity) nameservers, the glue-record addresses Cloudflare assigned to them, and the Cloudflare nameservers they replace. Defaults to CLOUDFLARE_ZONE_ID.",
     parameters: z.object({
@@ -99,6 +103,7 @@ export function registerZoneTools(server: FastMCP) {
 
   server.addTool({
     name: "set_zone_vanity_nameservers",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Replace a zone's custom (vanity) nameservers. Every name must be a subdomain of the zone itself (ns1.example.com for zone example.com), and the zone must be on a Business or Enterprise plan. This changes authoritative DNS: resolution breaks until the same nameservers and their glue records are set at the registrar. Requires a 'Zone Write' API token.",
     parameters: z.object({
@@ -122,6 +127,7 @@ export function registerZoneTools(server: FastMCP) {
 
   server.addTool({
     name: "clear_zone_vanity_nameservers",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Remove a zone's custom (vanity) nameservers and the read-only A/AAAA records Cloudflare created for them. The zone falls back to its assigned Cloudflare nameservers, which must then be set at the registrar. Requires a 'Zone Write' API token.",
     parameters: z.object({

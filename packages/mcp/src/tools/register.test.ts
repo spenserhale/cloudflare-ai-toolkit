@@ -5,25 +5,55 @@ import { registerCustomHostnameTools } from "./custom-hostnames.js";
 import { registerDnsTools } from "./dns.js";
 import { registerLogExplorerTools } from "./log-explorer.js";
 import { registerRedirectTools } from "./redirects.js";
+import { registerRegistrarTools } from "./registrar.js";
 import { registerResourceTools } from "./resources.js";
 import { registerTokenTools } from "./tokens.js";
 import { registerTunnelTools } from "./tunnels.js";
 import { registerWafTools } from "./waf.js";
 import { registerZoneTools } from "./zones.js";
 
+interface RegisteredTool {
+  name: string;
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+}
+
 interface FakeServer {
   readonly tools: string[];
-  addTool: (tool: { name: string }) => void;
+  readonly registered: RegisteredTool[];
+  addTool: (tool: RegisteredTool) => void;
 }
 
 function makeFakeServer(): FakeServer {
   const tools: string[] = [];
+  const registered: RegisteredTool[] = [];
   return {
     tools,
+    registered,
     addTool(tool) {
       tools.push(tool.name);
+      registered.push(tool);
     },
   };
+}
+
+function registerAll(server: FakeServer): void {
+  const target = server as unknown as Parameters<typeof registerResourceTools>[0];
+  for (const register of [
+    registerResourceTools,
+    registerAuditTools,
+    registerCacheTools,
+    registerDnsTools,
+    registerLogExplorerTools,
+    registerRedirectTools,
+    registerRegistrarTools,
+    registerTokenTools,
+    registerTunnelTools,
+    registerWafTools,
+    registerZoneTools,
+    registerCustomHostnameTools,
+  ]) {
+    register(target);
+  }
 }
 
 describe("MCP tool registration", () => {
@@ -35,6 +65,7 @@ describe("MCP tool registration", () => {
     registerDnsTools(server as unknown as Parameters<typeof registerDnsTools>[0]);
     registerLogExplorerTools(server as unknown as Parameters<typeof registerLogExplorerTools>[0]);
     registerRedirectTools(server as unknown as Parameters<typeof registerRedirectTools>[0]);
+    registerRegistrarTools(server as unknown as Parameters<typeof registerRegistrarTools>[0]);
     registerTokenTools(server as unknown as Parameters<typeof registerTokenTools>[0]);
     registerTunnelTools(server as unknown as Parameters<typeof registerTunnelTools>[0]);
     registerWafTools(server as unknown as Parameters<typeof registerWafTools>[0]);
@@ -93,7 +124,40 @@ describe("MCP tool registration", () => {
         "list_token_permission_groups",
         "list_tunnels",
         "get_tunnel",
+        "search_domains",
+        "check_domains",
+        "register_domain",
+        "get_domain_registration_status",
+        "get_domain_registration",
+        "list_domain_registrations",
       ])
     );
+  });
+
+  // Clients such as Claude's connector settings split tools into read and
+  // write groups by readOnlyHint, and admins set Allow/Ask/Block per group.
+  // A missing hint lets a write tool land in the wrong group.
+  test("every tool declares readOnlyHint explicitly", () => {
+    const server = makeFakeServer();
+    registerAll(server);
+    const missing = server.registered
+      .filter((tool) => typeof tool.annotations?.readOnlyHint !== "boolean")
+      .map((tool) => tool.name);
+    expect(missing).toEqual([]);
+  });
+
+  test("tools that change or remove state are marked destructive", () => {
+    const server = makeFakeServer();
+    registerAll(server);
+    const unmarked = server.registered
+      .filter((tool) => /^(update|delete|purge|set|clear|register)_/u.test(tool.name))
+      .filter((tool) => tool.annotations?.destructiveHint !== true)
+      .map((tool) => tool.name);
+    expect(unmarked).toEqual([]);
+    const readOnlyWriters = server.registered
+      .filter((tool) => /^(create|enable|update|delete|purge|set|clear|register)_/u.test(tool.name))
+      .filter((tool) => tool.annotations?.readOnlyHint !== false)
+      .map((tool) => tool.name);
+    expect(readOnlyWriters).toEqual([]);
   });
 });

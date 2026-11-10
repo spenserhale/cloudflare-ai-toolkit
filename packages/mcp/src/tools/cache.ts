@@ -1,6 +1,7 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { DESTRUCTIVE_WRITE } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -10,6 +11,7 @@ function getClient(): CloudflareClient {
 export function registerCacheTools(server: FastMCP) {
   server.addTool({
     name: "purge_cache_by_prefixes",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Purge cached content from a Cloudflare zone by URL prefix(es). " +
       "Zone ID falls back to the CLOUDFLARE_ZONE_ID environment variable if omitted.",
@@ -35,6 +37,7 @@ export function registerCacheTools(server: FastMCP) {
 
   server.addTool({
     name: "purge_cache_by_tags",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Purge cached content from a Cloudflare zone by cache tag(s). " +
       "Zone ID falls back to the CLOUDFLARE_ZONE_ID environment variable if omitted.",

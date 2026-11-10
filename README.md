@@ -369,6 +369,49 @@ cloudflare tunnels info office-gateway
 
 Requires a token with `Cloudflare Tunnel Read`.
 
+### Domain registration (Registrar)
+
+Search for domains, check live availability and price, and register them through
+the [Registrar API](https://developers.cloudflare.com/registrar/registrar-api/)
+(beta). All commands read the account from `--accountId` or `CLOUDFLARE_ACCOUNT_ID`.
+
+```bash
+cloudflare registrar search "acme corp" --extensions com,dev   # suggestions (cached data)
+cloudflare registrar check acmecorp.com acmecorp.dev            # live availability + price, up to 20
+cloudflare registrar register acmecorp.dev --maxPrice 12        # check, show price, type 'yes', buy
+cloudflare registrar status acmecorp.dev --wait                 # follow an in-progress registration
+cloudflare registrar get acmecorp.dev                           # a registered domain's details
+cloudflare registrar list --sort expires --all                  # every registered domain
+```
+
+**`register` spends money and cannot be undone.** A successful registration
+charges the account's default payment method and is non-refundable. Before it
+buys, `register` re-checks availability with the registry, refuses premium or
+unavailable domains, refuses if the price is above `--maxPrice`, prints the
+price, and asks you to type `yes`. `--yes` skips the prompt and is required when
+stdin is not a terminal. Auto-renew stays off unless you pass `--autoRenew`.
+
+Registration uses the account's default registrant contact. If the account has
+none, the API answers `No registrant contact provided and no default address
+book entry found`. Set one in the dashboard under Domain Registration, or pass
+`--contact contact.json` with a single contact (or a `{registrant, administrator,
+technical, billing}` map):
+
+```json
+{"email": "ada@example.com", "phone": "+1.5555555555",
+ "postal_info": {"name": "Ada Lovelace", "organization": "Example Inc",
+   "address": {"street": "123 Main St", "city": "Austin", "state": "TX",
+               "postal_code": "78701", "country_code": "US"}}}
+```
+
+Add `--sandbox` to any command to use Cloudflare's non-billing Registrar sandbox
+(`/registrar-sandbox`). It runs the full register-and-poll flow without a charge,
+but supports fewer extensions than production (`.dev`, for example, is not
+supported there).
+
+Requires a token with Registrar access on the account, plus a billing profile
+with a default payment method for real registrations.
+
 ## Local development
 
 ```bash

@@ -8,15 +8,19 @@ import { registerCustomHostnameTools } from "./tools/custom-hostnames.js";
 import { registerDnsTools } from "./tools/dns.js";
 import { registerLogExplorerTools } from "./tools/log-explorer.js";
 import { registerRedirectTools } from "./tools/redirects.js";
+import { registerRegistrarTools } from "./tools/registrar.js";
 import { registerTokenTools } from "./tools/tokens.js";
 import { registerTunnelTools } from "./tools/tunnels.js";
 import { registerWafTools } from "./tools/waf.js";
 import { registerZoneTools } from "./tools/zones.js";
+import { withExplanatoryErrors } from "./tools/explain.js";
 
-const server = new FastMCP({
-  name: "cloudflare-ai-toolkit",
-  version: pkg.version as `${number}.${number}.${number}`,
-});
+const server = withExplanatoryErrors(
+  new FastMCP({
+    name: "cloudflare-ai-toolkit",
+    version: pkg.version as `${number}.${number}.${number}`,
+  })
+);
 
 registerResourceTools(server);
 registerAuditTools(server);
@@ -24,6 +28,7 @@ registerCacheTools(server);
 registerDnsTools(server);
 registerLogExplorerTools(server);
 registerRedirectTools(server);
+registerRegistrarTools(server);
 registerTokenTools(server);
 registerTunnelTools(server);
 registerWafTools(server);

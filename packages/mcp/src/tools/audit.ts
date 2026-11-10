@@ -22,6 +22,7 @@ import {
   type AuditLogFilters,
   type AuditLogListResult,
 } from "@cloudflare-ai-toolkit/sdk";
+import { READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -107,6 +108,7 @@ function windowFor(filters: AuditLogFilters): number {
 export function registerAuditTools(server: FastMCP) {
   server.addTool({
     name: "list_audit_logs",
+    annotations: READ_ONLY,
     description:
       "List one page of Cloudflare audit logs. For multi-page history questions use search_audit_logs",
     parameters: z.object({
@@ -155,6 +157,7 @@ export function registerAuditTools(server: FastMCP) {
 
   server.addTool({
     name: "search_audit_logs",
+    annotations: READ_ONLY,
     description:
       "Search Cloudflare audit logs across every page of a time range (auto-pagination, parallel " +
       "time windows, retries). Use this instead of list_audit_logs for history questions such as " +
@@ -233,6 +236,7 @@ export function registerAuditTools(server: FastMCP) {
 
   server.addTool({
     name: "audit_log_facets",
+    annotations: READ_ONLY,
     description:
       "Count Cloudflare audit log events by product, resource type, action, actor, context, and " +
       "zone over a time range, to discover valid filter values before calling search_audit_logs.",
@@ -271,6 +275,7 @@ export function registerAuditTools(server: FastMCP) {
 
   server.addTool({
     name: "custom_hostname_history",
+    annotations: READ_ONLY,
     description:
       "Timeline of create/update/delete audit events for a custom hostname (SSL for SaaS). " +
       "Links creates by hostname and updates/deletes by ID, flags likely delete-then-recreate " +

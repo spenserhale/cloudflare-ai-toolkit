@@ -5,6 +5,7 @@ import {
   resolveConfig,
   TunnelStatusSchema,
 } from "@cloudflare-ai-toolkit/sdk";
+import { READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -15,6 +16,7 @@ function getClient(): CloudflareClient {
 export function registerTunnelTools(server: FastMCP) {
   server.addTool({
     name: "list_tunnels",
+    annotations: READ_ONLY,
     description:
       "List Cloudflare Tunnels (cloudflared) in an account with their health status. Use this to resolve a tunnel name to its ID. Requires a 'Cloudflare Tunnel Read' API token.",
     parameters: z.object({
@@ -50,6 +52,7 @@ export function registerTunnelTools(server: FastMCP) {
 
   server.addTool({
     name: "get_tunnel",
+    annotations: READ_ONLY,
     description:
       "Get one Cloudflare Tunnel plus its running cloudflared connectors: version, architecture, and the Cloudflare data centers and origin IPs each connector is connected through. An empty connectors list means no cloudflared is running. Requires a 'Cloudflare Tunnel Read' API token.",
     parameters: z.object({

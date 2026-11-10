@@ -3,9 +3,7 @@ import { encode } from "@toon-format/toon";
 import {
   AUDIT_LOG_FILTER_FIELDS,
   AuditFacetCounter,
-  CloudflareAuthError,
   CloudflareClient,
-  CloudflareError,
   DAY_MS,
   DEFAULT_AUDIT_FACETS,
   DEFAULT_AUDIT_FIELDS,
@@ -24,6 +22,7 @@ import {
   type AuditLogFilters,
   type AuditSearchProgress,
   type AuditWhereClause,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -297,19 +296,7 @@ function createDefaultDeps(): AuditSearchDeps {
 }
 
 function formatError(err: unknown): string {
-  const base =
-    err instanceof CloudflareAuthError
-      ? `Authentication failed: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-  if (!(err instanceof CloudflareError)) return base;
-  const parts = [base];
-  if (err.requiredPermissions && err.requiredPermissions.length > 0) {
-    parts.push(`Required permission: ${err.requiredPermissions.map((p) => `'${p}'`).join(" or ")}`);
-  }
-  if (err.docsUrl) parts.push(`Docs: ${err.docsUrl}`);
-  return parts.join("\n");
+  return describeError(err);
 }
 
 function formatDuration(ms: number): string {

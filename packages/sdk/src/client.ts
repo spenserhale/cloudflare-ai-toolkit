@@ -29,6 +29,15 @@ import type {
   Tunnel,
   TunnelConnector,
   TunnelInfo,
+  CheckDomainsParams,
+  DomainAvailabilityResult,
+  DomainRegistration,
+  ListDomainRegistrationsParams,
+  ListDomainRegistrationsResult,
+  RegisterDomainParams,
+  RegistrarTarget,
+  RegistrationWorkflowStatus,
+  SearchDomainsParams,
   LogExplorerDataset,
   LogExplorerScope,
   PurgeCacheResult,
@@ -82,6 +91,14 @@ import {
   ListTunnelsParamsSchema,
   TunnelSchema,
   TunnelConnectorSchema,
+  CheckDomainsParamsSchema,
+  CursorResultInfoSchema,
+  DomainAvailabilityResultSchema,
+  DomainRegistrationSchema,
+  ListDomainRegistrationsParamsSchema,
+  RegisterDomainParamsSchema,
+  RegistrationWorkflowStatusSchema,
+  SearchDomainsParamsSchema,
   LogExplorerDatasetSchema,
   LogExplorerRowSchema,
   ResultInfoSchema,
@@ -138,6 +155,8 @@ interface RequestOptions {
    * a bare payload instead of a JSON object (e.g. Log Explorer's SQL query).
    */
   textBody?: string;
+  /** Extra request headers, e.g. `Prefer: respond-async`. */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 }
 
@@ -442,6 +461,7 @@ export class CloudflareClient {
       signal: options.signal,
       headers: {
         "Content-Type": isTextBody ? "text/plain" : "application/json",
+        ...options.headers,
         ...this.getAuthHeaders(),
       },
       body: isTextBody
@@ -1033,6 +1053,156 @@ export class CloudflareClient {
     ]);
 
     return { tunnel, connectors };
+  }
+
+  // -------------------------------------------------------------------------
+  // Registrar (domain search, availability, and registration)
+  // -------------------------------------------------------------------------
+
+  /** `/registrar` or, for `sandbox`, the non-billing `/registrar-sandbox` mirror. */
+  private registrarBasePath(target: RegistrarTarget = {}): string {
+    const accountId = this.resolveAccountId(target.accountId);
+    const root = target.sandbox ? "registrar-sandbox" : "registrar";
+    return `/client/v4/accounts/${accountId}/${root}`;
+  }
+
+  /**
+   * Suggests domain names for a keyword or phrase, with indicative pricing.
+   * Results come from cached data and only cover API-supported extensions, so
+   * confirm a pick with `checkDomains` before registering it.
+   */
+  async searchDomains(params: SearchDomainsParams): Promise<DomainAvailabilityResult> {
+    const parsed = SearchDomainsParamsSchema.parse(params);
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${this.registrarBasePath(parsed)}/domain-search`,
+      {
+        query: {
+          q: parsed.query,
+          extensions: parsed.extensions,
+          limit: parsed.limit,
+        },
+      }
+    );
+    return DomainAvailabilityResultSchema.parse(result);
+  }
+
+  /**
+   * Checks real-time availability and pricing with the registry (up to 20
+   * domains). Unregistrable domains carry a `reason`.
+   */
+  async checkDomains(params: CheckDomainsParams): Promise<DomainAvailabilityResult> {
+    const parsed = CheckDomainsParamsSchema.parse(params);
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `${this.registrarBasePath(parsed)}/domain-check`,
+      { body: { domains: parsed.domains } }
+    );
+    return DomainAvailabilityResultSchema.parse(result);
+  }
+
+  /**
+   * Starts a domain registration. **Billable and non-refundable** outside the
+   * sandbox: a successful registration charges the account's default payment
+   * method. Callers should run `checkDomains` first and confirm the price; the
+   * `prepareDomainRegistration` helper does both.
+   *
+   * The API waits briefly and returns a completed workflow, or an in-progress
+   * one (HTTP 202) to poll with `getRegistrationStatus`. Do not re-submit on an
+   * in-progress result.
+   */
+  async registerDomain(params: RegisterDomainParams): Promise<RegistrationWorkflowStatus> {
+    const parsed = RegisterDomainParamsSchema.parse(params);
+    const result = await this.requestResult<unknown>(
+      "POST",
+      `${this.registrarBasePath(parsed)}/registrations`,
+      {
+        body: {
+          domain_name: parsed.domainName,
+          years: parsed.years,
+          auto_renew: parsed.autoRenew,
+          privacy_mode: parsed.privacyMode,
+          contacts: parsed.contacts,
+          contact_extensions: parsed.contactExtensions,
+          acknowledgements: parsed.acknowledgements,
+        },
+        headers: parsed.respondAsync ? { Prefer: "respond-async" } : undefined,
+      }
+    );
+    return this.parseRegistrationWorkflow(result, parsed.domainName);
+  }
+
+  /** The registration workflow's current state; poll until it is terminal. */
+  async getRegistrationStatus(
+    domainName: string,
+    target: RegistrarTarget = {}
+  ): Promise<RegistrationWorkflowStatus> {
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${this.registrarBasePath(target)}/registrations/${encodeURIComponent(domainName)}/registration-status`
+    );
+    return this.parseRegistrationWorkflow(result, domainName);
+  }
+
+  /** A domain registered to the account. */
+  async getRegistration(
+    domainName: string,
+    target: RegistrarTarget = {}
+  ): Promise<DomainRegistration> {
+    const result = await this.requestResult<unknown>(
+      "GET",
+      `${this.registrarBasePath(target)}/registrations/${encodeURIComponent(domainName)}`
+    );
+    return DomainRegistrationSchema.parse(result);
+  }
+
+  /** One cursor-paginated page of the account's domain registrations. */
+  async listRegistrations(
+    params: ListDomainRegistrationsParams = {}
+  ): Promise<ListDomainRegistrationsResult> {
+    const parsed = ListDomainRegistrationsParamsSchema.parse(params);
+    const body = await this.requestRaw<unknown>(
+      "GET",
+      `${this.registrarBasePath(parsed)}/registrations`,
+      {
+        query: {
+          cursor: parsed.cursor,
+          per_page: parsed.perPage,
+          direction: parsed.direction,
+          sort_by: parsed.sortBy,
+        },
+      }
+    );
+
+    const response = CloudflareResponseSchema(z.array(DomainRegistrationSchema)).safeParse(body);
+    if (!response.success) {
+      throw new CloudflareError("Unexpected registrations response shape", "INVALID_RESPONSE");
+    }
+    if (!response.data.success) {
+      const first = response.data.errors[0];
+      throw new CloudflareError(
+        first?.message ?? "Registrations request failed",
+        String(first?.code ?? "API_ERROR")
+      );
+    }
+
+    const info = CursorResultInfoSchema.safeParse(response.data.result_info);
+    const cursor = info.success ? info.data.cursor : undefined;
+    return {
+      registrations: response.data.result,
+      nextCursor: cursor && cursor.length > 0 ? cursor : undefined,
+    };
+  }
+
+  private parseRegistrationWorkflow(
+    result: unknown,
+    domainName: string
+  ): RegistrationWorkflowStatus {
+    const status = RegistrationWorkflowStatusSchema.parse(result);
+    return {
+      ...status,
+      domain_name: status.domain_name ?? status.context?.domain_name ?? domainName,
+    };
   }
 
   // -------------------------------------------------------------------------

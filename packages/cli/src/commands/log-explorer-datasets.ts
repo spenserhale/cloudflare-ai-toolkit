@@ -1,14 +1,13 @@
 import { buildCommand } from "@stricli/core";
 import { createInterface } from "node:readline/promises";
 import {
-  CloudflareAuthError,
   CloudflareClient,
-  CloudflareError,
   resolveConfig,
   type AvailableLogExplorerDataset,
   type LogExplorerDataset,
   type LogExplorerDatasetField,
   type LogExplorerScope,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 // ---------------------------------------------------------------------------
@@ -81,26 +80,9 @@ const defaultDeps: DatasetDeps = {
   },
 };
 
-function formatPermissionHint(err: unknown): string | undefined {
-  if (!(err instanceof CloudflareError)) return undefined;
-  if (!err.requiredPermissions || err.requiredPermissions.length === 0) return undefined;
-  const clause =
-    err.requiredPermissions.length === 1
-      ? `'${err.requiredPermissions[0]}'`
-      : err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
-  const docs = err.docsUrl ? ` Docs: ${err.docsUrl}` : "";
-  return `Required permission for this endpoint: ${clause}.${docs}`;
-}
 
 function formatError(err: unknown): string {
-  const base =
-    err instanceof CloudflareAuthError
-      ? `Authentication failed: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-  const hint = formatPermissionHint(err);
-  return hint ? `${base}\n${hint}` : base;
+  return describeError(err);
 }
 
 function orDash(value: string | number | boolean | null | undefined): string {

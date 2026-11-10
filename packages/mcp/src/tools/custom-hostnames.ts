@@ -1,6 +1,7 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -26,6 +27,7 @@ function toSslInput(ssl: SslToolArgs | undefined) {
 export function registerCustomHostnameTools(server: FastMCP) {
   server.addTool({
     name: "list_custom_hostnames",
+    annotations: READ_ONLY,
     description:
       "List custom hostnames (Cloudflare for SaaS / SSL for SaaS) in a zone, including hostname status and certificate status. Filter by hostname to inspect one domain.",
     parameters: z.object({
@@ -71,6 +73,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
 
   server.addTool({
     name: "get_custom_hostname",
+    annotations: READ_ONLY,
     description:
       "Get one custom hostname's certificate and validation state: ssl.status, validation records and errors, and hostname ownership challenges. A hostname is ready for traffic when status and ssl.status are both 'active'.",
     parameters: z.object({
@@ -86,6 +89,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
 
   server.addTool({
     name: "create_custom_hostname",
+    annotations: ADDITIVE_WRITE,
     description:
       "Create a custom hostname (SSL for SaaS) and request its certificate. Returns the ownership validation records the customer must add.",
     parameters: z.object({
@@ -130,6 +134,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
 
   server.addTool({
     name: "update_custom_hostname",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Update a custom hostname's origin, metadata, or SSL config. Resending SSL config with unchanged values retriggers domain control validation.",
     parameters: z.object({
@@ -169,6 +174,7 @@ export function registerCustomHostnameTools(server: FastMCP) {
 
   server.addTool({
     name: "delete_custom_hostname",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Delete a custom hostname and its certificate. Destructive: the customer's traffic stops passing through Cloudflare for this hostname.",
     parameters: z.object({

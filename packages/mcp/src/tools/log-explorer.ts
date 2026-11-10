@@ -7,6 +7,7 @@ import {
   resolveConfig,
   type QueryLogExplorerResult,
 } from "@cloudflare-ai-toolkit/sdk";
+import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -26,6 +27,7 @@ function renderQuery(result: QueryLogExplorerResult, format: OutputFormat): stri
 export function registerLogExplorerTools(server: FastMCP) {
   server.addTool({
     name: "query_log_explorer",
+    annotations: READ_ONLY,
     description:
       "Run a SQL query against Cloudflare Log Explorer. Scope is account-level or zone-level; defaults to zone when CLOUDFLARE_ZONE_ID is set.",
     parameters: z.object({
@@ -51,6 +53,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "enable_log_explorer_dataset",
+    annotations: ADDITIVE_WRITE,
     description:
       "Enable a Log Explorer dataset (e.g. http_requests, gateway_dns) for the account or zone.",
     parameters: z.object({
@@ -78,6 +81,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "list_log_explorer_datasets",
+    annotations: READ_ONLY,
     description:
       "List configured Log Explorer datasets (IDs, enabled state) for the account or zone.",
     parameters: z.object({
@@ -101,6 +105,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "list_available_log_explorer_datasets",
+    annotations: READ_ONLY,
     description:
       "List dataset types the account or zone can enable, with timestamp fields and schemas.",
     parameters: z.object({
@@ -120,6 +125,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "get_log_explorer_dataset",
+    annotations: READ_ONLY,
     description:
       "Get one Log Explorer dataset by ID, including field configuration and filter.",
     parameters: z.object({
@@ -140,6 +146,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "update_log_explorer_dataset",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Update a Log Explorer dataset: enable/disable ingest, restrict fields, set or clear a Logpush filter, or toggle deletion protection.",
     parameters: z.object({
@@ -177,6 +184,7 @@ export function registerLogExplorerTools(server: FastMCP) {
 
   server.addTool({
     name: "delete_log_explorer_dataset",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Delete a Log Explorer dataset, stopping its log ingest. Requires deletion protection to be off.",
     parameters: z.object({

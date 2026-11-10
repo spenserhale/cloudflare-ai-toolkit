@@ -1,6 +1,6 @@
 ---
 name: cloudflare-cli
-description: Reference for the `cloudflare` CLI (from @cloudflare-ai-toolkit/cli, installed globally on this machine), covering zone lookups, cache purges, DNS record changes, custom hostnames (SSL for SaaS) certificate state and lifecycle, WAF firewall rules, redirect rules, Log Explorer SQL, and audit log queries against the Cloudflare API. Trigger whenever the user mentions Cloudflare, a zone or zone ID, cache invalidation or purging, DNS record edits, custom hostnames or SSL for SaaS certificates, WAF or firewall rules, redirects or redirect rules, Log Explorer, or audit logs — even if they don't name the CLI. Prefer this CLI over hand-rolling curl against api.cloudflare.com or reaching for wrangler for these tasks, since it handles auth, pagination, and flag validation.
+description: Reference for the `cloudflare` CLI (from @cloudflare-ai-toolkit/cli, installed globally on this machine), covering zone lookups, cache purges, DNS record changes, custom hostnames (SSL for SaaS) certificate state and lifecycle, WAF firewall rules, redirect rules, Log Explorer SQL, audit log queries, and domain search and registration (Registrar) against the Cloudflare API. Trigger whenever the user mentions Cloudflare, a zone or zone ID, cache invalidation or purging, DNS record edits, custom hostnames or SSL for SaaS certificates, WAF or firewall rules, redirects or redirect rules, Log Explorer, audit logs, or buying, registering, or checking the availability of a domain — even if they don't name the CLI. Prefer this CLI over hand-rolling curl against api.cloudflare.com or reaching for wrangler for these tasks, since it handles auth, pagination, and flag validation.
 ---
 
 # cloudflare CLI
@@ -72,6 +72,12 @@ cloudflare log-explorer datasets update <dataset-id> --enabled false
 cloudflare log-explorer datasets delete <dataset-id> --yes
 cloudflare tunnels list                                # Cloudflare Tunnels + health status
 cloudflare tunnels info <tunnel-id|name>               # connectors: version, colos, origin IPs
+cloudflare registrar search "<keywords>"               # domain name suggestions + indicative price
+cloudflare registrar check <domain...>                 # live availability + price (max 20)
+cloudflare registrar register <domain> --maxPrice <n>  # BUYS the domain (billable, non-refundable)
+cloudflare registrar status <domain> --wait            # follow an API-started registration
+cloudflare registrar get <domain>                      # registered domain: expiry, auto-renew, lock
+cloudflare registrar list --all                        # all registered domains
 cloudflare upgrade                                     # self-update: binary→GitHub Releases, npm/bun/pnpm→package manager
 ```
 
@@ -140,6 +146,13 @@ Each rule pairs a Cloudflare rules-language expression with an action
 ## Destructive commands
 
 `cache purge everything`, `prefixes`, and `hosts` take a `--yes` flag to skip the confirmation prompt. So do `log-explorer datasets delete`, `custom-hostnames delete`, `waf rules delete`, and `redirects delete`. Don't pass `--yes` reflexively. If the user's scope is ambiguous ("purge the cache" — which zone? everything or specific URLs?), confirm before running. An accidental `purge everything` on a production zone is painful to recover from.
+
+`registrar register` spends the user's money and is non-refundable. Never run it
+without the user explicitly approving the exact domain and the price shown by
+`registrar check`, and pass that price as `--maxPrice` so a price change aborts
+the purchase. Use `--sandbox` to try the flow without a charge. If a registration
+reports `pending`/`in_progress`, follow it with `registrar status <domain> --wait`;
+never re-run `register` for the same domain.
 
 ## Log Explorer notes
 

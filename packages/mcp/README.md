@@ -58,6 +58,36 @@ Requires Node 20+. Installs a `cloudflare-mcp` binary.
 | `delete_log_explorer_dataset` | Delete a dataset and stop its log ingest |
 | `list_tunnels` | List Cloudflare Tunnels (cloudflared) in an account with their health status |
 | `get_tunnel` | Get one tunnel plus its running connectors, their versions, colos, and origin IPs |
+| `search_domains` | Suggest available domain names for a keyword, with indicative pricing |
+| `check_domains` | Check live availability and price for up to 20 domains |
+| `register_domain` | **Billable.** Register a domain; re-checks availability and refuses if the live price exceeds the caller's `maxRegistrationCost` |
+| `get_domain_registration_status` | Get the state of an API-started registration workflow |
+| `get_domain_registration` | Get a registered domain's status, expiry, auto-renew, and privacy settings |
+| `list_domain_registrations` | List the account's registered domains (cursor-paginated) |
+
+All Registrar tools accept `sandbox: true` to use Cloudflare's non-billing
+Registrar sandbox. `register_domain` is annotated `destructiveHint: true`; it
+requires the price and currency the user approved from `check_domains`, and it
+refuses premium, unavailable, or more expensive domains instead of buying them.
+
+### Read and write permissions
+
+Every tool declares MCP annotations. Read tools set `readOnlyHint: true`;
+tools that create, change, delete, purge, or buy set `readOnlyHint: false`, and
+the ones that change or remove existing state (including `register_domain`)
+also set `destructiveHint: true`. Clients use these hints to group tools. In
+Claude's connector settings, for example, read tools and write/delete tools
+are listed separately, and an administrator can set each tool to Always allow,
+Ask, or Block. To require approval for every domain purchase, set
+`register_domain` to Ask; to forbid purchases, set it to Block.
+
+### Errors
+
+Failed tool calls return an explanation rather than a bare message: the
+Cloudflare error code, the request method and path, the permission to add
+when known, what the HTTP status means (for example, which account a 403
+token must include), known fixes such as where to set a default registrant
+contact, and a docs link.
 
 ## Setup with Claude Desktop
 

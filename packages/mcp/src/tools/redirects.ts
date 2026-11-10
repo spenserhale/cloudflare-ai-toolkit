@@ -1,6 +1,7 @@
 import type { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { CloudflareClient, resolveConfig } from "@cloudflare-ai-toolkit/sdk";
+import { ADDITIVE_WRITE, DESTRUCTIVE_WRITE, READ_ONLY } from "./annotations.js";
 
 function getClient(): CloudflareClient {
   const config = resolveConfig();
@@ -34,6 +35,7 @@ const redirectActionFields = {
 export function registerRedirectTools(server: FastMCP) {
   server.addTool({
     name: "list_redirect_rules",
+    annotations: READ_ONLY,
     description:
       "List redirect rules in a zone. Rules run in order — the first match wins.",
     parameters: z.object({
@@ -48,6 +50,7 @@ export function registerRedirectTools(server: FastMCP) {
 
   server.addTool({
     name: "get_redirect_rule",
+    annotations: READ_ONLY,
     description: "Get one redirect rule by ID: expression, target, status code, state.",
     parameters: z.object({
       ruleId: z.string().min(1).describe("Redirect rule ID"),
@@ -62,6 +65,7 @@ export function registerRedirectTools(server: FastMCP) {
 
   server.addTool({
     name: "create_redirect_rule",
+    annotations: ADDITIVE_WRITE,
     description:
       "Create a redirect rule from a rules-language expression. Pass targetUrl (fixed destination) or targetExpression (dynamic). Supports dryRun to validate without persisting.",
     parameters: z.object({
@@ -96,6 +100,7 @@ export function registerRedirectTools(server: FastMCP) {
 
   server.addTool({
     name: "update_redirect_rule",
+    annotations: DESTRUCTIVE_WRITE,
     description:
       "Partially update a redirect rule. Unspecified fields keep their values; changing any target/status field merges with the current redirect settings.",
     parameters: z.object({
@@ -127,6 +132,7 @@ export function registerRedirectTools(server: FastMCP) {
 
   server.addTool({
     name: "delete_redirect_rule",
+    annotations: DESTRUCTIVE_WRITE,
     description: "Delete a redirect rule. Destructive: matched URLs stop redirecting.",
     parameters: z.object({
       ruleId: z.string().min(1).describe("Redirect rule ID"),

@@ -166,6 +166,48 @@ Other facts from probing it:
   windows is several times faster (see `resolveWindowMs` in
   `packages/cli/src/commands/audit-search.ts` for measurements).
 
+## Registrar API: test purchases in the sandbox, and expect doc drift
+
+`POST /accounts/{id}/registrar/registrations` **charges real money and is
+non-refundable**. Never call it (or `cloudflare registrar register` without
+`--sandbox`, or the MCP `register_domain` tool without `sandbox: true`) to
+"just test something". `/accounts/{id}/registrar-sandbox/...` is a full,
+non-billing mirror of the same endpoints (it's in the OpenAPI schema, not the
+guide). Every SDK/CLI/MCP registrar call takes `sandbox`.
+
+Live responses differ from the documented examples:
+
+- The workflow status has no top-level `domain_name`; it is in
+  `context.domain_name`. `context.registration` is never present, so call
+  `GET /registrations/{domain}` for expiry and other details.
+- `registration-status` only knows API-started workflows. A domain bought in
+  the dashboard answers `No workflow found` (code 10000).
+- An account without a default address-book contact fails registration with
+  `No registrant contact provided and no default address book entry found`.
+  Pass `contacts` inline (the CLI's `--contact file.json`). The address book
+  has **no API**: the default contact can only be set in the dashboard at
+  `https://dash.cloudflare.com/{account_id}/domains/registrations`. The
+  sandbox has its own (empty) address book, so a sandbox "no default contact"
+  error says nothing about production.
+- The sandbox supports fewer extensions than production (`.dev` is
+  `extension_not_supported_via_api` there). Use `.com` for sandbox tests.
+- The spec doesn't name the token permission group for these endpoints, so
+  there are no `ROUTE_PERMISSION_HINTS` for them. Don't guess one.
+
+## MCP tools must declare annotations, and errors go through `describeError`
+
+Claude's connector settings (and other MCP clients) sort tools into read and
+write/delete groups by `readOnlyHint`, and admins set Allow/Ask/Block per tool.
+Give every new tool one of `READ_ONLY`, `ADDITIVE_WRITE`, or
+`DESTRUCTIVE_WRITE` from `packages/mcp/src/tools/annotations.ts`;
+`register.test.ts` fails if a tool omits `readOnlyHint` or a
+`update_/delete_/purge_/set_/clear_/register_` tool isn't destructive.
+
+Errors should explain themselves by default. MCP wraps every tool with
+`withExplanatoryErrors` (index.ts), and CLI commands format failures with the
+SDK's `describeError`. Put new error advice there (status explanations or
+`KNOWN_ERROR_HINTS`), not in individual commands.
+
 ## Looking up Cloudflare API facts
 
 Never guess an endpoint path, field name, or response shape. Two sources, in
@@ -177,6 +219,8 @@ order:
    plan gating, and worked examples. It is semantic search over
    developers.cloudflare.com, so it is good at "how does purge-by-tag work"
    and weaker at "what is the exact request body for this one endpoint."
+   Some agent sessions do not expose the configured MCP tools; use the public
+   documentation and API reference directly when they are unavailable.
 2. **The REST API reference at <https://developers.cloudflare.com/api/>** —
    the canonical source for endpoint paths, HTTP methods, parameter names and
    types, and the `{ success, errors, messages, result }` envelope. Go here
@@ -185,6 +229,14 @@ order:
    `https://developers.cloudflare.com/api/resources/<resource>/methods/<method>/`
    (e.g. `.../resources/cache/methods/purge/`); fetch it directly rather than
    searching again.
+
+The official [Cloudflare API schemas](https://github.com/cloudflare/api-schemas)
+repository also publishes the full OpenAPI specification as `openapi.json` and
+`openapi.yaml`. Use it to search endpoint paths and inspect schemas when the
+reference is hard to navigate; check the current API reference for the specific
+operation as well. Cloudflare's [agent skills](https://github.com/cloudflare/skills)
+provide product-specific guidance when installed; they do not replace checking
+current API documentation.
 
 Because we wrap this API, (2) wins any disagreement with (1) for
 request/response shapes — the docs prose lags the reference. If neither has

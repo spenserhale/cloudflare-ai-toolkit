@@ -47,6 +47,14 @@ import {
   tokenPermissionsCommand,
   verifyTokenCommand,
 } from "./commands/tokens.js";
+import {
+  registrarCheckCommand,
+  registrarGetCommand,
+  registrarListCommand,
+  registrarRegisterCommand,
+  registrarSearchCommand,
+  registrarStatusCommand,
+} from "./commands/registrar.js";
 import { listTunnelsCommand, tunnelInfoCommand } from "./commands/tunnels.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
@@ -255,6 +263,20 @@ const tunnelRoutes = buildRouteMap({
   },
 });
 
+const registrarRoutes = buildRouteMap({
+  routes: {
+    search: registrarSearchCommand,
+    check: registrarCheckCommand,
+    register: registrarRegisterCommand,
+    status: registrarStatusCommand,
+    get: registrarGetCommand,
+    list: registrarListCommand,
+  },
+  docs: {
+    brief: "Search, check, and register domains with Cloudflare Registrar",
+  },
+});
+
 const routes = buildRouteMap({
   routes: {
     resources: resourceRoutes,
@@ -268,6 +290,7 @@ const routes = buildRouteMap({
     "log-explorer": logExplorerRoutes,
     tokens: tokenRoutes,
     tunnels: tunnelRoutes,
+    registrar: registrarRoutes,
     upgrade: upgradeCommand,
   },
   docs: {

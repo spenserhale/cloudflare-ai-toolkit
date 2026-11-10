@@ -1336,3 +1336,227 @@ export const TunnelInfoSchema = z.object({
 });
 
 export type TunnelInfo = z.infer<typeof TunnelInfoSchema>;
+
+// ---------------------------------------------------------------------------
+// Registrar (domain search, availability, and registration)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared by every Registrar call. `sandbox` routes the request to
+ * `/registrar-sandbox/...`, Cloudflare's non-billing mirror of the Registrar
+ * API, so a registration can be exercised end to end without a charge.
+ */
+export const RegistrarTargetSchema = z.object({
+  accountId: z.string().optional(),
+  sandbox: z.boolean().optional(),
+});
+
+export type RegistrarTarget = z.infer<typeof RegistrarTargetSchema>;
+
+export const DomainTierSchema = z.enum(["standard", "premium"]);
+
+export type DomainTier = z.infer<typeof DomainTierSchema>;
+
+/**
+ * Prices are decimal strings in `currency` (e.g. `"8.50"`). A first-year promo
+ * shows up as a `registration_cost` below `renewal_cost`.
+ */
+export const DomainPricingSchema = z
+  .object({
+    currency: z.string(),
+    registration_cost: z.string(),
+    renewal_cost: z.string(),
+  })
+  .passthrough();
+
+export type DomainPricing = z.infer<typeof DomainPricingSchema>;
+
+/**
+ * Why a domain cannot be registered through the API. Kept open-ended because
+ * Cloudflare adds reasons over time; the known values are listed in
+ * `DOMAIN_UNREGISTRABLE_REASONS`.
+ */
+export const DOMAIN_UNREGISTRABLE_REASONS = [
+  "domain_unavailable",
+  "domain_premium",
+  "extension_not_supported_via_api",
+  "extension_not_supported",
+  "extension_disallows_registration",
+] as const;
+
+export const DomainAvailabilitySchema = z
+  .object({
+    name: z.string(),
+    registrable: z.boolean(),
+    tier: z.string().optional(),
+    pricing: DomainPricingSchema.optional(),
+    reason: z.string().optional(),
+  })
+  .passthrough();
+
+export type DomainAvailability = z.infer<typeof DomainAvailabilitySchema>;
+
+export const DomainAvailabilityResultSchema = z.object({
+  domains: z.array(DomainAvailabilitySchema),
+});
+
+export type DomainAvailabilityResult = z.infer<typeof DomainAvailabilityResultSchema>;
+
+export const SearchDomainsParamsSchema = RegistrarTargetSchema.extend({
+  /** Keyword, phrase, or partial domain name to generate suggestions from. */
+  query: z.string().min(1),
+  /** Restrict suggestions to these extensions (without the dot), max 20. */
+  extensions: z.array(z.string().min(1)).max(20).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+export type SearchDomainsParams = z.infer<typeof SearchDomainsParamsSchema>;
+
+/** The check endpoint accepts at most 20 domains per request. */
+export const CheckDomainsParamsSchema = RegistrarTargetSchema.extend({
+  domains: z.array(z.string().min(1)).min(1).max(20),
+});
+
+export type CheckDomainsParams = z.infer<typeof CheckDomainsParamsSchema>;
+
+export const RegistrationContactSchema = z.object({
+  email: z.string().email(),
+  /** E.164-style with a dot after the country code, e.g. `+1.5555555555`. */
+  phone: z.string().min(1),
+  fax: z.string().optional(),
+  postal_info: z.object({
+    name: z.string().min(1),
+    organization: z.string().optional(),
+    address: z.object({
+      street: z.string().min(1),
+      city: z.string().min(1),
+      state: z.string().min(1),
+      postal_code: z.string().min(1),
+      country_code: z.string().min(2),
+    }),
+  }),
+});
+
+export type RegistrationContact = z.infer<typeof RegistrationContactSchema>;
+
+export const RegistrationContactsSchema = z.object({
+  registrant: RegistrationContactSchema.optional(),
+  administrator: RegistrationContactSchema.optional(),
+  technical: RegistrationContactSchema.optional(),
+  billing: RegistrationContactSchema.optional(),
+});
+
+export type RegistrationContacts = z.infer<typeof RegistrationContactsSchema>;
+
+export const PrivacyModeSchema = z.enum(["off", "redaction"]);
+
+export type PrivacyMode = z.infer<typeof PrivacyModeSchema>;
+
+export const RegisterDomainParamsSchema = RegistrarTargetSchema.extend({
+  domainName: z.string().min(1),
+  /** Defaults server-side to the extension's minimum term (2 years for `.ai`). */
+  years: z.number().int().min(1).max(10).optional(),
+  /** Defaults server-side to `false`. `true` authorizes renewal charges. */
+  autoRenew: z.boolean().optional(),
+  /** Defaults server-side to `redaction`. */
+  privacyMode: PrivacyModeSchema.optional(),
+  /** Omit to use the account's default registrant contact. */
+  contacts: RegistrationContactsSchema.optional(),
+  /** Registry-specific registrant fields (`.us` nexus, `.ca` legal type, ...). */
+  contactExtensions: z.record(z.unknown()).optional(),
+  /** Extension- or premium-specific acknowledgements, e.g. `{ fees: {...} }`. */
+  acknowledgements: z.record(z.unknown()).optional(),
+  /** Send `Prefer: respond-async` to get an immediate `202` instead of waiting. */
+  respondAsync: z.boolean().optional(),
+});
+
+export type RegisterDomainParams = z.infer<typeof RegisterDomainParamsSchema>;
+
+export const RegistrationWorkflowStateSchema = z.enum([
+  "pending",
+  "in_progress",
+  "action_required",
+  "blocked",
+  "succeeded",
+  "failed",
+]);
+
+export type RegistrationWorkflowState = z.infer<typeof RegistrationWorkflowStateSchema>;
+
+/** States after which polling can stop. */
+export const TERMINAL_REGISTRATION_STATES: readonly RegistrationWorkflowState[] = [
+  "succeeded",
+  "failed",
+  "action_required",
+  "blocked",
+];
+
+export const DomainRegistrationSchema = z
+  .object({
+    domain_name: z.string(),
+    status: z.string(),
+    created_at: z.string().optional(),
+    expires_at: z.string().optional(),
+    auto_renew: z.boolean().optional(),
+    privacy_mode: z.string().optional(),
+    locked: z.boolean().optional(),
+  })
+  .passthrough();
+
+export type DomainRegistration = z.infer<typeof DomainRegistrationSchema>;
+
+export const RegistrationWorkflowStatusSchema = z
+  .object({
+    /**
+     * Not in the API response (the live API puts it in `context.domain_name`);
+     * the client lifts it to the top level for convenience.
+     */
+    domain_name: z.string().optional(),
+    state: z.string(),
+    completed: z.boolean(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+    context: z
+      .object({
+        domain_name: z.string().optional(),
+        /** Present in the documented examples; the live API omits it, so call `getRegistration`. */
+        registration: DomainRegistrationSchema.optional(),
+      })
+      .passthrough()
+      .optional(),
+    error: z.object({ code: z.string(), message: z.string() }).passthrough().nullish(),
+    links: z
+      .object({ self: z.string(), resource: z.string().optional() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+export type RegistrationWorkflowStatus = z.infer<typeof RegistrationWorkflowStatusSchema>;
+
+export const ListDomainRegistrationsParamsSchema = RegistrarTargetSchema.extend({
+  cursor: z.string().optional(),
+  perPage: z.number().int().min(1).max(50).optional(),
+  direction: z.enum(["asc", "desc"]).optional(),
+  sortBy: z.enum(["registry_created_at", "registry_expires_at", "name"]).optional(),
+});
+
+export type ListDomainRegistrationsParams = z.infer<typeof ListDomainRegistrationsParamsSchema>;
+
+export const CursorResultInfoSchema = z
+  .object({
+    cursor: z.string().optional(),
+    per_page: z.number().optional(),
+    count: z.number().optional(),
+  })
+  .passthrough();
+
+export type CursorResultInfo = z.infer<typeof CursorResultInfoSchema>;
+
+export const ListDomainRegistrationsResultSchema = z.object({
+  registrations: z.array(DomainRegistrationSchema),
+  /** Pass to the next call; empty when this is the last page. */
+  nextCursor: z.string().optional(),
+});
+
+export type ListDomainRegistrationsResult = z.infer<typeof ListDomainRegistrationsResultSchema>;

@@ -13,7 +13,7 @@
     },
     "packages/cli": {
       "name": "@cloudflare-ai-toolkit/cli",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "bin": {
         "cloudflare": "./dist/bin.js",
       },
@@ -31,7 +31,7 @@
     },
     "packages/mcp": {
       "name": "@cloudflare-ai-toolkit/mcp",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "bin": {
         "cloudflare-mcp": "./dist/index.js",
       },
@@ -48,7 +48,7 @@
     },
     "packages/sdk": {
       "name": "@cloudflare-ai-toolkit/sdk",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
         "zod": "^3.24.0",
       },

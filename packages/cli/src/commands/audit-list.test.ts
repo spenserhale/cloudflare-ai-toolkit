@@ -271,7 +271,7 @@ describe("runAuditLogsList", () => {
       )
     );
     expect(deps.error).toHaveBeenCalledWith(
-      expect.stringContaining("Required permission for this endpoint: 'Account Settings Read'")
+      expect.stringContaining("Required permission: 'Account Settings Read'")
     );
   });
 

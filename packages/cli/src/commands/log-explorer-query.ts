@@ -2,12 +2,11 @@ import { readFileSync } from "node:fs";
 import { buildCommand } from "@stricli/core";
 import { encode } from "@toon-format/toon";
 import {
-  CloudflareAuthError,
   CloudflareClient,
-  CloudflareError,
   resolveConfig,
   type LogExplorerScope,
   type QueryLogExplorerResult,
+  describeError,
 } from "@cloudflare-ai-toolkit/sdk";
 
 export interface LogExplorerQueryFlags {
@@ -97,16 +96,6 @@ function isZodError(err: unknown): err is { name: "ZodError"; issues?: readonly 
   );
 }
 
-function formatPermissionHint(err: unknown): string | undefined {
-  if (!(err instanceof CloudflareError)) return undefined;
-  if (!err.requiredPermissions || err.requiredPermissions.length === 0) return undefined;
-  const clause =
-    err.requiredPermissions.length === 1
-      ? `'${err.requiredPermissions[0]}'`
-      : err.requiredPermissions.map((p) => `'${p}'`).join(" or ");
-  const docs = err.docsUrl ? ` Docs: ${err.docsUrl}` : "";
-  return `Required permission for this endpoint: ${clause}.${docs}`;
-}
 
 function formatError(err: unknown): string {
   if (isZodError(err)) {
@@ -125,14 +114,7 @@ function formatError(err: unknown): string {
     return `Unexpected Cloudflare API response shape (${path}): ${first?.message ?? "validation failed"}`;
   }
 
-  const base =
-    err instanceof CloudflareAuthError
-      ? `Authentication failed: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-  const hint = formatPermissionHint(err);
-  return hint ? `${base}\n${hint}` : base;
+  return describeError(err);
 }
 
 async function resolveSql(

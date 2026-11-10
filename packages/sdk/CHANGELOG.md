@@ -1,5 +1,17 @@
 # @cloudflare-ai-toolkit/sdk
 
+## 0.10.0
+
+### Minor Changes
+
+- Add domain search, availability checks, and registration through the Cloudflare Registrar API (beta).
+
+  - **SDK:** `searchDomains`, `checkDomains`, `registerDomain`, `getRegistrationStatus`, `getRegistration`, and `listRegistrations` on `CloudflareClient`. Each accepts `sandbox: true` to target Cloudflare's non-billing `/registrar-sandbox` mirror. New helpers: `prepareDomainRegistration`/`assessRegistration`, which gate a purchase on a fresh registry check and an optional price ceiling, and `waitForRegistration`, which polls a workflow to a terminal state without re-submitting it.
+  - **CLI:** `cloudflare registrar search|check|register|status|get|list`. `register` re-checks availability, refuses premium or unavailable domains and prices above `--maxPrice`, shows the price, and requires typing `yes` (or `--yes`). It waits for in-progress registrations and accepts `--contact <file.json>` for accounts without a default registrant contact.
+  - **MCP:** `search_domains`, `check_domains`, `register_domain`, `get_domain_registration_status`, `get_domain_registration`, and `list_domain_registrations`. `register_domain` is annotated destructive and requires the user-approved `maxRegistrationCost` and `currency`; it refuses instead of buying when the live price is higher.
+  - **Permissions:** every MCP tool now declares `readOnlyHint` (and `destructiveHint` for tools that change or remove state), so clients such as Claude's connector settings list read and write tools separately and let administrators set Always allow, Ask, or Block per tool.
+  - **Errors:** new SDK `describeError` explains failures by default with the Cloudflare code, request, required permission, what the HTTP status means, known fixes, and a docs link. Every MCP tool and CLI command uses it.
+
 ## 0.9.0
 
 ### Minor Changes
