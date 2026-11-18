@@ -33,7 +33,7 @@ remain legacy and are clearly labeled unsupported on zones where that API retire
 migrating writes is outside this read-only task.
 
 Rulesets list exposes cursor pagination and an explicit `--all` option. Detail
-reads return every ordered rule. Only a phase-entrypoint 404 is represented as
+reads return every ordered rule. Only a structured phase-entrypoint not-found 404 is represented as
 `status: absent`, according to the documented endpoint contract; a ruleset-ID 404
 remains an error because it can also mean missing managed-ruleset entitlement.
 Preserve upstream codes, request paths, and failures. Redact credential-bearing

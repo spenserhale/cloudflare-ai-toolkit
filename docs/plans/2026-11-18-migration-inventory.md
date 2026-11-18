@@ -113,11 +113,22 @@ commit carries its documentation; the final guide adds verified evidence.
   configuration while redacting sensitive values — inventory must remain useful
   for configuration comparisons — cost if wrong: medium; regression tests cover
   normal and credential-bearing shapes.
+- [verification] Root build/lint pass; tests pass SDK 272, MCP 12, CLI 315.
+  Original WAF command regression fails on the old built SDK and passes on the
+  replacement. Node JS help passes six checks. Guide scripts pass syntax and
+  isolated mocked execution — cost if wrong: low; no live configuration evidence.
+- [live evidence] Existing credential mechanism reports all three credentials
+  missing in both worktree and original checkout. Thirty-two built-CLI attempts
+  across the three zones/account exit 1 with zero stdout and the exact missing
+  credential explanation — cost if wrong: low; no empty inventories inferred.
 
 ## Deferred
 
 WAF mutations and migration execution are outside scope. Live credentials or
-permissions unavailable on this machine will be recorded exactly, not inferred.
+permissions unavailable on this machine are recorded exactly, not inferred.
+Live PBHS data/permission/entitlement checks require credentials; they remain
+unverified. Bulk Redirect/IP-list contents and Worker code/bindings are outside
+the new configuration readers and must be inventoried separately if referenced.
 
 ## Tasks
 

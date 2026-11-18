@@ -36,8 +36,8 @@ unavailable (for example, running under Node instead of Bun).
 
 Optional defaults so you don't have to pass IDs each time:
 
-- `CLOUDFLARE_ACCOUNT_ID` — default for `audit` commands
-- `CLOUDFLARE_ZONE_ID` — default for `cache`, `custom-hostnames`, `zones get`, `zones vanity-ns`, and `log-explorer` commands
+- `CLOUDFLARE_ACCOUNT_ID` — default for `audit`, account Rulesets, and Worker domains
+- `CLOUDFLARE_ZONE_ID` — default for `cache`, `custom-hostnames`, `zones get`, `zones vanity-ns`, `log-explorer`, WAF, zone inventory and Worker routes; never an implicit filter for Worker domains
 
 If no credential is set, stop and ask the user which they want to configure — don't guess at one.
 
@@ -171,14 +171,14 @@ ordered rules, execute targets, overrides, origin Host/SNI/DNS parameters,
 rate limits, redirects, cache and transforms. Read managed definitions at account
 scope, using the execute reference's version or `--version latest`.
 
-Only phase-entrypoint 404 is `status: absent`; generic Ruleset 404 can also mean
+Only a structured phase-entrypoint not-found 404 is `status: absent`; generic Ruleset 404 can also mean
 missing managed entitlement and remains a failure. Permission, entitlement,
 malformed-response and upstream failures must never be recorded as empty
 inventory. New readers redact credential-bearing fields. Worker routes and
 domains describe assignments, not Worker source or bindings. Zone settings
 accept individual IDs, for example `ssl` and `security_level`.
 
-The [inventory guide](../../docs/guides/migration-inventory.md) gives the phase
+The [inventory guide](../docs/guides/migration-inventory.md) gives the phase
 map, exact commands, permission alternatives, and local-install verification.
 
 ## Redirect rules

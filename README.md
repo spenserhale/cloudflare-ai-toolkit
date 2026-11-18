@@ -133,10 +133,10 @@ project `.env` files keep working and win. See the
 CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
 CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
-CLOUDFLARE_ACCOUNT_ID    default for audit-log commands/tools
+CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, and Worker domains
 CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
                          custom hostnames, `zones get`, `zones vanity-ns`,
-                         log-explorer)
+                         log-explorer, WAF, zone inventory, and Worker routes)
 CLOUDFLARE_BASE_URL      override (default https://api.cloudflare.com)
 CLOUDFLARE_KEYCHAIN      0/false/no/off skips the OS keychain lookup
 ```

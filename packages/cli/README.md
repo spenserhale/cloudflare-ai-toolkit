@@ -57,7 +57,7 @@ export CLOUDFLARE_API_TOKEN=...       # preferred
 # or legacy Global API Key auth:
 # export CLOUDFLARE_API_KEY=...
 # export CLOUDFLARE_EMAIL=...
-export CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit commands
+export CLOUDFLARE_ACCOUNT_ID=...      # optional default for audit/account inventory
 export CLOUDFLARE_ZONE_ID=...         # optional default for zone-scoped commands
 ```
 
