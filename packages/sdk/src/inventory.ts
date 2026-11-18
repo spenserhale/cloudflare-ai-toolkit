@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CloudflareAuthError, CloudflareError } from "./errors.js";
+import { WorkerInventoryReader, type InventoryResponseGet } from "./worker-inventory.js";
 import {
   InventoryBotManagementSchema,
   InventoryCursorResultInfoSchema,
@@ -97,12 +98,13 @@ function redactUrls(value: string): string {
 }
 
 /** Reads native migration configuration while preserving fields added by Cloudflare. */
-export class InventoryReader {
+export class InventoryReader extends WorkerInventoryReader {
   constructor(
     private readonly get: InventoryGet,
     private readonly defaults: { zoneId?: string; accountId?: string } = {},
-    private readonly credentialValues: readonly string[] = []
-  ) {}
+    private readonly credentialValues: readonly string[] = [],
+    responseGet?: InventoryResponseGet,
+  ) { super(get, defaults, credentialValues, responseGet); }
 
   private text(value: string): string {
     // Conservatively hide the whole expression; rewriting a rules-language

@@ -1,6 +1,14 @@
 export { CloudflareClient } from "./client.js";
 export { InventoryReader } from "./inventory.js";
 export type { InventoryGet } from "./inventory.js";
+export { WorkerInventoryReader } from "./worker-inventory.js";
+export type {
+  InventoryResponseGet, InventoryWorkerTarget, InventoryWorkerScope, WorkerPageOptions,
+  WorkerExportOptions, InventoryWorkerBinding, InventoryWorkerDeployment,
+  InventoryWorkerVersionSummary, GetInventoryWorkerSettingsResult, GetInventoryWorkerSourceResult,
+  ListInventoryWorkerDeploymentsResult, ListInventoryWorkerVersionsResult, GetInventoryWorkerVersionResult,
+} from "./worker-inventory.js";
+export type { WorkerSourceInspection, WorkerSourceOptions } from "./worker-source.js";
 export type {
   InventoryTarget, InventoryScope, InventoryRule, InventoryRulesetMetadata,
   InventoryRuleset, InventoryCursorResultInfo, InventoryAbsentDiagnostic,

@@ -175,11 +175,40 @@ Only a structured phase-entrypoint not-found 404 is `status: absent`; generic Ru
 missing managed entitlement and remains a failure. Permission, entitlement,
 malformed-response and upstream failures must never be recorded as empty
 inventory. New readers redact credential-bearing fields. Worker routes and
-domains describe assignments, not Worker source or bindings. Zone settings
+domains describe assignments; resolve them with the Worker readers below. Zone settings
 accept individual IDs, for example `ssl` and `security_level`.
 
 The [inventory guide](../docs/guides/migration-inventory.md) gives the phase
 map, exact commands, permission alternatives, and local-install verification.
+
+### Worker implementation inspection
+
+```bash
+cloudflare workers settings get <assigned-worker> --account-id <id> --json
+cloudflare workers source get <assigned-worker> --account-id <id> --json
+cloudflare workers deployments list <assigned-worker> --account-id <id> --page 1 --per-page 20 --json
+cloudflare workers versions list <assigned-worker> --account-id <id> --page 1 --per-page 20 --json
+cloudflare workers versions get <assigned-worker> <version-id> --account-id <id> --json
+```
+
+Use route `script` literally. For custom domains use `service` literally with
+`--environment production`; nonproduction legacy service environments fail
+explicitly. Never infer a suffixed Worker name. Preserve the assignment snapshots
+and their service/environment fields. A route without script is an exclusion.
+
+Settings/version reads preserve binding names/types/resource IDs but hide all
+plain-text, JSON, secret and key values. Missing bindings/modules are unavailable,
+not empty. List output has `nextPage`/`truncated`; follow every page. Deployment
+page 1 identifies actively serving version IDs and percentages; the newest
+uploaded version need not serve traffic. Read each active ID with `versions get`.
+Pinned source uses the documented Beta version API; failures remain failures.
+
+Source stdout contains only metadata/hashes. Optional `--out-dir <new-directory>`
+on `source get` or `versions get` writes sensitive original bytes privately
+(0700/0600). Do not print, upload, commit, or attach these files. Do not `cat`
+live source into agent context. Unpinned source/settings and deployment reads
+are separate observations, not an atomic deployment snapshot. The guide contains
+the complete safe local collection workflow and unsupported cases.
 
 ## Redirect rules
 
@@ -210,8 +239,8 @@ never re-run `register` for the same domain.
 
 ## When something isn't covered
 
-The CLI includes configuration inventory and Worker route/custom-domain assignments,
-but not Worker code/bindings or all product APIs. For R2, Pages, Access, or anything
+The CLI includes configuration inventory, Worker assignments and private
+implementation inspection, but not resource contents or all product APIs. For R2, Pages, Access, or anything
 else not listed, use the appropriate product tooling; do not bend these commands
 into doing something they do not support.
 
