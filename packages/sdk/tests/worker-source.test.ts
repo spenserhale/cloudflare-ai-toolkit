@@ -104,6 +104,8 @@ describe("private Worker source inspection", () => {
     "https://example.test/module.js?password=synthetic-inline-credential",
     "https://example.test/module.js#synthetic-inline-credential",
     "postgres://user:synthetic-inline-credential@example.test/module.js",
+    "//user:synthetic-inline-credential@example.test/module.js",
+    "//example.test/module.js?session=synthetic-inline-credential",
   ])("redacts URL credentials, queries and fragments in module names independently of the callback", async (name) => {
     const result = await inspectWorkerModules([{ ...modules()[0]!, name }], name, OPTIONS);
     expect(result.entrypoint).toBe("[REDACTED]");

@@ -50,6 +50,9 @@ may contain inline credentials, and must never be attached to PRs or printed by
 agents. Limits bound bytes, module count and JSON metadata; exceeding a limit is
 an error rather than a successful partial inventory.
 
+Protocol-relative credential-bearing URLs in module identities receive the same
+redaction as URLs with explicit schemes; filenames in artifacts remain generated.
+
 ## Consequences
 
 The SDK can write local inspection artifacts but never Cloudflare configuration.

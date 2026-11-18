@@ -70,9 +70,9 @@ function validateMediaType(value: unknown): asserts value is string {
 function safeLabel(value: string, options: WorkerSourceOptions): string {
   // Module identities can themselves be URLs. Hide the whole identity if it
   // contains userinfo, a query, or a fragment, including non-HTTP schemes.
-  for (const match of value.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/giu)) {
+  for (const match of value.matchAll(/(?:\b[a-z][a-z0-9+.-]*:)?\/\/[^\s"'<>]+/giu)) {
     try {
-      const url = new URL(match[0]);
+      const url = new URL(match[0], "https://module.invalid");
       if (url.username || url.password || url.search || url.hash) return "[REDACTED]";
     } catch { return "[REDACTED]"; }
   }
