@@ -3,6 +3,8 @@ export interface CloudflareErrorOptions {
   readonly docsUrl?: string;
   readonly requestMethod?: string;
   readonly requestPath?: string;
+  /** HTTP failure came from a structured Cloudflare API error envelope. */
+  readonly apiResponse?: boolean;
 }
 
 export class CloudflareError extends Error {
@@ -10,6 +12,7 @@ export class CloudflareError extends Error {
   public readonly docsUrl?: string;
   public readonly requestMethod?: string;
   public readonly requestPath?: string;
+  public readonly apiResponse?: boolean;
 
   constructor(
     message: string,
@@ -23,6 +26,7 @@ export class CloudflareError extends Error {
     this.docsUrl = options.docsUrl;
     this.requestMethod = options.requestMethod;
     this.requestPath = options.requestPath;
+    this.apiResponse = options.apiResponse;
   }
 }
 
@@ -118,11 +122,14 @@ function statusExplanation(err: CloudflareError): string | undefined {
         ? "the zone or account this request targets"
         : `account ${accountId}`;
     return err.requiredPermissions && err.requiredPermissions.length > 0
-      ? `The credentials are valid but not allowed to do this. Add the permission above to the token and make sure its resources include ${scope}.`
-      : `The credentials are valid but not allowed to do this. Check that the token has a permission for this product and that its resources include ${scope}.`;
+      ? `Cloudflare denied this request. Add the permission above if missing and make sure the token resources include ${scope}. A product entitlement or plan restriction can also cause HTTP 403; check the API message.`
+      : `Cloudflare denied this request. Check that the token has a permission for this product and its resources include ${scope}. A product entitlement or plan restriction can also cause HTTP 403; check the API message.`;
   }
   if (status === 404) {
-    return "Cloudflare could not find that resource. Check the ID or name, and that it belongs to the account or zone the request used.";
+    return "Cloudflare could not find that resource. Check the ID or name, account or zone, and product entitlement; some unavailable managed resources also return HTTP 404.";
+  }
+  if (status === 410) {
+    return "Cloudflare retired this API (HTTP 410). Use the supported replacement API; changing token permissions will not restore the retired endpoint.";
   }
   if (status === 429) {
     return "Cloudflare rate-limited the request. Wait a moment and retry.";
@@ -167,7 +174,7 @@ export function describeError(err: unknown): string {
     const status = err.statusCode === undefined ? "" : ` (HTTP ${err.statusCode})`;
     lines.push(`Request: ${err.requestMethod} ${err.requestPath}${status}`);
   }
-  if (err.requiredPermissions && err.requiredPermissions.length > 0) {
+  if (err.statusCode !== 410 && err.requiredPermissions && err.requiredPermissions.length > 0) {
     lines.push(`Required permission: ${err.requiredPermissions.map((p) => `'${p}'`).join(" or ")}`);
   }
   const explanation = statusExplanation(err);

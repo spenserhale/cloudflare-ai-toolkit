@@ -1,4 +1,24 @@
 export { CloudflareClient } from "./client.js";
+export { InventoryReader } from "./inventory.js";
+export type { InventoryGet } from "./inventory.js";
+export type {
+  InventoryTarget, InventoryScope, InventoryRule, InventoryRulesetMetadata,
+  InventoryRuleset, InventoryCursorResultInfo, InventoryAbsentDiagnostic,
+  ListInventoryRulesetsOptions, ListInventoryRulesetsResult, GetInventoryRulesetResult,
+  GetInventoryPhaseEntrypointResult, InventoryZoneSetting, GetInventoryZoneSettingResult,
+  InventoryBotManagement, GetInventoryBotManagementResult, InventoryWorkerRoute,
+  ListInventoryWorkerRoutesResult, InventoryWorkerDomain, ListInventoryWorkerDomainsOptions,
+  ListInventoryWorkerDomainsResult, InventoryPageRule, ListInventoryPageRulesResult,
+  InventoryManagedTransform, InventoryManagedTransforms, GetInventoryManagedTransformsResult,
+  InventoryUrlNormalization, GetInventoryUrlNormalizationResult,
+} from "./types.js";
+export {
+  InventoryTargetSchema, InventoryRuleSchema, InventoryRulesetMetadataSchema,
+  InventoryRulesetSchema, InventoryCursorResultInfoSchema, InventoryZoneSettingSchema,
+  InventoryBotManagementSchema, InventoryWorkerRouteSchema, InventoryWorkerDomainSchema,
+  InventoryPageRuleSchema, InventoryManagedTransformSchema, InventoryManagedTransformsSchema,
+  InventoryUrlNormalizationSchema,
+} from "./types.js";
 export { loadConfig, readDotEnv, resolveConfig } from "./config.js";
 export type { DotEnvFile, Env, LoadConfigOptions, ResolveConfigOptions, ResolvedConfig } from "./config.js";
 export {

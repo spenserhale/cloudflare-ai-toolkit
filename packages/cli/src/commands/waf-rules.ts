@@ -58,11 +58,19 @@ const ACTIONS = [
   "log",
   "bypass",
 ] as const;
+const LIST_ACTIONS = [...ACTIONS, "skip", "execute"] as const;
+type WafRuleListAction = typeof LIST_ACTIONS[number];
 
 function parseAction(value: string): FirewallRuleAction {
   const match = ACTIONS.find((a) => a === value);
   if (match) return match;
   throw new Error(`Action must be one of ${ACTIONS.join("|")}, got '${value}'`);
+}
+
+function parseListAction(value: string): WafRuleListAction {
+  const match = LIST_ACTIONS.find((action) => action === value);
+  if (match) return match;
+  throw new Error(`Action must be one of ${LIST_ACTIONS.join("|")}, got '${value}'`);
 }
 
 function parseBoolean(flagName: string): (value: string) => boolean {
@@ -74,8 +82,8 @@ function parseBoolean(flagName: string): (value: string) => boolean {
 }
 
 function parsePositiveInt(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  const parsed = Number(value);
+  if (!/^\d+$/u.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`Expected a positive integer, got '${value}'`);
   }
   return parsed;
@@ -85,7 +93,7 @@ function formatError(err: unknown): string {
   return describeError(err);
 }
 
-function orDash(value: string | number | boolean | undefined): string {
+function orDash(value: unknown): string {
   if (value === undefined) return "-";
   const text = String(value);
   return text.length > 0 ? text : "-";
@@ -96,6 +104,8 @@ function formatRuleLine(rule: FirewallRule): string {
     `action=${orDash(rule.action)}`,
     rule.paused ? "paused=true" : "",
     rule.priority !== undefined ? `priority=${rule.priority}` : "",
+    rule.order !== undefined ? `order=${rule.order}` : "",
+    typeof rule.enabled === "boolean" ? `enabled=${rule.enabled}` : "",
   ].filter((f) => f.length > 0);
   return `${rule.id ?? "-"}  ${fields.join(" ")}  ${orDash(rule.description)}`;
 }
@@ -106,8 +116,13 @@ function formatRuleDetails(rule: FirewallRule): string {
     `Action:      ${orDash(rule.action)}${rule.paused ? " (paused)" : ""}`,
     `Description: ${orDash(rule.description)}`,
     `Priority:    ${orDash(rule.priority)}`,
-    `Expression:  ${orDash(rule.filter?.expression)}`,
+    `Expression:  ${orDash(rule.expression ?? rule.filter?.expression)}`,
   ];
+  if (rule.scope !== undefined || rule.rulesetId !== undefined) {
+    lines.push(`Source:      ${orDash(rule.scope)} ${orDash(rule.zoneId)} phase=${orDash(rule.phase)} ruleset=${orDash(rule.rulesetId)}`);
+  }
+  if (rule.order !== undefined) lines.push(`Order:       ${orDash(rule.order)}`);
+  if (typeof rule.enabled === "boolean") lines.push(`Enabled:     ${rule.enabled}`);
   if (rule.filter?.id) {
     lines.push(`Filter ID:   ${rule.filter.id}`);
   }
@@ -117,6 +132,9 @@ function formatRuleDetails(rule: FirewallRule): string {
   if (rule.ref) {
     lines.push(`Ref:         ${rule.ref}`);
   }
+  if (rule.order !== undefined || rule.action_parameters !== undefined) {
+    lines.push(`Native rule:\n${JSON.stringify(rule, null, 2)}`);
+  }
   return lines.join("\n");
 }
 
@@ -125,7 +143,7 @@ function formatRuleDetails(rule: FirewallRule): string {
 // ---------------------------------------------------------------------------
 
 export interface WafRulesListFlags {
-  readonly action?: FirewallRuleAction;
+  readonly action?: WafRuleListAction;
   readonly description?: string;
   readonly paused?: boolean;
   readonly page?: number;
@@ -152,8 +170,22 @@ export async function runListFirewallRules(
       flags.zoneId
     );
 
+    if (result.truncated) {
+      const nextPage = (result.resultInfo?.page ?? flags.page ?? 1) + 1;
+      deps.error(`More WAF rules are available. Continue with --page ${nextPage}.`);
+    }
+
     if (flags.json) {
       deps.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    if (result.scope !== undefined || result.phase !== undefined) {
+      deps.log(`Source: ${result.scope ?? "zone"} ${result.zoneId ?? "-"} phase=${result.phase ?? "-"} ruleset=${result.rulesetId ?? "-"} status=${result.status ?? "present"}`);
+    }
+    if (result.status === "absent") {
+      deps.log(`WAF custom phase ${result.phase ?? "http_request_firewall_custom"} is absent; no entrypoint is configured.`);
+      if (result.diagnostic) deps.log(JSON.stringify(result.diagnostic, null, 2));
       return;
     }
 
@@ -176,6 +208,10 @@ export async function runListFirewallRules(
     }
     for (const rule of result.rules) {
       deps.log(formatRuleLine(rule));
+      if (rule.order !== undefined || rule.action_parameters !== undefined) {
+        deps.log(`Expression: ${orDash(rule.expression ?? rule.filter?.expression)}`);
+        deps.log(JSON.stringify(rule, null, 2));
+      }
     }
   } catch (err) {
     deps.error(`Error: ${formatError(err)}`);
@@ -185,15 +221,15 @@ export async function runListFirewallRules(
 
 export const listFirewallRulesCommand = buildCommand({
   docs: {
-    brief: "List firewall (WAF custom) rules in a zone",
+    brief: "List modern WAF custom rules from the zone Ruleset Engine phase",
   },
   parameters: {
     flags: {
       action: {
         kind: "parsed",
-        parse: parseAction,
+        parse: parseListAction,
         optional: true,
-        brief: `Filter by action (${ACTIONS.join("|")})`,
+        brief: `Filter by action (${LIST_ACTIONS.join("|")})`,
       },
       description: {
         kind: "parsed",
@@ -269,7 +305,7 @@ export async function runGetFirewallRule(
 
 export const getFirewallRuleCommand = buildCommand({
   docs: {
-    brief: "Show one firewall rule, including its filter expression",
+    brief: "Read one modern WAF custom rule with native Rulesets parameters",
   },
   parameters: {
     flags: {
@@ -352,7 +388,7 @@ export async function runCreateFirewallRule(
 
 export const createFirewallRuleCommand = buildCommand({
   docs: {
-    brief: "Create a firewall (WAF custom) rule from a filter expression",
+    brief: "Legacy write: create a firewall rule through the retired Firewall Rules API",
     customUsage: [
       "--action block --expression 'http.request.uri.path contains \"/wp-login.php\"'",
       "--action managed_challenge --expression 'ip.src.country eq \"CN\"' --description 'Challenge CN'",
@@ -462,7 +498,7 @@ export async function runUpdateFirewallRule(
 
 export const updateFirewallRuleCommand = buildCommand({
   docs: {
-    brief: "Replace a firewall rule's action, expression, description, or state (PUT; resend current values to keep them)",
+    brief: "Legacy write: replace a firewall rule through the retired Firewall Rules API (PUT)",
   },
   parameters: {
     flags: {
@@ -474,7 +510,7 @@ export const updateFirewallRuleCommand = buildCommand({
       expression: {
         kind: "parsed",
         parse: String,
-        brief: "New filter expression; required on every update (fetch the current one with `waf rules get`)",
+        brief: "Legacy filter expression; required on every update. Modern WAF read output is not a legacy write payload",
       },
       description: {
         kind: "parsed",
@@ -510,7 +546,7 @@ export const updateFirewallRuleCommand = buildCommand({
       kind: "tuple",
       parameters: [
         {
-          brief: "Firewall rule ID (find it with `waf rules list`)",
+          brief: "Legacy Firewall Rules API ID; modern WAF read IDs do not identify legacy write targets",
           parse: String,
           placeholder: "rule-id",
         },
@@ -576,7 +612,7 @@ export async function runDeleteFirewallRule(
 
 export const deleteFirewallRuleCommand = buildCommand({
   docs: {
-    brief: "Delete a firewall rule",
+    brief: "Legacy write: delete a firewall rule through the retired Firewall Rules API",
   },
   parameters: {
     flags: {
@@ -601,7 +637,7 @@ export const deleteFirewallRuleCommand = buildCommand({
       kind: "tuple",
       parameters: [
         {
-          brief: "Firewall rule ID (find it with `waf rules list`)",
+          brief: "Legacy Firewall Rules API ID; modern WAF read IDs do not identify legacy write targets",
           parse: String,
           placeholder: "rule-id",
         },
