@@ -162,8 +162,9 @@ order is retained without inventing evaluation priority. Default page size is 10
 API's IP-prefix, redirect/hostname-substring, and ASN-exact semantics; filtered
 and resumed results are subsets, even when `truncated` is false. A complete
 unfiltered collection cross-checks the metadata count and fails on inconsistency.
-Later-page failures never return partial success. These reads are not an atomic
-snapshot; retry if concurrent changes cause a mismatch.
+Any item page that advertises more data without a continuation cursor fails,
+including bounded reads. Later-page failures never return partial success. These
+reads are not an atomic snapshot; retry if concurrent changes cause a mismatch.
 
 Known empty lists return their metadata and `items: []`. Missing lists, permission
 or entitlement denials, HTTP 410, malformed responses and upstream errors throw

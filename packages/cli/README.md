@@ -189,8 +189,9 @@ numeric `resultInfo`, and `truncated`.
 `lists get` returns list identity and native metadata. `lists items list` first
 reads that identity, then returns `list`, `items`, `resultInfo.cursors`, and
 `truncated`. Items default to 100 per page (range 1–500); `--all` follows every
-remaining cursor and fails if any page fails. `--all --cursor <c>` collects a
-suffix, not items before that cursor. `--search` is an upstream filter: IP prefix,
+remaining cursor and fails if any page fails. Any item page advertising more data
+without a continuation cursor fails, including bounded reads. `--all --cursor <c>`
+collects a suffix, not items before that cursor. `--search` is an upstream filter: IP prefix,
 redirect/hostname substring, ASN exact match. Filtered/resumed results are subsets.
 Truncation diagnostics go to stderr; `--json` stdout contains only JSON.
 

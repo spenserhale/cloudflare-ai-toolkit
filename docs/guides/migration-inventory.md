@@ -176,6 +176,8 @@ Item reads first fetch metadata, so an empty result still identifies the list.
 Items default to 100 per page, maximum 500. `--cursor` passes an opaque API cursor;
 `--all` follows `resultInfo.cursors.after`, detects loops, and fails on any later
 page error. Starting `--all` with a cursor collects only the remaining suffix.
+If the API advertises more items but supplies no usable continuation cursor,
+the read fails even without `--all`; it cannot offer a continuation that works.
 `--search` is an IP prefix, redirect/hostname substring, or exact ASN match,
 according to the API. Filtered/resumed reads are subsets, not whole-list evidence.
 For an unfiltered terminal collection from the beginning, the item count must
@@ -190,7 +192,8 @@ retained. Redirects preserve `source_url`, `target_url`, `status_code`,
 Unknown fields survive validation; array order is retained without assigning
 rule priority to items. Source URLs can omit their scheme; see the
 [parameter reference](https://developers.cloudflare.com/rules/url-forwarding/bulk-redirects/reference/parameters/).
-URL credentials and sensitive query values are redacted even in those sources.
+URL credentials and sensitive query values are redacted even in those sources
+and in upstream diagnostics reflecting scheme-less URLs.
 Treat redacted URLs as inventory evidence, not reusable redirect definitions.
 
 A successful empty list has metadata and `items: []`. A missing list (404),
@@ -498,11 +501,13 @@ installation, its baseline build/lint and all 614 tests passed (SDK 283, MCP 12,
 CLI 319). PR #14 subsequently merged into `main` as `b90442b`; the extension PR
 targets `main` and leaves the parent changeset pending.
 
-Test-first implementation added 70 SDK HTTP cases, 39 CLI unit cases, and 66
+Initial test-first implementation added 70 SDK HTTP cases, 39 CLI unit cases, and 66
 isolated subprocess cases. The SDK cases failed on missing methods/exports and
 the CLI cases failed on the unregistered `lists` route before implementation.
-Targeted verification passes: SDK inventory and Lists 144 cases; CLI inventory
-units, Lists units and Lists subprocess tests 143 cases. SDK build and lint pass.
+Independent package review added nine SDK and two subprocess regressions, observed
+failing before fixing reflected scheme-less URL credentials and unusable bounded
+pagination. Targeted SDK inventory/Lists verification passes 153 cases; CLI
+inventory, WAF and Lists verification passes 205 cases. SDK build and SDK/CLI lint pass.
 The added tests cover multiple pages, exact filters/search, scope, redirect
 parameters, all documented kinds, empty versus missing, failed later pages,
 403/404/410/5xx, malformed successes, redaction and GET-only enforcement.

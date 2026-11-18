@@ -170,6 +170,10 @@ describe("typed Lists items and pagination", () => {
     await withRoutes([metadata(), items([ip], info)], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
   });
 
+  it.each([{ has_more: true }, { truncated: true }, { count: 2 }, { total_count: 3 }, { total_pages: 2 }, { cursors: { after: "" }, has_more: true }])("rejects unusable bounded continuation when more is advertised: %j", async (info) => {
+    await withRoutes([metadata(), items([ip], info)], async () => { await expect(client().inventory.listListItems("list-1", target)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
+  });
+
   it("never returns partial results after a later failed page", async () => {
     await withRoutes([metadata(), items([ip], { cursors: { after: "next" } }), { ...items(null), query: { per_page: "100", cursor: "next" }, status: 500, body: { success: false, errors: [{ code: 999, message: "Backend failure" }], result: null } }], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ statusCode: 500, code: "999" }); });
   });
@@ -235,6 +239,24 @@ describe("Lists failures and redaction", () => {
         const text = describeError(error);
         for (const secret of ["synthetic-list-token", "alice", "password", "error-secret"]) expect(text).not.toContain(secret);
         expect(text).toContain("Denied");
+      }
+    });
+  });
+
+  it.each([
+    "alice:password@old.example.com/path?token=error-secret&lang=en",
+    "//alice:password@old.example.com/path?token=error-secret&lang=en",
+    "old.example.com/path?access_token=error-secret&lang=en",
+  ])("redacts a scheme-less redirect URL reflected in diagnostics: %s", async (source) => {
+    const message = `Invalid source_url: ${source}. Keep list name office_networks, status 301 and safe.example.com/path?lang=en unchanged.`;
+    await withRoutes([{ path: root, status: 403, body: { success: false, result: null, errors: [{ code: 1234, message }] } }], async () => {
+      try { await client().inventory.listLists(target); throw new Error("expected error"); }
+      catch (error) {
+        const text = describeError(error);
+        for (const secret of ["alice", "password", "error-secret"]) expect(text).not.toContain(secret);
+        expect(text).toContain("old.example.com/path");
+        expect(text).toContain("lang=en");
+        expect(text).toContain("Keep list name office_networks, status 301 and safe.example.com/path?lang=en unchanged.");
       }
     });
   });

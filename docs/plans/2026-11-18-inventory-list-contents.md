@@ -52,7 +52,8 @@ locally by exact `name` and `kind`, then page locally (default 100, maximum 500,
 Reject advertised upstream incompleteness instead of guessing query parameters.
 Items accept `cursor`, `per_page` (1–500, default 100), and `search`; follow
 `result_info.cursors.after` with `all`, detect repeated cursors, and fail if later
-pages fail or more data is reported without a usable cursor. `all` with a cursor
+pages fail or more data is reported without a usable cursor (including bounded
+reads). `all` with a cursor
 collects the remaining suffix, not earlier pages.
 
 Read metadata before items so every result includes list identity and kind,
@@ -115,6 +116,13 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
 - [execution] Draft disjoint subprocess tests while SDK/CLI implementation runs;
   final green verification waits for their build — cost if wrong: low, tests
   already failed on the expected unregistered `lists` command.
+- [review] Reject item responses advertising more without a usable forward cursor,
+  even for bounded reads — otherwise CLI continuation advice cannot work — cost
+  if wrong: low, unsupported upstream pagination fails visibly.
+- [redaction] Apply credential-URL redaction to host-shaped scheme-less URLs in
+  reflected diagnostics as well as URL fields — upstream messages can echo a
+  source/search string — cost if wrong: medium, secret-bearing text may be masked;
+  ordinary URLs/prose have preservation regressions.
 
 ## Deferred
 

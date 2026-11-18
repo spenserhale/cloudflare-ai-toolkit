@@ -441,6 +441,14 @@ describe("CLI account list inventory through mocked HTTP", () => {
     expectFailure(result, /cursor|incomplete|malformed/iu);
   });
 
+  it("rejects a bounded item page advertising more without a usable continuation cursor", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope], [
+      metadataRoute(list("ip", 2)),
+      itemsRoute([{ id: "one", ip: "192.0.2.1" }], { cursors: { after: "" }, has_more: true }),
+    ]);
+    expectFailure(result, /cursor|incomplete|malformed/iu);
+  });
+
   it("fails a later item page without printing the earlier page as success", async () => {
     const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--all", "--per-page", "1"], [
       metadataRoute(list("ip", 2)),
@@ -480,6 +488,19 @@ describe("CLI account list inventory through mocked HTTP", () => {
     expectFailure(result, "Denied");
     for (const secret of ["inventory-test-token", "alice", "password", "query-secret"]) expect(result.stdout + result.stderr).not.toContain(secret);
     expect(result.stderr).toContain("safe=visible");
+  });
+
+  it("redacts scheme-less redirect URLs from later-page diagnostics without printing partial JSON", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--all"], [
+      metadataRoute(list("redirect", 2)),
+      itemsRoute([{ id: "first", redirect: { source_url: "old.example.test/old", target_url: "https://new.example.test/new", preserve_query_string: false } }], { cursors: { after: "next" } }),
+      { pathname: itemsPath, query: { per_page: "100", cursor: "next" }, status: 500, body: { success: false, errors: [{ code: 12004, message: "Invalid source URL alice:password@old.example.test/path?token=unconfigured-secret&safe=visible for list office_networks" }], result: null } },
+    ]);
+    expectFailure(result, "Invalid source URL");
+    for (const secret of ["alice", "password", "unconfigured-secret"]) expect(result.stdout + result.stderr).not.toContain(secret);
+    expect(result.stderr).toContain("old.example.test/path");
+    expect(result.stderr).toContain("safe=visible");
+    expect(result.stderr).toContain("for list office_networks");
   });
 
   it("does not include invalid upstream values in schema failure diagnostics", async () => {

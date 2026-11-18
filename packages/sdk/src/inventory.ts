@@ -117,6 +117,14 @@ function redactListUrl(value: string): string {
   return redacted.startsWith(prefix) ? redacted.slice(prefix.length) : redacted;
 }
 
+/** API errors may reflect Bulk Redirect sources without their optional scheme. */
+function redactOmittedSchemeUrls(value: string): string {
+  return value.replace(
+    /(^|[\s"'(<=>])((?:\/\/)?(?:[^\s"'<>\\/?#@]+@)?(?:(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\[[a-f\d:.]+\])(?::\d+)?(?:[/?#][^\s"'<>\\]*)?)/giu,
+    (_match, boundary: string, candidate: string) => boundary + redactListUrl(candidate),
+  );
+}
+
 /** Reads native migration configuration while preserving fields added by Cloudflare. */
 export class InventoryReader {
   constructor(
@@ -129,7 +137,7 @@ export class InventoryReader {
     // Conservatively hide the whole expression; rewriting a rules-language
     // literal without a parser could leave another copy of the credential.
     if (credentialBearingExpression(value)) return REDACTED;
-    let result = redactUrls(value);
+    let result = redactOmittedSchemeUrls(redactUrls(value));
     for (const secret of this.credentialValues) {
       if (secret) result = result.split(secret).join(REDACTED);
     }
@@ -294,8 +302,8 @@ export class InventoryReader {
         (page.info.total_count !== undefined && page.info.total_count > items.length) ||
         (page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
         (page.info.count !== undefined && page.info.count > page.result.length));
+      if (incomplete && !after) throw this.malformed(path, "API reports more list items without a continuation cursor");
       if (!parsed.data.all || !after) {
-        if (parsed.data.all && incomplete) throw this.malformed(path, "API reports more list items without a continuation cursor");
         if (!incomplete && parsed.data.cursor === undefined && parsed.data.search === undefined && items.length !== detail.list.num_items) {
           throw this.malformed(path, "item count differs from list metadata; inventory is incomplete or the list changed during collection");
         }
