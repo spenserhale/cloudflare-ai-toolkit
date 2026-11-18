@@ -63,6 +63,16 @@ cloudflare waf rules get <rule-id>                     # rule detail incl. expre
 cloudflare waf rules create --action block --expression '<expr>'
 cloudflare waf rules update <rule-id> --action block --expression '<expr>'
 cloudflare waf rules delete <rule-id> --yes
+cloudflare rulesets list --scope zone|account --all    # metadata and cursor pagination
+cloudflare rulesets get <id> --scope zone|account      # all ordered rules; optional --version
+cloudflare rulesets phases get <phase> --scope zone|account
+cloudflare zones settings get <setting-id>             # SSL/security/cache setting value
+cloudflare zones managed-transforms get                # managed request/response headers
+cloudflare zones url-normalization get                 # URL normalization mode
+cloudflare waf bot-management get                      # bot settings, plan-dependent
+cloudflare workers routes list                        # zone Worker routes and exclusions
+cloudflare workers domains list                       # account domains; optional --zone-id filter
+cloudflare page-rules list                            # legacy Page Rules in execution order
 cloudflare redirects list                             # redirect rules (first match wins)
 cloudflare redirects get <rule-id>
 cloudflare redirects create --expression '<expr>' --targetUrl <url> [--statusCode 301]
@@ -96,7 +106,8 @@ cloudflare upgrade                                     # self-update: binary→G
 ```
 
 The list above is a summary — run `cloudflare <cmd> --help` for the actual flag set on each.
-Flags are camelCase (`--zoneId`, `--perPage`), not kebab-case.
+Flags accept camelCase (`--zoneId`, `--perPage`) and kebab-case
+(`--zone-id`, `--per-page`).
 
 ## Finding a zone ID
 
@@ -141,12 +152,34 @@ Reads need `Zone Read`; writes need `Zone Write`.
 
 ## WAF firewall rules
 
-Each rule pairs a Cloudflare rules-language expression with an action
-(`block`, `challenge`, `js_challenge`, `managed_challenge`, `allow`, `log`, `bypass`).
+`waf rules list|get` read the Rulesets `http_request_firewall_custom` phase.
+Native expressions, enabled state, action parameters, and one-based `order`
+survive alongside compatibility `filter.expression` and `paused` fields.
+Filters (including `skip`/`execute`) and numeric paging run locally. Read access
+uses an applicable Rulesets product permission, such as `Zone WAF Read`.
 
-- Read the current rule before updating: `waf rules update` is a PUT — resend the current action/expression plus your change, or you'll clobber them.
-- Stage risky rules with `--paused true`, verify with `waf rules get`, then unpause.
-- `log` action is Enterprise-plan only. Reads need `Firewall Services Read`; writes need `Firewall Services Write`.
+`waf rules create|update|delete` still target the retired legacy Firewall Rules
+API. They are not supported modern mutations. Never pass a modern read ID to
+those commands. This inventory change does not migrate writes.
+
+## Configuration inventory
+
+Use explicit `--scope zone|account` on Rulesets commands; selected scope can use
+its configured ID. `rulesets list` returns metadata only and exposes cursor
+continuation; use `--all` or `--cursor`. `get` and `phases get` preserve all
+ordered rules, execute targets, overrides, origin Host/SNI/DNS parameters,
+rate limits, redirects, cache and transforms. Read managed definitions at account
+scope, using the execute reference's version or `--version latest`.
+
+Only phase-entrypoint 404 is `status: absent`; generic Ruleset 404 can also mean
+missing managed entitlement and remains a failure. Permission, entitlement,
+malformed-response and upstream failures must never be recorded as empty
+inventory. New readers redact credential-bearing fields. Worker routes and
+domains describe assignments, not Worker source or bindings. Zone settings
+accept individual IDs, for example `ssl` and `security_level`.
+
+The [inventory guide](../../docs/guides/migration-inventory.md) gives the phase
+map, exact commands, permission alternatives, and local-install verification.
 
 ## Redirect rules
 
@@ -155,7 +188,7 @@ Each rule pairs a Cloudflare rules-language expression with an action
 - Target is one of `--targetUrl <literal>` or `--targetExpression <dynamic rules expr>`.
 - `--dryRun` on create validates the expression without saving — use it before enforcing.
 - `redirects update` is partial: pass only what changes (e.g. just `--statusCode 302`); other fields keep their values.
-- Disable a rule with `--enabled false` instead of deleting it. Reads need `Rulesets Read`; writes need `Rulesets Edit`.
+- Disable a rule with `--enabled false` instead of deleting it. Reads need an applicable Rulesets permission, such as `Dynamic URL Redirects Read`; mutations need the corresponding Write permission.
 
 ## Destructive commands
 
@@ -177,7 +210,10 @@ never re-run `register` for the same domain.
 
 ## When something isn't covered
 
-The CLI focuses on zones, DNS, cache, custom hostnames, WAF firewall rules, redirect rules, Log Explorer, and audit operations. For Workers, R2, Pages, Access, or anything else not listed, fall back to `wrangler` or a direct call to the Cloudflare REST API — don't bend these commands into doing something they don't.
+The CLI includes configuration inventory and Worker route/custom-domain assignments,
+but not Worker code/bindings or all product APIs. For R2, Pages, Access, or anything
+else not listed, use the appropriate product tooling; do not bend these commands
+into doing something they do not support.
 
 ## If the command isn't found
 

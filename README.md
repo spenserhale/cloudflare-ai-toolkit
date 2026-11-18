@@ -265,24 +265,45 @@ cloudflare custom-hostnames history app.example.com     # audit-log timeline
 Requires a token with `SSL and Certificates Read` (or Write). `history` also
 reads the account audit log, which needs `Account Settings Read` (or Write).
 
-### WAF firewall rules
+### WAF custom-rule inventory
 
-Manage the zone's firewall (WAF custom) rules — each is a Cloudflare rules-
-language expression plus an action. `update` is a PUT: pass the current
-action/expression (fetch with `waf rules get`) plus your change.
+Read custom rules through the current Rulesets API (`http_request_firewall_custom`).
+JSON retains native expressions, enabled state, ordered rules, action parameters,
+and source metadata, plus compatibility `filter.expression` and `paused` fields.
+Filters and `--page`/`--per-page` apply locally to the full phase entrypoint.
 
 ```bash
 cloudflare waf rules list --zoneId <zone-id> --action block
 cloudflare waf rules get <rule-id>
-cloudflare waf rules create --action block \
-  --expression 'http.request.uri.path contains "/wp-login.php"'
-cloudflare waf rules create --action managed_challenge --paused true \
-  --expression 'ip.src.country eq "CN"' --description 'Challenge CN'
-cloudflare waf rules update <rule-id> --action block --expression '...' --paused false
-cloudflare waf rules delete <rule-id> --yes
+cloudflare waf rules list --zone-id <zone-id> --action skip --json
 ```
 
-Requires `Firewall Services Read`/`Write`; the `log` action is Enterprise-only.
+Reads need an applicable Rulesets product permission, such as `Zone WAF Read`.
+`waf rules create|update|delete` still target the retired legacy Firewall Rules API;
+they are not modern Rulesets mutations. Do not pass IDs from these reads to them.
+
+### Configuration inventory
+
+```bash
+cloudflare rulesets list --scope zone --zone-id <zone-id> --all --json
+cloudflare rulesets list --scope account --account-id <account-id> --all --json
+cloudflare rulesets phases get http_request_origin --scope zone --zone-id <zone-id> --json
+cloudflare rulesets get <ruleset-id> --scope account --account-id <account-id> --version latest --json
+cloudflare zones settings get ssl --zone-id <zone-id> --json
+cloudflare waf bot-management get --zone-id <zone-id> --json
+cloudflare workers routes list --zone-id <zone-id> --json
+cloudflare workers domains list --account-id <account-id> --zone-id <zone-filter> --json
+cloudflare page-rules list --zone-id <zone-id> --json
+cloudflare zones managed-transforms get --zone-id <zone-id> --json
+cloudflare zones url-normalization get --zone-id <zone-id> --json
+```
+
+Rulesets detail preserves origin Host/SNI/DNS overrides, execute references and
+managed-WAF overrides, rate limits, redirects, cache and transform parameters.
+List results expose cursor continuation; `--all` follows it. Phase absence is
+explicit; denied or malformed reads fail. See the [migration inventory
+guide](docs/guides/migration-inventory.md) for coverage, permissions, local installation,
+and the complete read-only PBHS command set.
 
 ### Redirect rules
 
@@ -305,7 +326,8 @@ cloudflare redirects get <rule-id>
 cloudflare redirects delete <rule-id> --yes
 ```
 
-Requires a token with `Rulesets Edit` (`Rulesets Read` for listing).
+Requires an applicable Rulesets product permission, such as `Dynamic URL Redirects
+Read` for inventory or `Dynamic URL Redirects Write` for mutations.
 
 ### Cache purge
 

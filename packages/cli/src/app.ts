@@ -71,6 +71,18 @@ import {
   listFirewallRulesCommand,
   updateFirewallRuleCommand,
 } from "./commands/waf-rules.js";
+import {
+  getBotManagementCommand,
+  getManagedTransformsCommand,
+  getPhaseEntrypointCommand,
+  getRulesetCommand,
+  getUrlNormalizationCommand,
+  getZoneSettingCommand,
+  listPageRulesCommand,
+  listRulesetsCommand,
+  listWorkerDomainsCommand,
+  listWorkerRoutesCommand,
+} from "./commands/inventory.js";
 
 const resourceRoutes = buildRouteMap({
   routes: {
@@ -142,9 +154,21 @@ const zoneRoutes = buildRouteMap({
     list: listZonesCommand,
     get: getZoneCommand,
     "vanity-ns": zoneVanityNsRoutes,
+    settings: buildRouteMap({
+      routes: { get: getZoneSettingCommand },
+      docs: { brief: "Read individual zone settings" },
+    }),
+    "managed-transforms": buildRouteMap({
+      routes: { get: getManagedTransformsCommand },
+      docs: { brief: "Read managed header transforms" },
+    }),
+    "url-normalization": buildRouteMap({
+      routes: { get: getUrlNormalizationCommand },
+      docs: { brief: "Read URL normalization settings" },
+    }),
   },
   docs: {
-    brief: "Zone lookups and custom nameservers",
+    brief: "Zone lookups, settings, transforms, and custom nameservers",
   },
 });
 
@@ -171,17 +195,47 @@ const firewallRuleRoutes = buildRouteMap({
     delete: deleteFirewallRuleCommand,
   },
   docs: {
-    brief: "Manage firewall (WAF custom) rules",
+    brief: "Read modern WAF custom rules; writes use the retired legacy API",
   },
 });
 
 const wafRoutes = buildRouteMap({
   routes: {
     rules: firewallRuleRoutes,
+    "bot-management": buildRouteMap({
+      routes: { get: getBotManagementCommand },
+      docs: { brief: "Read Bot Management settings" },
+    }),
   },
   docs: {
     brief: "WAF operations",
   },
+});
+
+const rulesetsRoutes = buildRouteMap({
+  routes: {
+    list: listRulesetsCommand,
+    get: getRulesetCommand,
+    phases: buildRouteMap({
+      routes: { get: getPhaseEntrypointCommand },
+      docs: { brief: "Read Ruleset Engine phase entrypoints" },
+    }),
+  },
+  docs: { brief: "Read full Rulesets in an explicit zone or account scope" },
+});
+
+const workersRoutes = buildRouteMap({
+  routes: {
+    routes: buildRouteMap({
+      routes: { list: listWorkerRoutesCommand },
+      docs: { brief: "List zone Worker routes" },
+    }),
+    domains: buildRouteMap({
+      routes: { list: listWorkerDomainsCommand },
+      docs: { brief: "List account Worker custom domains" },
+    }),
+  },
+  docs: { brief: "Read Worker routes and custom domains" },
 });
 
 const redirectsRoutes = buildRouteMap({
@@ -288,6 +342,12 @@ const routes = buildRouteMap({
     "custom-hostnames": customHostnameRoutes,
     dns: dnsRoutes,
     waf: wafRoutes,
+    rulesets: rulesetsRoutes,
+    workers: workersRoutes,
+    "page-rules": buildRouteMap({
+      routes: { list: listPageRulesCommand },
+      docs: { brief: "Read Page Rules" },
+    }),
     redirects: redirectsRoutes,
     "log-explorer": logExplorerRoutes,
     tokens: tokenRoutes,

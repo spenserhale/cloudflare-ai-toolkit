@@ -97,6 +97,17 @@ cloudflare waf rules create --action <action> --expression <expr> [--paused true
 cloudflare waf rules update <rule-id> --action <action> --expression <expr> [flags]
 cloudflare waf rules delete <rule-id> [--zoneId <id>] [--yes]
 
+cloudflare rulesets list --scope zone|account [--zone-id <id>|--account-id <id>] [--cursor <c>] [--per-page 50] [--all] [--json]
+cloudflare rulesets get <ruleset-id> --scope zone|account [--version <version>] [flags]
+cloudflare rulesets phases get <phase> --scope zone|account [flags]
+cloudflare zones settings get <setting-id> [--zone-id <id>] [--json]
+cloudflare zones managed-transforms get [--zone-id <id>] [--json]
+cloudflare zones url-normalization get [--zone-id <id>] [--json]
+cloudflare waf bot-management get [--zone-id <id>] [--json]
+cloudflare workers routes list [--zone-id <id>] [--json]
+cloudflare workers domains list [--account-id <id>] [--zone-id <filter>] [--json]
+cloudflare page-rules list [--zone-id <id>] [--json]
+
 cloudflare redirects list [--zoneId <id>] [--json]
 cloudflare redirects get <rule-id> [--zoneId <id>] [--json]
 cloudflare redirects create --expression <expr> (--targetUrl <url>|--targetExpression <expr>) [--statusCode 301|302|303|307|308] [flags]
@@ -143,6 +154,27 @@ cloudflare upgrade [--check] [--force] [--version <version>]
 ```
 
 Run `cloudflare <command> --help` for full flag docs.
+
+## Migration inventory
+
+See the [read-only inventory guide](../../docs/guides/migration-inventory.md) for
+local installation, the complete PBHS command set, API sources, permission
+requirements, and verification evidence. CamelCase and kebab-case flags both work.
+
+`waf rules list|get` now use the Rulesets custom-firewall phase. JSON retains
+native rule fields and source metadata, with `filter.expression` and `paused`
+compatibility fields. Filters and numeric paging run locally; `order` is the
+original one-based array position, not legacy priority. `skip` and `execute`
+filters are supported. `waf rules create|update|delete` still use the retired
+legacy API and are not modern mutations; do not feed read IDs into those commands.
+
+Rulesets commands require explicit `--scope zone|account`. Lists expose cursors
+and `truncated`; use `--all` or follow `--cursor`. Detail/phase reads return every
+ordered rule and preserve product parameters. A missing phase returns explicit
+`status: "absent"` with its original 404 diagnostic. Other read failures exit 1
+with stderr diagnostics and no JSON result; parser usage failures are nonzero.
+Zone settings use individual setting IDs because the collection endpoint is
+deprecated. Worker domains are account-scoped, with an optional zone filter.
 
 ## License
 

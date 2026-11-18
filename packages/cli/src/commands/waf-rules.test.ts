@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CloudflareClient, FirewallRule } from "@cloudflare-ai-toolkit/sdk";
+import { CloudflareError, type CloudflareClient, type FirewallRule } from "@cloudflare-ai-toolkit/sdk";
 import {
   runCreateFirewallRule,
   runDeleteFirewallRule,
+  runGetFirewallRule,
   runListFirewallRules,
   runUpdateFirewallRule,
   type WafRuleCreateFlags,
@@ -77,6 +78,82 @@ describe("runListFirewallRules", () => {
     expect(log.mock.calls[1]?.[0]).toContain("rule-1  action=block priority=50  Block wp-login");
     expect(error).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("preserves native Rulesets fields and source metadata in JSON", async () => {
+    const result = {
+      scope: "zone" as const, zoneId: "z", phase: "http_request_firewall_custom", status: "present" as const, rulesetId: "rs",
+      rules: [{ ...rule, action: "skip", expression: "true", enabled: true, order: 1, action_parameters: { ruleset: "current", products: ["zoneLockdown"] } }],
+      resultInfo: { page: 1, per_page: 1, total_pages: 2, total_count: 2 }, truncated: true,
+    };
+    const { log, error, deps } = makeDeps({ listFirewallRules: vi.fn(async () => result) as WafClientMethods["listFirewallRules"] });
+    await runListFirewallRules({ json: true }, deps);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual(result);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("--page"));
+  });
+
+  it("prints source, evaluation order, native expression, and action parameters", async () => {
+    const modernRule = {
+      ...rule, action: "skip", enabled: true, order: 2, expression: "http.host eq \"example.com\"",
+      action_parameters: { ruleset: "current", phases: ["http_request_firewall_managed"] },
+    } as unknown as FirewallRule;
+    const listFirewallRules = vi.fn(async () => ({
+      scope: "zone" as const, zoneId: "z", phase: "http_request_firewall_custom", status: "present" as const, rulesetId: "rs",
+      rules: [modernRule], resultInfo: { page: 1, total_pages: 1 }, truncated: false,
+    }));
+    const { log, deps } = makeDeps({ listFirewallRules });
+    await runListFirewallRules({ json: false }, deps);
+    const text = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(text).toContain("http_request_firewall_custom");
+    expect(text).toContain("rs");
+    expect(text).toContain("order=2");
+    expect(text).toContain("enabled=true");
+    expect(text).toContain('http.host eq "example.com"');
+    expect(text).toContain("http_request_firewall_managed");
+  });
+
+  it("prints phase absence without presenting it as no matching rules", async () => {
+    const listFirewallRules = vi.fn(async () => ({
+      scope: "zone" as const, zoneId: "z", phase: "http_request_firewall_custom", status: "absent" as const, rules: [], resultInfo: {},
+      truncated: false, diagnostic: { statusCode: 404, code: "10003", message: "entrypoint not found" },
+    }));
+    const { log, deps } = makeDeps({ listFirewallRules });
+    await runListFirewallRules({ json: false }, deps);
+    const text = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(text).toContain("absent");
+    expect(text).not.toContain("No firewall rules matched");
+  });
+
+  it.each([
+    new CloudflareError("Forbidden", "9109", 403),
+    new CloudflareError("Retired", "10020", 410),
+    new Error("Malformed response"),
+  ])("does not render failed reads as empty rules: %s", async (failure) => {
+    const { log, error, exit, deps } = makeDeps({ listFirewallRules: vi.fn(async () => { throw failure; }) });
+    await expect(runListFirewallRules({ json: true }, deps)).rejects.toThrow("EXIT:1");
+    expect(log).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.stringContaining(failure.message));
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("runGetFirewallRule", () => {
+  it("shows native source and parameter details", async () => {
+    const getFirewallRule = vi.fn(async () => ({
+      ...rule, expression: "true", enabled: false, order: 3, scope: "zone", zoneId: "z",
+      phase: "http_request_firewall_custom", rulesetId: "rs",
+      action_parameters: { ruleset: "current" },
+    }));
+    const { log, deps } = makeDeps({ getFirewallRule });
+    await runGetFirewallRule("rule-1", { json: false }, deps);
+    const text = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(text).toContain("http_request_firewall_custom");
+    expect(text).toContain("rs");
+    expect(text).toContain("Order:       3");
+    expect(text).toContain("Enabled:     false");
+    expect(text).toContain("Expression:  true");
+    expect(text).toContain("current");
   });
 });
 
