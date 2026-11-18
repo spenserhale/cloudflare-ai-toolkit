@@ -83,6 +83,13 @@ import {
   listWorkerDomainsCommand,
   listWorkerRoutesCommand,
 } from "./commands/inventory.js";
+import {
+  getWorkerSettingsCommand,
+  getWorkerSourceCommand,
+  getWorkerVersionCommand,
+  listWorkerDeploymentsCommand,
+  listWorkerVersionsCommand,
+} from "./commands/worker-inventory.js";
 
 const resourceRoutes = buildRouteMap({
   routes: {
@@ -234,8 +241,24 @@ const workersRoutes = buildRouteMap({
       routes: { list: listWorkerDomainsCommand },
       docs: { brief: "List account Worker custom domains" },
     }),
+    settings: buildRouteMap({
+      routes: { get: getWorkerSettingsCommand },
+      docs: { brief: "Inspect account Worker settings and binding references" },
+    }),
+    source: buildRouteMap({
+      routes: { get: getWorkerSourceCommand },
+      docs: { brief: "Inspect original source metadata or export private local files" },
+    }),
+    deployments: buildRouteMap({
+      routes: { list: listWorkerDeploymentsCommand },
+      docs: { brief: "Read serving deployment versions and percentages" },
+    }),
+    versions: buildRouteMap({
+      routes: { list: listWorkerVersionsCommand, get: getWorkerVersionCommand },
+      docs: { brief: "Read version history and inspect pinned source through Beta API" },
+    }),
   },
-  docs: { brief: "Read Worker routes and custom domains" },
+  docs: { brief: "Read Worker assignments, settings, versions and private source inventory" },
 });
 
 const redirectsRoutes = buildRouteMap({

@@ -18,9 +18,13 @@ In this change's checkout:
 ```bash
 bun install --frozen-lockfile
 bun run build
+bun run lint
+bun run test
 export CF_TOOLKIT_ROOT="$(pwd -P)"
 cloudflare() { bun "$CF_TOOLKIT_ROOT/packages/cli/dist/bin.js" "$@"; }
 git rev-parse HEAD
+cloudflare workers source get --help
+cloudflare workers versions get --help
 cloudflare rulesets list --help
 cloudflare zones settings get --help
 cloudflare waf rules list --help
@@ -30,7 +34,7 @@ The function selects this build in the current shell without replacing the
 installed binary. To install from a fresh checkout once the branch is pushed:
 
 ```bash
-git clone --branch fix/migration-inventory \
+git clone --branch feat/inventory-worker-inspection \
   https://github.com/spenserhale/cloudflare-ai-toolkit.git toolkit-inventory
 cd toolkit-inventory
 bun install --frozen-lockfile
@@ -66,6 +70,10 @@ Existing commands are reused rather than duplicated:
 | Bot settings | `waf bot-management get` | Fields and entitlement vary by plan. |
 | Worker routes and exclusions | `workers routes list` | Zone scope. Missing `script` means no-Worker exclusion. |
 | Worker custom domains | `workers domains list --account-id <id>` | Account scope; optional `--zone-id` filter. |
+| Worker runtime settings and binding references | `workers settings get <worker>` | Account scope; values hidden, omitted bindings explicitly unavailable. |
+| Original Worker source | `workers source get <worker>` | Unpinned metadata/hashes; optional private `--out-dir`. |
+| Worker deployment/version identity | `workers deployments list <worker>`, `workers versions list <worker>` | Numeric pages, `nextPage` and `truncated`; upload order is not deployment order. |
+| Pinned Worker modules and bindings | `workers versions get <worker> <version>` | Documented Beta API with `include=modules`; optional private `--out-dir`. |
 | Legacy Page Rules | `page-rules list` | Still readable; highest priority first; preserves targets/actions. |
 | Managed Transforms | `zones managed-transforms get` | Separate managed-header settings, not Rulesets. |
 | URL normalization | `zones url-normalization get` | Separate setting, not a rule phase. |
@@ -323,13 +331,238 @@ instead of reporting that managed rules are empty. Disabled/unreferenced custom
 definitions can be found in the metadata lists and read explicitly with `get`.
 
 This covers rule definitions and settings, not every referenced dataset. Bulk
-Redirect list **contents**, IP-list contents, Worker source/bindings/secrets,
+Redirect list **contents**, IP-list contents, Worker secret values,
 certificate private keys, and VIP/WordPress domain/database state are outside
 these readers. List IDs and Worker assignments remain visible. If one of those
 resources participates in the migration, record it as unresolved and inventory it
 with its supported product tooling before declaring migration readiness.
 
-## Verification evidence
+## Worker implementation and bindings
+
+Use the existing assignment readers first. A zone route's `script` is the literal
+Worker name; an omitted script is a no-Worker exclusion. A custom domain's
+`service` is documented as the Worker name and `environment` is deprecated.
+Pass `service` literally with `--environment production` to preserve both fields.
+Nonproduction legacy service environments are rejected before HTTP with
+`UNSUPPORTED_WORKER_ENVIRONMENT`; never guess that a service/environment maps to
+`service-environment`. Modern Wrangler environments are distinct Workers; inspect
+the actual name in the assignment. Keep route/domain snapshots alongside each
+Worker's results, including enabled/preview fields when returned.
+
+All Worker reads are account-scoped, using `--account-id` or the configured
+account. They reject zone scope. Commands emit bounded JSON metadata and use
+stderr/nonzero status for errors. No 403, 404, 410, upstream failure, malformed
+response, or unsupported format becomes an empty script, empty bindings or
+successful source result. Settings with an explicit `bindings: []` have
+`bindingsStatus: "present"`; omitted bindings have `bindings: null` and
+`bindingsStatus: "unavailable"`. Pinned modules omitted by the API similarly have
+`source: null` and `sourceStatus: "unavailable"`. Those results are incomplete
+evidence, even though the containing metadata read succeeded.
+If `--out-dir` explicitly requests an export and the API omits modules, the
+command instead fails with `SOURCE_UNAVAILABLE` and creates no source directory.
+
+`settings get` uses script-and-version `/settings`, which includes bindings.
+It does not confuse this with `/script-settings`, which contains script-level
+Logpush/tail settings. Binding names/types and documented resource references
+remain visible: KV namespaces, R2 buckets, D1 databases, service/environment and
+entrypoint, Durable Object classes/scripts/namespaces, queues, Hyperdrive,
+Vectorize, dispatch namespaces, workflows and Secrets Store references where
+returned. All plain-text/JSON values, secret values and cryptographic key material
+are hidden regardless of binding name. Unknown binding types retain identity
+but their details are unavailable. These snapshots cannot be written back.
+
+`source get` reads the original script, never JSON-decodes it as an API envelope.
+It recognizes JavaScript and defensively parses HTTP multipart file parts without
+flattening modules or corrupting binary bytes. A multipart `metadata.main_module`
+can identify the entrypoint; the download reference does not guarantee this
+metadata or any `CF-ENTRYPOINT` header. Do not invent an entrypoint when absent.
+For documented, pinned multi-module inspection use `versions get`, which calls
+the Beta version API with `include=modules` and decodes each module's base64 bytes.
+An original source read is **unpinned**; it is not proof of what currently serves
+traffic. Deployment page 1's first deployment identifies the active version IDs
+and percentages, including split deployments. Inspect every such ID. Uploaded
+version history can include versions that never served traffic.
+
+Accepted original-download media types are `application/javascript`,
+`text/javascript`, `application/javascript+module` and `multipart/form-data`.
+Missing/other types fail `UNSUPPORTED_CONTENT_FORMAT`; malformed multipart fails
+`MALFORMED_RESPONSE`. Module parts and Beta modules preserve their media types
+and bytes; arbitrary MIME parameters are omitted from public metadata.
+
+Deployment and version lists default to 20, maximum 100, per page. Follow
+`nextPage` with `--page` until null; `truncated: true` is incomplete. Without
+upstream totals, a full page conservatively requires the next page. A successful
+short/empty page ends that traversal. Each page, settings read and source read is
+a separate observation, not an atomic snapshot; preserve deployment/version IDs
+and recapture if configuration changes during collection.
+
+### Private source convention
+
+Neither CLI nor SDK returns raw source in serializable results. `source get` and
+`versions get` return module names, media types, sizes and SHA256 hashes. Add
+`--out-dir <new-directory>` to save original bytes. The directory must not exist;
+files use generated names and a manifest maps them to module names. Directory
+mode is 0700 and files 0600. Do not use a shared, synced or repository directory.
+
+**Private source may contain inline credentials. Never print, commit, upload or
+attach its bytes to chat, logs, issues or PRs.** No heuristic can prove arbitrary
+code is credential-free. Inspect locally in a trusted editor. Only bounded,
+redacted metadata is suitable for agent context or review artifacts. Export is an
+inspection bundle, not a deployable archive. It contains no retrieved secret
+values, static assets or resource contents. Limits of 20 MiB total source, 500
+modules and 1 MiB metadata fail explicitly rather than returning partial success.
+
+### Copy-paste PBHS Worker collection
+
+Run in Bash using the local `cloudflare` function above. `jq` is required. This
+standalone recipe stores snapshots, private source and failures outside the repo.
+It does not print source. Every Cloudflare command is a read. The pagination
+guard stops after 100 pages with failure rather than silently claiming completion.
+
+```bash
+umask 077
+ACCOUNT_ID=b6228b68442dde92d0cea47c06752c74
+OUT=$(mktemp -d "${TMPDIR:-/tmp}/cf-worker-inventory.XXXXXX")
+printf 'exit\tread\n' > "$OUT/manifest.tsv"
+failed=0
+
+capture_worker() {
+  local name="$1" code
+  shift
+  if cloudflare "$@" --json > "$OUT/$name.stdout.tmp" 2> "$OUT/$name.stderr.txt"; then
+    mv "$OUT/$name.stdout.tmp" "$OUT/$name.json"
+    printf '0\t%s\n' "$name" >> "$OUT/manifest.tsv"
+  else
+    code=$?
+    mv "$OUT/$name.stdout.tmp" "$OUT/$name.failed-stdout.txt"
+    printf '%s\t%s\n' "$code" "$name" >> "$OUT/manifest.tsv"
+    failed=1
+    return "$code"
+  fi
+}
+
+worker_pages() {
+  local name="$1" page=1 next
+  shift
+  while [ "$page" -le 100 ]; do
+    capture_worker "$name-page-$page" "$@" --page "$page" --per-page 100 || return 1
+    next=$(jq -er 'if .nextPage == null and .truncated == false then "done"
+      elif (.nextPage | type) == "number" and .truncated == true then .nextPage
+      else error("missing continuation") end' "$OUT/$name-page-$page.json") || {
+      failed=1; return 1;
+    }
+    [ "$next" = done ] && return 0
+    if [[ ! "$next" =~ ^[0-9]+$ ]] || [ "$next" -le "$page" ]; then
+      printf 'Invalid Worker continuation\n' >&2
+      failed=1; return 1
+    fi
+    page=$next
+  done
+  printf 'Worker history exceeds collection guard; continue manually\n' >&2
+  failed=1
+  return 1
+}
+
+# A failed assignment read must stop collection: no queue is inferred from it.
+capture_worker domains workers domains list --account-id "$ACCOUNT_ID" || exit 1
+for zone in \
+  a9a49f7f84cf016d217085dcfb8d27e7 \
+  93ee0111ed54e0cd50ee68173b7f3307 \
+  ff1813179f9c7390f39bda0b7f1aadfb; do
+  capture_worker "routes-$zone" workers routes list --zone-id "$zone" || exit 1
+done
+
+# Keep original assignments; deduplicate only inspection targets.
+jq -s '[.[] | (.routes[]? | select(.script != null and .script != "") |
+    {worker:.script}), (.domains[]? | {worker:.service,environment:.environment})]
+    | unique | .[] | @base64' -r "$OUT"/routes-*.json "$OUT/domains.json" \
+  > "$OUT/targets.txt" || exit 1
+
+i=0
+while IFS= read -r row; do
+  i=$((i + 1))
+  worker=$(printf '%s\n' "$row" | jq -Rer '@base64d | fromjson | .worker') || exit 1
+  environment=$(printf '%s\n' "$row" | jq -Rr '@base64d | fromjson | .environment // empty') || exit 1
+  args=(--account-id "$ACCOUNT_ID")
+  [ -z "$environment" ] || args+=(--environment "$environment")
+  printf '%s\n' "$row" | jq -R '@base64d | fromjson' > "$OUT/worker-$i-target.json"
+  if capture_worker "worker-$i-settings" workers settings get "$worker" "${args[@]}"; then
+    jq -e '.bindingsStatus == "present"' "$OUT/worker-$i-settings.json" >/dev/null || failed=1
+  fi
+  capture_worker "worker-$i-source" workers source get "$worker" "${args[@]}" \
+    --out-dir "$OUT/worker-$i-current-source" || :
+  worker_pages "worker-$i-deployments" workers deployments list "$worker" "${args[@]}" || :
+  worker_pages "worker-$i-versions" workers versions list "$worker" "${args[@]}" || :
+
+  # Only page 1's first deployment is active. Uploaded order is not active order.
+  if [ -f "$OUT/worker-$i-deployments-page-1.json" ]; then
+    jq -r '.deployments[0].versions[]?.version_id' \
+      "$OUT/worker-$i-deployments-page-1.json" | sort -u > "$OUT/worker-$i-active.txt"
+    v=0
+    while IFS= read -r version; do
+      v=$((v + 1))
+      if capture_worker "worker-$i-version-$v" workers versions get "$worker" "$version" \
+          "${args[@]}" --out-dir "$OUT/worker-$i-version-$v-source"; then
+        jq -e '.bindingsStatus == "present" and .sourceStatus == "present"' \
+          "$OUT/worker-$i-version-$v.json" >/dev/null || failed=1
+      fi
+    done < "$OUT/worker-$i-active.txt"
+  fi
+done < "$OUT/targets.txt"
+printf 'Private inventory: %s; incomplete or failed: %s\n' "$OUT" "$failed"
+cat "$OUT/manifest.tsv"
+test "$failed" -eq 0
+```
+
+A successful zero-length target queue means the successful assignment snapshots
+returned no Worker targets; it says nothing about unattached Workers. Failed
+reads remain in the manifest/stderr files and make the recipe fail. Nonproduction
+legacy environments require separately supported tooling; do not invent a target.
+
+### Official contracts and unsupported cases
+
+Checked 2026-11-18:
+
+- [Original script download](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/get/)
+  returns raw content, not a JSON envelope.
+- [Script and version settings](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/script_and_version_settings/methods/get/)
+  provides runtime configuration/bindings; separate
+  [script settings](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/settings/methods/get/)
+  is `/script-settings`.
+- [Deployments](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/)
+  returns `{deployments: [...]}`; [version history](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/list/)
+  returns an array. Both document numeric paging.
+- [Beta pinned version detail](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/subresources/versions/methods/get/)
+  accepts a Worker ID or name and `include=modules`; module objects contain
+  `name`, `content_type`, `content_base64`. This Beta API may change or be unavailable.
+- [Multipart upload](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/)
+  and [metadata](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/)
+  document module parts and entrypoint. Recognizing a multipart download does not
+  imply a documented pinned download/entrypoint header contract.
+- [Custom-domain service/environment fields](https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/list/),
+  [legacy environment deprecation](https://developers.cloudflare.com/workers/wrangler/deprecations/),
+  [modern environment behavior](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/).
+
+Use an account-scoped token authorized for the relevant Worker. The references
+accept `Workers Scripts Read` and several newer content/individual-Worker role
+alternatives for source/Beta detail; metadata-only roles can read some history
+but do not imply source access. `Workers Routes Read` is zone-scoped and is not
+sufficient for account source/bindings. No new credential mechanism is introduced.
+403 may mean permissions, resource scope or entitlement; preserve the failed
+read instead of guessing which. 404 means missing or inaccessible, never absence
+of bindings. Worker errors preserve status/API code/path but suppress arbitrary
+upstream text, which may echo source or credentials.
+
+Unsupported here: legacy nonproduction service-environment APIs (no current
+public contract), dispatch-namespace inspection, static asset download, source
+maps, secret values, binding resource contents, deployment reconstruction and
+an atomic view across requests. No arbitrary version query is added to the
+original script or `/content/v2` download. Classic script version detail provides
+hashes/handlers rather than source; this implementation uses the documented Beta
+module API instead. Failed Beta access remains unresolved; it never falls back
+to an unpinned download labeled as that version.
+
+## Parent inventory verification evidence
 
 Baseline before implementation: `bun install --frozen-lockfile`, `bun run build`,
 and `bun run test` succeeded (SDK 203, MCP 12, CLI 228 tests).

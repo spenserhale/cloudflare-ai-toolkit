@@ -293,6 +293,11 @@ cloudflare zones settings get ssl --zone-id <zone-id> --json
 cloudflare waf bot-management get --zone-id <zone-id> --json
 cloudflare workers routes list --zone-id <zone-id> --json
 cloudflare workers domains list --account-id <account-id> --zone-id <zone-filter> --json
+cloudflare workers settings get <assigned-worker> --account-id <account-id> --json
+cloudflare workers source get <assigned-worker> --account-id <account-id> --json
+cloudflare workers deployments list <assigned-worker> --account-id <account-id> --json
+cloudflare workers versions list <assigned-worker> --account-id <account-id> --json
+cloudflare workers versions get <assigned-worker> <version-id> --account-id <account-id> --json
 cloudflare page-rules list --zone-id <zone-id> --json
 cloudflare zones managed-transforms get --zone-id <zone-id> --json
 cloudflare zones url-normalization get --zone-id <zone-id> --json
@@ -304,6 +309,15 @@ List results expose cursor continuation; `--all` follows it. Phase absence is
 explicit; denied or malformed reads fail. See the [migration inventory
 guide](docs/guides/migration-inventory.md) for coverage, permissions, local installation,
 and the complete read-only PBHS command set.
+
+Worker inspection exposes binding names/types/resource references and source
+module hashes, never source or binding values on stdout. `source get` reads
+unpinned original content; `versions get` uses the documented Beta API for pinned
+modules. Add `--out-dir <new-private-directory>` to either to save sensitive source
+locally (0700 directory, 0600 files). Never attach that source to chat or PRs.
+For a custom domain, pass its literal `service` and `--environment production`;
+other legacy environments are explicitly unsupported. Lists expose `nextPage`
+and `truncated`; follow `--page`. Missing bindings/modules remain unavailable.
 
 ### Redirect rules
 
