@@ -100,6 +100,10 @@ changeset. Existing parent plan/evidence remains historical.
   and active_source missing — cost if wrong: low, live inventory remains unknown.
 - [target] User changed PR base to main after merging parent; no release or merge
   authorized for this feature — cost if wrong: low.
+- [source helper] T1 has 35 passing tests, including failing-then-passing MIME,
+  URL identity, encoding and manifest-limit regressions. Existing ancestors are
+  canonicalized (macOS /tmp is a symlink); destination leaf must be new — cost if
+  wrong: medium, local filesystem races require a hostile same-user process.
 
 ## Deferred
 
