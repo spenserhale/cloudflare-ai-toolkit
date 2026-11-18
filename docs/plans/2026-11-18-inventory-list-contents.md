@@ -9,9 +9,11 @@ specs: []
 
 ## Intent
 
-Extend the migration inventory in open PR #14, based on
-`e1cc1a152ccc2566259707cad99ee181f30d23d6`. Deliver a separate PR against
-`fix/migration-inventory`; do not release, merge, or modify live configuration.
+Extend the migration inventory from PR #14, based on
+`e1cc1a152ccc2566259707cad99ee181f30d23d6`. The parent was merged into `main`
+as `b90442bd12252ebc988b26342c657281b9ab052b` during this task. Per the user's
+updated instruction, deliver a separate PR against `main`; do not release, merge,
+or modify live configuration. Preserve the pending parent changeset.
 The parent exposes list references but cannot resolve their contents.
 
 ## Acceptance criteria
@@ -108,6 +110,11 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   reuse it — cost if wrong: low, no base-branch mutations.
 - [sources] Configured Cloudflare Docs MCP is not exposed; use official API
   reference and product docs directly — cost if wrong: low, sources are linked.
+- [base] Target `main` following the user's updated instruction after parent PR
+  #14 merged — cost if wrong: low, the parent head remains in main's history.
+- [execution] Draft disjoint subprocess tests while SDK/CLI implementation runs;
+  final green verification waits for their build — cost if wrong: low, tests
+  already failed on the expected unregistered `lists` command.
 
 ## Deferred
 
@@ -201,7 +208,7 @@ and diagnostic streams, JSON and nonzero exits. Existing readers remain covered.
 from phase/definition snapshots, permissions/limitations and honest smoke report.
 **Tests:** Bash syntax and isolated mocked execution of guide recipe, full suite,
 Node JS help; credential status without values, then GET-only live checks only if
-configured. Independent final review; target parent branch PR, no merge/release.
+configured. Independent final review; target `main` PR, no merge/release.
 **Review:** yes, safety and claims.
 **Docs:** Apply D3/D4, one minor SDK/CLI changeset; link official metadata/detail/
 items and product references; no live contents in artifacts.
