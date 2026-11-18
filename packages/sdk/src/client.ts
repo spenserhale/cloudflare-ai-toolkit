@@ -149,6 +149,8 @@ function mergeAuditFilterQuery(
 }
 
 interface RequestOptions {
+  /** Preserve a bounded Worker response for its format-specific GET reader. */
+  rawResponse?: boolean;
   query?: Record<string, QueryValue>;
   body?: unknown;
   /**
@@ -476,7 +478,8 @@ export class CloudflareClient {
     this.inventory = new InventoryReader(
       (path, query) => this.requestRaw("GET", path, { query }),
       { zoneId: this.config.zoneId, accountId: this.config.accountId },
-      credentials
+      credentials,
+      (path, query) => this.requestRaw<Response>("GET", path, { query, rawResponse: true }),
     );
   }
 
@@ -568,6 +571,7 @@ export class CloudflareClient {
     const isTextBody = options.textBody !== undefined;
     const res = await fetch(url, {
       method,
+      ...(options.rawResponse ? { redirect: "error" as const } : {}),
       signal: options.signal,
       headers: {
         "Content-Type": isTextBody ? "text/plain" : "application/json",
@@ -580,6 +584,8 @@ export class CloudflareClient {
           ? JSON.stringify(options.body)
           : undefined,
     });
+
+    if (options.rawResponse) return res as T;
 
     if (res.status === 204) {
       return undefined as T;

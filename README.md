@@ -133,7 +133,7 @@ project `.env` files keep working and win. See the
 CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
 CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
-CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, Lists, and Worker domains
+CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, Lists, and Worker inventory
 CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
                          custom hostnames, `zones get`, `zones vanity-ns`,
                          log-explorer, WAF, zone inventory, and Worker routes)
@@ -296,6 +296,11 @@ cloudflare zones settings get ssl --zone-id <zone-id> --json
 cloudflare waf bot-management get --zone-id <zone-id> --json
 cloudflare workers routes list --zone-id <zone-id> --json
 cloudflare workers domains list --account-id <account-id> --zone-id <zone-filter> --json
+cloudflare workers settings get <assigned-worker> --account-id <account-id> --json
+cloudflare workers source get <assigned-worker> --account-id <account-id> --json
+cloudflare workers deployments list <assigned-worker> --account-id <account-id> --json
+cloudflare workers versions list <assigned-worker> --account-id <account-id> --json
+cloudflare workers versions get <assigned-worker> <version-id> --account-id <account-id> --json
 cloudflare page-rules list --zone-id <zone-id> --json
 cloudflare zones managed-transforms get --zone-id <zone-id> --json
 cloudflare zones url-normalization get --zone-id <zone-id> --json
@@ -318,6 +323,15 @@ remaining item pages; `--cursor` resumes items from `resultInfo.cursors.after`.
 `truncated` and stderr diagnostics identify incomplete collections. A missing or
 failed read never means an empty list. These readers do not export Cloudflare
 Managed Lists or built-in datasets; `redirects` remains the Single Redirect reader.
+
+Worker inspection exposes binding names/types/resource references and source
+module hashes, never source or binding values on stdout. `source get` reads
+unpinned original content; `versions get` uses the documented Beta API for pinned
+modules. Add `--out-dir <new-private-directory>` to either to save sensitive source
+locally (0700 directory, 0600 files). Never attach that source to chat or PRs.
+For a custom domain, pass its literal `service` and `--environment production`;
+other legacy environments are explicitly unsupported. Lists expose `nextPage`
+and `truncated`; follow `--page`. Missing bindings/modules remain unavailable.
 
 ### Redirect rules
 

@@ -109,6 +109,11 @@ cloudflare zones url-normalization get [--zone-id <id>] [--json]
 cloudflare waf bot-management get [--zone-id <id>] [--json]
 cloudflare workers routes list [--zone-id <id>] [--json]
 cloudflare workers domains list [--account-id <id>] [--zone-id <filter>] [--json]
+cloudflare workers settings get <worker> [--account-id <id>] [--environment production] [--json]
+cloudflare workers source get <worker> [--account-id <id>] [--environment production] [--out-dir <new-private-directory>] [--json]
+cloudflare workers deployments list <worker> [--account-id <id>] [--environment production] [--page 1] [--per-page 20] [--json]
+cloudflare workers versions list <worker> [--account-id <id>] [--environment production] [--page 1] [--per-page 20] [--json]
+cloudflare workers versions get <worker> <version> [--account-id <id>] [--environment production] [--out-dir <new-private-directory>] [--json]
 cloudflare page-rules list [--zone-id <id>] [--json]
 
 cloudflare redirects list [--zoneId <id>] [--json]
@@ -214,6 +219,45 @@ empty inventories. Existing credential/URL redaction applies. Read access needs
 `Account Filter Lists Read` for the selected account. Cloudflare Managed Lists
 and built-in datasets are not exported. Use `redirects` for Single Redirect rules;
 Bulk Redirect references are resolved through these account Lists commands.
+
+Worker implementation readers extend those assignments with account-scoped
+settings, binding references, original source inspection, deployment percentages,
+and uploaded versions. Pass the exact route `script` as `<worker>`. For a custom
+domain, pass its literal `service` and `--environment production`; the output
+preserves both identities. Nonproduction legacy service environments are
+unsupported and fail before HTTP. Modern Wrangler environments are separate
+Workers: use the actual assigned name, never invent a suffix.
+
+All five commands support `--json`, run without prompts, and use the existing
+credential mechanism. Diagnostics go to stderr and failed reads exit nonzero
+without successful JSON. Lists return one page (default 20, maximum 100); follow
+`nextPage` with the same `--per-page` until it is null. A full page without totals
+conservatively reports another page. Empty results never substitute for a denied,
+missing, retired, malformed or upstream-failed read.
+
+Settings and version inspection preserve binding names, types and documented
+resource references. Plain-text, JSON, secret and key values are always redacted;
+omitted bindings remain `bindings: null`, `bindingsStatus: "unavailable"` rather
+than claiming an empty list. Unknown binding types retain their identity with
+details unavailable.
+
+`source get` reads the original, unpinned script. Its stdout contains only module
+names, types, byte counts and hashes. The first deployment on page 1 identifies
+serving version IDs and percentages; uploaded versions, including `latest`, are
+not proof of deployment. `versions get` uses the documented Beta API with
+`include=modules` to inspect a specific version and its bindings. Missing modules
+remain explicitly unavailable. Beta permission or availability failures remain
+failed reads; the CLI does not fall back to another version.
+If `--out-dir` requests an export but modules are unavailable, the command fails
+with `SOURCE_UNAVAILABLE` and creates no source directory.
+
+An explicit `--out-dir` exports original source bytes into a new private directory
+(0700), with files and a manifest (0600). Existing destinations are rejected.
+Generated filenames preserve original module names through the manifest and avoid
+using upstream names as paths. Source may contain inline credentials: inspect it
+locally, never print it into agent chat or attach it to PRs. Export limits are
+20 MiB and 500 modules; exceeding limits fails instead of silently truncating.
+No Worker, binding, route, domain or secret is changed by these commands.
 
 ## License
 

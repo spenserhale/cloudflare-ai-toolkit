@@ -196,6 +196,85 @@ query encoding (`%20` to `+`) and bare query flags (`x` to `x=`).
 `all: true` buffers the complete collection in memory; callers handling very large
 lists should collect bounded cursor pages into separate artifacts instead.
 
+### Worker implementation inventory
+
+Reuse `listWorkerRoutes(zoneId)` and `listWorkerDomains({accountId, zoneId})` to
+find assignments. Worker implementation reads require account scope:
+
+```ts
+const target = { accountId: "<account-id>", script: "assigned-worker" };
+const settings = await cf.inventory.getWorkerSettings(target);
+const original = await cf.inventory.getWorkerSource(target); // safe hashes, not code
+const deployments = await cf.inventory.listWorkerDeployments(target, { page: 1, perPage: 20 });
+const versions = await cf.inventory.listWorkerVersions(target, { page: 1, perPage: 20 });
+
+// Use a deployment's version_id to inspect the implementation serving traffic.
+// "latest" instead means the most recently created version, possibly undeployed.
+const implementation = await cf.inventory.getWorkerVersion(target, "<version-id>");
+// Explicit private local export; parent directory must exist, destination must not.
+const exported = await cf.inventory.getWorkerVersion(target, "<version-id>", {
+  outDir: "/private/local/path/new-worker-inspection",
+});
+```
+
+Targets also accept `{accountId, service: domain.service, environment:
+domain.environment}`. The documented production domain service resolves literally
+to that Worker name and preserves service/environment identity. Nonproduction
+legacy service environments fail with `UNSUPPORTED_WORKER_ENVIRONMENT`; no name
+suffix or endpoint is inferred. For modern environments use the actual assigned
+Worker name. Configured account ID can fill an omitted `accountId`; a zone ID
+never supplies account scope.
+
+These methods only issue authenticated GET requests and reject redirects. Settings
+use `/workers/scripts/{script}/settings`; original downloads use the raw script
+endpoint. Original code and current settings are separate unpinned observations.
+Pinned modules/bindings use the documented Beta Worker version endpoint with
+`include=modules`; Beta availability is a limitation and failures are not empty
+inventory. Deployment history preserves version IDs and traffic percentages; its
+first item on page 1 is the currently serving deployment. Upload ordering in
+`versions` does not establish deployment state.
+
+Lists return one page with `resultInfo`, `truncated` and `nextPage`. Follow
+`nextPage` until null; without totals a full page conservatively exposes another
+page. Page size defaults to 20 and accepts 1–100. Malformed or contradictory
+responses, denied/missing/retired resources and upstream errors remain failures.
+Contradictory pagination totals are malformed responses, never completeness evidence.
+Paging options whose full page window exceeds safe integer arithmetic are rejected
+as `CONFIG_ERROR` before HTTP, rather than blaming a successful upstream response.
+The version-history API's `result.items` wrapper is normalized to `versions`;
+missing or malformed `items` is a failed read. Runtime projections preserve an
+empty compatibility date, nullable tail consumers, and documented region,
+hostname, host or targeted placement configuration, including placement without
+an explicit mode.
+
+Worker results project selected runtime settings and binding resource references
+rather than preserving arbitrary server fields. Binding names/types, KV/D1/R2
+identifiers, service and Durable Object targets, queues, Hyperdrive, Vectorize,
+dispatch/workflow and Secrets Store references survive. Plain-text, JSON, secret
+and key material always becomes `value: "[REDACTED]"`, even with an innocuous name.
+Unknown binding kinds retain name/type and `detailsStatus: "unavailable"`.
+An explicit empty binding array is `bindings: []`, `bindingsStatus: "present"`;
+omitted bindings are null/unavailable. Missing requested modules similarly return
+`source: null`, `sourceStatus: "unavailable"`; requesting export then fails with
+`SOURCE_UNAVAILABLE`. An unavailable API response never establishes empty code.
+
+Source results contain only module names, media types, byte lengths and SHA-256
+hashes. Original JavaScript and defensively recognized multipart downloads are
+supported; Beta modules preserve their exact decoded bytes. Source export creates
+0700 directories and 0600 numbered module files plus a mapping manifest. Existing
+or symlinked destinations are refused. Source files can contain inline credentials:
+inspect privately, never print them to agents, logs, chat or PR artifacts. Export
+does not produce a deployment archive or write to Cloudflare. Inspection limits
+are 20 MiB source, 500 modules, 1,000 bindings and 1 MiB returned metadata; exceeding
+them fails rather than silently truncating. Upstream error text and preview URLs
+are withheld because they may contain credentials; HTTP status, numeric API code
+and request identity remain available through `describeError`.
+Source bodies are consumed once; oversized or unsupported streams fail without
+waiting on an unread cloned response, including in Node JS builds.
+
+See the [inventory guide](../../docs/guides/migration-inventory.md) for the
+assignment-to-version workflow, official contracts and unsupported cases.
+
 ### Redirect rules
 
 ```ts

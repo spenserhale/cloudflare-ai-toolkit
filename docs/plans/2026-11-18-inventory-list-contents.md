@@ -125,8 +125,9 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   reflected diagnostics as well as URL fields — upstream messages can echo a
   source/search string — cost if wrong: medium, secret-bearing text may be masked;
   ordinary URLs/prose have preservation regressions.
-- [verification] Root build/lint pass and all 874 tests pass (SDK 408, MCP 12,
-  CLI 454); JS help and three mocked Node JS data/error smoke checks pass. Six guide
+- [verification] After main's PR #16 integration, root build/lint pass and all
+  1,030 tests pass (SDK 520, MCP 12, CLI 498); JS help and mocked Node JS data/error
+  smoke checks pass. Guide
   Bash blocks pass syntax checks; 14 durable list-recipe cases behave as
   documented — cost if wrong: low, evidence is local and mocked, not live access.
 - [live evidence] Existing credential-status read reports keychain available but
@@ -174,6 +175,10 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   official Lists reference; a nullable DNS field is not evidence about Lists —
   cost if wrong: medium, an undocumented null response would fail explicitly
   until supported by actual Lists evidence rather than appearing empty.
+- [integration] Merge current main (`c2eafb7`, PR #16) into the feature branch
+  before the authorized PR merge, retaining both feature guides and rerunning
+  all checks — cost if wrong: low, the five conflicts were documentation-only;
+  the combined SDK/CLI test suites pass without product-code conflict edits.
 
 ## Deferred
 
