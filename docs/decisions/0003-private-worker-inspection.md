@@ -52,6 +52,9 @@ an error rather than a successful partial inventory.
 
 Protocol-relative credential-bearing URLs in module identities receive the same
 redaction as URLs with explicit schemes; filenames in artifacts remain generated.
+Read each source response once, validating its enclosing metadata before export.
+Do not clone a response for a second export pass: an unread tee branch can prevent
+stream cancellation from settling when the bounded read fails under Node.
 
 ## Consequences
 

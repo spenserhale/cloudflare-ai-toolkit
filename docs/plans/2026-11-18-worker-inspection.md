@@ -112,6 +112,12 @@ changeset. Existing parent plan/evidence remains historical.
 - [URL review] Two more failing helper cases closed protocol-relative credential
   URL leaks; helper now has 37 passing cases. SDK projections cover the same
   form — cost if wrong: medium, conservative URL redaction hides some labels.
+- [final review] Two findings reproduced before correction: Node exports could
+  wait on cancellation of a cloned stream, and contradictory pagination totals
+  could claim completeness. Source is now consumed once with metadata validation
+  before export; numeric totals must be consistent. Node subprocess and SDK
+  regressions fail before and pass after — cost if wrong: medium, malformed
+  upstream responses now fail conservatively instead of exporting partial data.
 
 ## Deferred
 

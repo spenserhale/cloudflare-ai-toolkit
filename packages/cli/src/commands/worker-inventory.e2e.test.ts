@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const CLI_ENTRY = resolve(dirname(fileURLToPath(import.meta.url)), "../bin.ts");
+const CLI_BUILD = resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/bin.js");
 const ACCOUNT = "worker-inventory-account";
 const WORKER = "fixture-worker";
 const PATH = `/client/v4/accounts/${ACCOUNT}/workers/scripts/${WORKER}`;
@@ -21,6 +22,7 @@ interface Route {
   readonly body?: unknown;
   readonly raw?: string;
   readonly contentType?: string;
+  readonly endless?: boolean;
 }
 interface Result { code: number | null; stdout: string; stderr: string }
 
@@ -47,14 +49,15 @@ globalThis.fetch = async (input, init) => {
     return new Response(JSON.stringify({success:false,errors:[{code:599,message:violation}],result:null}),{status:599});
   }
   report.consumed++; save();
-  return new Response(route.raw ?? JSON.stringify(route.body), {
+  const body = route.endless ? new ReadableStream({pull(controller) { controller.enqueue(new Uint8Array(1024 * 1024)); }}) : route.raw ?? JSON.stringify(route.body);
+  return new Response(body, {
     status: route.status ?? 200,
     headers: {"Content-Type": route.contentType ?? "application/json"},
   });
 };
 `;
 
-async function runCli(args: string[], routes: Route[] = [], configuredAccount = false): Promise<Result> {
+async function runCli(args: string[], routes: Route[] = [], configuredAccount = false, runtime: "bun" | "node" = "bun"): Promise<Result> {
   const directory = mkdtempSync(join(tmpdir(), "cf-worker-cli-"));
   const preload = join(directory, "fetch.mjs");
   const reportPath = join(directory, "requests.json");
@@ -62,7 +65,7 @@ async function runCli(args: string[], routes: Route[] = [], configuredAccount = 
   try {
     const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("CLOUDFLARE_")));
     const result = await new Promise<Result>((resolveResult, reject) => {
-      const child = spawn(process.env.BUN_BIN ?? "bun", ["--preload", preload, CLI_ENTRY, ...args], {
+      const child = spawn(runtime === "node" ? "node" : process.env.BUN_BIN ?? "bun", [runtime === "node" ? "--import" : "--preload", preload, runtime === "node" ? CLI_BUILD : CLI_ENTRY, ...args], {
         cwd: directory,
         env: {
           ...inherited,
@@ -75,7 +78,7 @@ async function runCli(args: string[], routes: Route[] = [], configuredAccount = 
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "", stderr = "";
-      const timeout = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Worker CLI timeout")); }, 10_000);
+      const timeout = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Worker CLI timeout")); }, runtime === "node" ? 3000 : 10_000);
       child.stdout.on("data", (chunk) => { stdout += String(chunk); });
       child.stderr.on("data", (chunk) => { stderr += String(chunk); });
       child.on("error", (error) => { clearTimeout(timeout); reject(error); });
@@ -109,6 +112,16 @@ function failure(result: Result, pattern?: RegExp) {
 }
 
 describe("Worker implementation inventory CLI", () => {
+  it.each(["application/javascript", "text/html"])("Node export rejects an endless %s response without hanging or artifacts", async (contentType) => {
+    const directory = mkdtempSync(join(tmpdir(), "cf-worker-node-bound-"));
+    try {
+      const result = await runCli(command("source", "get", WORKER, "--out-dir", join(directory, "source")), [
+        { path: PATH, endless: true, contentType },
+      ], false, "node");
+      failure(result, contentType === "text/html" ? /Unsupported Worker source content format/ : /exceeds limits/);
+      expect(readdirSync(directory)).toEqual([]);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
   it("reads account settings and resource references without binding values", async () => {
     const result = await runCli(command("settings", "get", WORKER), [{ path: `${PATH}/settings`, body: envelope({ compatibility_date: "2026-01-01", bindings: [
       { name: "DATA", type: "kv_namespace", namespace_id: "namespace-1" },

@@ -7,6 +7,8 @@ export interface WorkerSourceOptions {
   readonly outDir?: string;
   readonly identity: Record<string, string>;
   readonly sanitize: (value: string) => string;
+  /** Validate the containing inventory metadata before creating any artifacts. */
+  readonly validateMetadata?: (source: WorkerSourceInspection) => void;
 }
 
 export interface WorkerSourceModule {
@@ -248,6 +250,7 @@ async function inspect(modules: SourceModule[], format: WorkerSourceInspection["
     truncated: false,
   };
   if (Buffer.byteLength(JSON.stringify(source)) > MAX_METADATA) limit();
+  options.validateMetadata?.(source);
   return exportPrivate(source, modules, options);
 }
 

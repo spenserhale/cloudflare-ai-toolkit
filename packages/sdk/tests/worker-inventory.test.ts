@@ -35,6 +35,15 @@ function version(modules: unknown = [{ name: "index.js", content_type: "applicat
 function deployment() { return { id: ID, created_on: DATE, source: "api", strategy: "percentage", versions: [{ version_id: ID, percentage: 25 }, { version_id: ID2, percentage: 75 }] }; }
 
 describe("account Worker inventory", () => {
+  it.each([
+    { page: 1, per_page: 20, count: 2, total_count: 1, total_pages: 1 },
+    { page: 1, per_page: 2, count: 2, total_pages: 0 },
+    { page: 1, per_page: 2, count: 2, total_count: 2, total_pages: 2 },
+  ])("rejects contradictory pagination totals: %j", async (info) => {
+    await mock(() => json([{ id: ID }, { id: ID2 }], info), async () => {
+      await expect(client().inventory.listWorkerVersions(TARGET, { perPage: info.per_page })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
   it("reads settings GET with explicit account scope and preserves binding references while hiding all values", async () => {
     await mock((url) => {
       expect(url.pathname).toBe(`${BASE}/settings`);

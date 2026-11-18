@@ -183,6 +183,7 @@ Lists return one page with `resultInfo`, `truncated` and `nextPage`. Follow
 `nextPage` until null; without totals a full page conservatively exposes another
 page. Page size defaults to 20 and accepts 1–100. Malformed or contradictory
 responses, denied/missing/retired resources and upstream errors remain failures.
+Contradictory pagination totals are malformed responses, never completeness evidence.
 
 Worker results project selected runtime settings and binding resource references
 rather than preserving arbitrary server fields. Binding names/types, KV/D1/R2
@@ -206,6 +207,8 @@ are 20 MiB source, 500 modules, 1,000 bindings and 1 MiB returned metadata; exce
 them fails rather than silently truncating. Upstream error text and preview URLs
 are withheld because they may contain credentials; HTTP status, numeric API code
 and request identity remain available through `describeError`.
+Source bodies are consumed once; oversized or unsupported streams fail without
+waiting on an unread cloned response, including in Node JS builds.
 
 See the [inventory guide](../../docs/guides/migration-inventory.md) for the
 assignment-to-version workflow, official contracts and unsupported cases.

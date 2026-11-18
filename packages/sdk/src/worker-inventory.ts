@@ -226,6 +226,12 @@ export class WorkerInventoryReader {
   private pagination(info: unknown, options: z.infer<typeof PageOptionsSchema>, count: number, path: string): PageResult {
     const parsed = this.parse(PageInfoSchema, info ?? {}, path);
     if ((parsed.page !== undefined && parsed.page !== options.page) || (parsed.per_page !== undefined && parsed.per_page !== options.perPage) || (parsed.count !== undefined && parsed.count !== count) || count > options.perPage) throw this.error(path);
+    const observed = (options.page - 1) * options.perPage + count;
+    if (!Number.isSafeInteger(observed) ||
+      (count > 0 && parsed.total_count !== undefined && parsed.total_count < observed) ||
+      (count > 0 && parsed.total_pages !== undefined && parsed.total_pages < options.page) ||
+      (parsed.total_count !== undefined && parsed.total_pages !== undefined &&
+        (parsed.total_count === 0 ? parsed.total_pages > 1 : parsed.total_pages !== Math.ceil(parsed.total_count / options.perPage)))) throw this.error(path);
     const hasTotals = parsed.total_pages !== undefined || parsed.total_count !== undefined;
     const more = Boolean(parsed.has_more || parsed.truncated ||
       (parsed.total_pages !== undefined && parsed.total_pages > options.page) ||
@@ -248,16 +254,15 @@ export class WorkerInventoryReader {
     const resolved = this.workerTarget(target);
     const parsed = ExportOptionsSchema.safeParse(options);
     if (!parsed.success) throw new CloudflareError("Worker source output directory must be a nonempty local path.", "CONFIG_ERROR");
-    const response = await this.response(resolved.path);
-    const inspectionOptions = { identity: { ...resolved.metadata }, sanitize: (value: string) => this.sanitize(value) };
-    // Inspect first so outer metadata validation can never fail after an export.
-    // The clone is bounded by the same 20 MiB helper limit, and only needed when
-    // the caller explicitly requests a local artifact.
-    const exportResponse = parsed.data.outDir === undefined ? undefined : response.clone();
-    const source = await inspectWorkerContent(response, inspectionOptions);
-    const result = this.bounded({ ...resolved.metadata, source }, exportResponse ? 64 * 1024 : 0);
-    if (exportResponse) result.source = await inspectWorkerContent(exportResponse, { ...inspectionOptions, outDir: parsed.data.outDir });
-    return result;
+    // Consume the body once. Cloning tees the stream, which can prevent bounded
+    // cancellation from settling while an unread export branch remains open.
+    const source = await inspectWorkerContent(await this.response(resolved.path), {
+      ...parsed.data,
+      identity: { ...resolved.metadata },
+      sanitize: (value) => this.sanitize(value),
+      validateMetadata: (metadata) => { this.bounded({ ...resolved.metadata, source: metadata }, parsed.data.outDir ? 64 * 1024 : 0); },
+    });
+    return { ...resolved.metadata, source };
   }
 
   async listWorkerDeployments(target: InventoryWorkerTarget, options: WorkerPageOptions = {}): Promise<ListInventoryWorkerDeploymentsResult> {
@@ -292,10 +297,14 @@ export class WorkerInventoryReader {
     const { modules, bindings, urls: _urls, ...metadata } = read.result;
     if (modules === undefined && parsed.data.outDir !== undefined) throw new CloudflareError("Cloudflare did not return the requested Worker version modules; source export is unavailable.", "SOURCE_UNAVAILABLE");
     const bindingResult = this.bindings(bindings, path);
-    const inspectionOptions = { identity: { ...resolved.metadata, versionId: read.result.id }, sanitize: (value: string) => this.sanitize(value) };
-    const source = modules === undefined ? null : await inspectWorkerModules(modules, read.result.main_module, inspectionOptions);
-    const result = this.bounded(this.safe({ ...resolved.metadata, version: metadata, ...bindingResult, source, sourceStatus: source === null ? "unavailable" as const : "present" as const }), parsed.data.outDir ? 64 * 1024 : 0);
-    if (modules !== undefined && parsed.data.outDir !== undefined) result.source = await inspectWorkerModules(modules, read.result.main_module, { ...inspectionOptions, outDir: parsed.data.outDir });
-    return result;
+    const base = this.safe({ ...resolved.metadata, version: metadata, ...bindingResult });
+    if (modules === undefined) return this.bounded({ ...base, source: null, sourceStatus: "unavailable" as const });
+    const source = await inspectWorkerModules(modules, read.result.main_module, {
+      ...parsed.data,
+      identity: { ...resolved.metadata, versionId: read.result.id },
+      sanitize: (value) => this.sanitize(value),
+      validateMetadata: (metadata) => { this.bounded({ ...base, source: metadata, sourceStatus: "present" }, parsed.data.outDir ? 64 * 1024 : 0); },
+    });
+    return { ...base, source, sourceStatus: "present" };
   }
 }
