@@ -90,22 +90,25 @@ function credentialBearingExpression(value: string): boolean {
   return false;
 }
 
+function redactUrl(candidate: string): string {
+  try {
+    const url = new URL(candidate);
+    let changed = false;
+    if (url.username || url.password) {
+      url.username = "";
+      url.password = "";
+      changed = true;
+    }
+    for (const key of [...url.searchParams.keys()]) {
+      if (secretField(key)) { url.searchParams.set(key, REDACTED); changed = true; }
+    }
+    return changed ? url.toString() : candidate;
+  } catch { return candidate; }
+}
+
 function redactUrls(value: string): string {
-  return value.replace(/https?:\/\/[^\s"'<>\\]+/giu, (candidate) => {
-    try {
-      const url = new URL(candidate);
-      let changed = false;
-      if (url.username || url.password) {
-        url.username = "";
-        url.password = "";
-        changed = true;
-      }
-      for (const key of [...url.searchParams.keys()]) {
-        if (secretField(key)) { url.searchParams.set(key, REDACTED); changed = true; }
-      }
-      return changed ? url.toString() : candidate;
-    } catch { return candidate; }
-  });
+  // Apostrophes are legal URL path/query characters, including before secrets.
+  return value.replace(/https?:\/\/[^\s"<>\\]+/giu, redactUrl);
 }
 
 /** Bulk Redirect source URLs may omit the scheme, unlike ordinary URL fields. */
@@ -113,15 +116,19 @@ function redactListUrl(value: string): string {
   const explicit = /^https?:\/\//iu.test(value);
   const relative = value.startsWith("//");
   const prefix = explicit ? "" : relative ? "https:" : "https://";
-  const redacted = redactUrls(`${prefix}${value}`);
+  const redacted = redactUrl(`${prefix}${value}`);
   return redacted.startsWith(prefix) ? redacted.slice(prefix.length) : redacted;
 }
 
 /** API errors may reflect Bulk Redirect sources without their optional scheme. */
 function redactOmittedSchemeUrls(value: string): string {
   return value.replace(
-    /(^|[\s"'(<=>])((?:\/\/)?(?:[^\s"'<>\\/?#@]+@)?(?:(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\[[a-f\d:.]+\])(?::\d+)?(?:[/?#][^\s"'<>\\]*)?)/giu,
-    (_match, boundary: string, candidate: string) => boundary + redactListUrl(candidate),
+    /(^|[\s"'(<=>])((?:\/\/)?(?:[^\s"<>\\/?#@]+@)?(?:(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\[[a-f\d:.]+\])(?::\d+)?(?:[/?#][^\s"<>\\]*)?)/giu,
+    (_match, boundary: string, candidate: string) => {
+      // Bare email addresses are ordinary inventory text, not URL userinfo.
+      if (/^[^:@/?#]+@[^:/?#]+$/u.test(candidate)) return boundary + candidate;
+      return boundary + redactListUrl(candidate);
+    },
   );
 }
 
@@ -299,10 +306,13 @@ export class InventoryReader {
       const after = page.info.cursors?.after;
       if (after && seen.has(after)) throw this.malformed(path, "API repeated a pagination cursor");
       const incomplete = Boolean(after || page.info.truncated || page.info.has_more ||
-        (page.info.total_count !== undefined && page.info.total_count > items.length) ||
-        (page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
+        (parsed.data.cursor === undefined && page.info.total_count !== undefined && page.info.total_count > items.length) ||
+        ((parsed.data.cursor === undefined || page.info.page !== undefined) && page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
         (page.info.count !== undefined && page.info.count > page.result.length));
       if (incomplete && !after) throw this.malformed(path, "API reports more list items without a continuation cursor");
+      if (!parsed.data.all && after && (!after.trim() || this.text(after) !== after)) {
+        throw this.malformed(path, "continuation cursor cannot be safely reused; retry without --cursor and use --all to collect items internally");
+      }
       if (!parsed.data.all || !after) {
         if (!incomplete && parsed.data.cursor === undefined && parsed.data.search === undefined && items.length !== detail.list.num_items) {
           throw this.malformed(path, "item count differs from list metadata; inventory is incomplete or the list changed during collection");

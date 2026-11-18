@@ -165,12 +165,17 @@ unfiltered collection cross-checks the metadata count and fails on inconsistency
 Any item page that advertises more data without a continuation cursor fails,
 including bounded reads. Later-page failures never return partial success. These
 reads are not an atomic snapshot; retry if concurrent changes cause a mismatch.
+Bounded reads fail if a forward cursor is blank or redaction would change it;
+retry from the beginning with `all: true` to keep that cursor internal. Resumed
+reads do not compare the suffix length to collection-wide totals.
 
 Known empty lists return their metadata and `items: []`. Missing lists, permission
 or entitlement denials, HTTP 410, malformed responses and upstream errors throw
 with their diagnostics. URLs with credentials or secret query values are redacted,
 including scheme-less Bulk Redirect source URLs. Cloudflare Managed Lists and
 built-in datasets are not claimed as accessible through the account Lists API.
+URL fields containing legal apostrophes are parsed in full. Ordinary comments
+and descriptions preserve bare email addresses unless they match credentials.
 
 ### Redirect rules
 

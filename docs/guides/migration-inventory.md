@@ -178,6 +178,9 @@ Items default to 100 per page, maximum 500. `--cursor` passes an opaque API curs
 page error. Starting `--all` with a cursor collects only the remaining suffix.
 If the API advertises more items but supplies no usable continuation cursor,
 the read fails even without `--all`; it cannot offer a continuation that works.
+Bounded reads also fail if a forward cursor is blank or credential redaction
+would change it. Retrying without `--cursor` and using `--all` keeps the original
+cursor inside the reader instead of exporting an unusable continuation.
 `--search` is an IP prefix, redirect/hostname substring, or exact ASN match,
 according to the API. Filtered/resumed reads are subsets, not whole-list evidence.
 For an unfiltered terminal collection from the beginning, the item count must
@@ -194,6 +197,9 @@ rule priority to items. Source URLs can omit their scheme; see the
 [parameter reference](https://developers.cloudflare.com/rules/url-forwarding/bulk-redirects/reference/parameters/).
 URL credentials and sensitive query values are redacted even in those sources
 and in upstream diagnostics reflecting scheme-less URLs.
+Complete URL fields are parsed directly, including valid apostrophes in paths;
+bare email addresses in ordinary comments and descriptions remain unchanged
+unless they match a configured credential value.
 Treat redacted URLs as inventory evidence, not reusable redirect definitions.
 
 A successful empty list has metadata and `items: []`. A missing list (404),
@@ -506,11 +512,25 @@ isolated subprocess cases. The SDK cases failed on missing methods/exports and
 the CLI cases failed on the unregistered `lists` route before implementation.
 Independent package review added nine SDK and two subprocess regressions, observed
 failing before fixing reflected scheme-less URL credentials and unusable bounded
-pagination. Targeted SDK inventory/Lists verification passes 153 cases; CLI
-inventory, WAF and Lists verification passes 205 cases. SDK build and SDK/CLI lint pass.
+pagination. Final review added twelve SDK and five subprocess cases covering
+apostrophes in URLs, bare email preservation, safe cursor round-tripping,
+internal complete collection, and resumed collection-wide totals. Eleven SDK and
+five subprocess regressions failed before the corrections; the internal
+complete-collection case guards behavior that already worked. Targeted SDK
+inventory/Lists verification passes 165 cases; CLI inventory units and Lists
+unit/subprocess verification passes 150 cases.
 The added tests cover multiple pages, exact filters/search, scope, redirect
 parameters, all documented kinds, empty versus missing, failed later pages,
 403/404/410/5xx, malformed successes, redaction and GET-only enforcement.
+
+Full local verification after both review rounds:
+
+- `bun run build`: SDK JS/types, CLI JS and MCP builds exit 0.
+- `bun run test`: SDK 374, MCP 12, CLI 431 pass, 817 total with no failures.
+- `bun run lint`: all three packages exit 0.
+- `node packages/cli/dist/bin.js lists --help` and help for `lists list`,
+  `lists get`, and `lists items list` exit 0 with the documented flags.
+- `git diff --check` passes. No local compiled binary was built or smoke-tested.
 
 All six guide Bash blocks pass `bash -n`. Isolated execution of the list recipe
 with a synthetic `cloudflare` function verifies eight scenarios: success, empty

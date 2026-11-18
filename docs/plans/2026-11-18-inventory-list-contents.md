@@ -123,6 +123,23 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   reflected diagnostics as well as URL fields — upstream messages can echo a
   source/search string — cost if wrong: medium, secret-bearing text may be masked;
   ordinary URLs/prose have preservation regressions.
+- [verification] Root build/lint pass and all 817 tests pass (SDK 374, MCP 12,
+  CLI 431); JS help passes for the Lists family and all three reads. Six guide
+  Bash blocks pass syntax checks; eight isolated list-recipe scenarios behave as
+  documented — cost if wrong: low, evidence is local and mocked, not live access.
+- [live evidence] Existing credential-status read reports keychain available but
+  token/key/email missing from all active sources; no live Lists HTTP attempted —
+  cost if wrong: low, account data and permissions remain explicitly unverified.
+- [final review] Parse complete URL fields directly and retain apostrophes when
+  scanning reflected URLs; preserve bare email addresses in normal text — final
+  review reproduced a credential leak and comment corruption — cost if wrong:
+  medium, security filtering must retain non-secret configuration faithfully.
+- [continuation] Fail bounded reads when a forward cursor is blank or changes
+  under redaction; advise `--all` from the beginning, which follows raw cursors
+  internally — cost if wrong: low, safe completion requires a larger opt-in read.
+- [resumption] Do not compare a resumed suffix against collection-wide totals —
+  the earlier items were deliberately skipped — cost if wrong: low, explicit
+  forward cursors and incompleteness flags still govern remaining pages.
 
 ## Deferred
 

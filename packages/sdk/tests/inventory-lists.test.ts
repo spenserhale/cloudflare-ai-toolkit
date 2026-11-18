@@ -177,6 +177,30 @@ describe("typed Lists items and pagination", () => {
   it("never returns partial results after a later failed page", async () => {
     await withRoutes([metadata(), items([ip], { cursors: { after: "next" } }), { ...items(null), query: { per_page: "100", cursor: "next" }, status: 500, body: { success: false, errors: [{ code: 999, message: "Backend failure" }], result: null } }], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ statusCode: 500, code: "999" }); });
   });
+
+  it.each([false, true])("does not compare a resumed suffix to the collection-wide total (all=%s)", async (all) => {
+    await withRoutes([metadata(), { ...items([{ ...ip, id: "second" }], { total_count: 2 }), query: { per_page: "100", cursor: "after-first" } }], async () => {
+      const result = await client().inventory.listListItems("list-1", target, { cursor: "after-first", all });
+      expect(result.items).toEqual([{ ...ip, id: "second" }]);
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  it.each(["   ", "synthetic-list-token-next", "https://alice:password@example.com/?token=cursor-secret"])("fails bounded continuation that cannot round-trip safely: %s", async (after) => {
+    await withRoutes([metadata(), items([ip], { cursors: { after } })], async () => {
+      await expect(client().inventory.listListItems("list-1", target)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE", message: expect.stringContaining("--all") });
+    });
+  });
+
+  it("follows a credential-bearing cursor internally with all instead of exporting it for reuse", async () => {
+    const after = "synthetic-list-token-next";
+    await withRoutes([metadata(), items([ip], { cursors: { after } }), { ...items([{ ...ip, id: "second" }]), query: { per_page: "100", cursor: after } }], async () => {
+      const result = await client().inventory.listListItems("list-1", target, { all: true });
+      expect(result.items).toHaveLength(2);
+      expect(result.truncated).toBe(false);
+      expect(JSON.stringify(result)).not.toContain("synthetic-list-token");
+    });
+  });
 });
 
 describe("Lists failures and redaction", () => {
@@ -258,6 +282,40 @@ describe("Lists failures and redaction", () => {
         expect(text).toContain("lang=en");
         expect(text).toContain("Keep list name office_networks, status 301 and safe.example.com/path?lang=en unchanged.");
       }
+    });
+  });
+
+  it.each(["https://old.example.com/O'Brien?token=apostrophe-secret", "old.example.com/O'Brien?token=apostrophe-secret", "//old.example.com/O'Brien?token=apostrophe-secret"])("redacts complete URL fields containing a legal apostrophe: %s", async (source_url) => {
+    await withRoutes([metadata({ ...list, kind: "redirect", num_items: 1 }), items([{ ...redirect, redirect: { ...redirect.redirect, source_url, target_url: "https://new.example.com/O'Brien?api_key=target-apostrophe-secret&lang=en" } }])], async () => {
+      const result = await client().inventory.listListItems("list-1", target);
+      const json = JSON.stringify(result);
+      expect(json).not.toContain("apostrophe-secret");
+      expect(result.items[0]?.redirect).toMatchObject({ preserve_path_suffix: false, status_code: 308 });
+      expect(json).toContain("O'Brien");
+      expect(json).toContain("lang=en");
+    });
+  });
+
+  it.each(["https://old.example.com/O'Brien?token=diagnostic-secret", "old.example.com/O'Brien?token=diagnostic-secret"])("redacts apostrophe-bearing URLs reflected in diagnostics: %s", async (source) => {
+    await withRoutes([{ path: root, status: 403, body: { success: false, result: null, errors: [{ code: 1234, message: `Failed URL ${source} for list office_networks` }] } }], async () => {
+      try { await client().inventory.listLists(target); throw new Error("expected error"); }
+      catch (error) {
+        const text = describeError(error);
+        expect(text).not.toContain("diagnostic-secret");
+        expect(text).toContain("O'Brien");
+        expect(text).toContain("for list office_networks");
+      }
+    });
+  });
+
+  it("preserves bare email addresses in comments and existing Rulesets fields", async () => {
+    const comment = "Contact owner@example.test or help@example.test.";
+    await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, comment }]), { path: "/client/v4/accounts/account-1/rulesets/ruleset-1", result: { id: "ruleset-1", description: comment, rules: [{ id: "rule-1", action: "block", description: comment }] } }], async () => {
+      const result = await client().inventory.listListItems("list-1", target);
+      expect(result.items[0]?.comment).toBe(comment);
+      const ruleset = await client().inventory.getRuleset("ruleset-1", target);
+      expect(ruleset.ruleset.description).toBe(comment);
+      expect(ruleset.ruleset.rules[0]?.description).toBe(comment);
     });
   });
 });

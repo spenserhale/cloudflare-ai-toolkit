@@ -290,14 +290,14 @@ describe("CLI account list inventory through mocked HTTP", () => {
     expect(parseSuccess(result)).toMatchObject({ items, truncated: false });
   });
 
-  it("returns a bounded item page and exposes cursor without logging its secret-bearing value", async () => {
-    const cursor = "next-inventory-test-token";
+  it("returns a bounded item page and exposes a usable opaque cursor without logging its value", async () => {
+    const cursor = "next-opaque?&=+/%";
     const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--per-page", "1"], [
       metadataRoute(list("ip", 2)),
       itemsRoute([{ id: "first", ip: "192.0.2.1" }], { cursors: { after: cursor } }, { per_page: "1" }),
     ]);
     const output = parseSuccess(result, true);
-    expect(output).toMatchObject({ truncated: true, resultInfo: { cursors: { after: "next-[REDACTED]" } } });
+    expect(output).toMatchObject({ truncated: true, resultInfo: { cursors: { after: cursor } } });
     expect(output.items).toHaveLength(1);
     expect(result.stderr).toContain("--cursor");
     expect(result.stderr).toContain("--all");
@@ -510,6 +510,45 @@ describe("CLI account list inventory through mocked HTTP", () => {
     ]);
     expectFailure(result, /malformed/iu);
     expect(result.stderr).not.toContain("do-not-leak");
+  });
+
+  it("preserves comments and redacts apostrophe-bearing redirect URLs in JSON", async () => {
+    const comment = "Contact owner@example.test";
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope], [
+      metadataRoute(list("redirect", 1)),
+      itemsRoute([{ id: "apostrophe", comment, redirect: { source_url: "old.example.test/O'Brien?token=path-secret", target_url: "https://new.example.test/O'Brien?api_key=target-secret", preserve_query_string: false } }]),
+    ]);
+    const output = parseSuccess(result);
+    expect(output.items[0].comment).toBe(comment);
+    expect(output.items[0].redirect.preserve_query_string).toBe(false);
+    expect(result.stdout).toContain("O'Brien");
+    expect(result.stdout).not.toContain("path-secret");
+    expect(result.stdout).not.toContain("target-secret");
+  });
+
+  it("redacts apostrophe-bearing URLs in error diagnostics", async () => {
+    const result = await runCli(["lists", "list", ...scope], [{
+      pathname: ACCOUNT_PATH, query: {}, status: 500,
+      body: { success: false, errors: [{ code: 12005, message: "Failed old.example.test/O'Brien?token=diagnostic-path-secret for office_networks" }], result: null },
+    }]);
+    expectFailure(result, "Failed");
+    expect(result.stderr).not.toContain("diagnostic-path-secret");
+    expect(result.stderr).toContain("O'Brien");
+  });
+
+  it.each(["   ", "inventory-test-token-next"])("fails a bounded cursor that cannot be reused safely: %s", async (after) => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope], [
+      metadataRoute(list("ip", 2)), itemsRoute([{ id: "one", ip: "192.0.2.1" }], { cursors: { after } }),
+    ]);
+    expectFailure(result, "--all");
+    expect(result.stderr).not.toContain("inventory-test-token");
+  });
+
+  it("resumes a final item page with a collection-wide total", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--cursor", "after-first"], [
+      metadataRoute(list("ip", 2)), itemsRoute([{ id: "two", ip: "192.0.2.2" }], { total_count: 2 }, { per_page: "100", cursor: "after-first" }),
+    ]);
+    expect(parseSuccess(result)).toMatchObject({ items: [{ id: "two" }], truncated: false });
   });
 
   it.each([

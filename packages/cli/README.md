@@ -194,6 +194,10 @@ without a continuation cursor fails, including bounded reads. `--all --cursor <c
 collects a suffix, not items before that cursor. `--search` is an upstream filter: IP prefix,
 redirect/hostname substring, ASN exact match. Filtered/resumed results are subsets.
 Truncation diagnostics go to stderr; `--json` stdout contains only JSON.
+If redaction would alter a forward cursor, or the cursor is blank, bounded reads
+fail rather than suggest an unusable `--cursor`. Retry from the beginning with
+`--all` to follow that cursor internally. Resumed reads remain suffixes even if
+the API includes a collection-wide total.
 
 Kinds are `ip`, `redirect`, `hostname`, and `asn`. The readers preserve item IDs,
 IPs/comments, redirect URLs, status and all behavior parameters. An empty list
