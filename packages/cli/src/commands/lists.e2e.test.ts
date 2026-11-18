@@ -552,6 +552,43 @@ describe("CLI account list inventory through mocked HTTP", () => {
   });
 
   it.each([
+    "['https://one.example/path','https://alice:password@two.example/private']",
+    "['one.example/path','alice:password@two.example/private']",
+  ])("redacts adjacent quoted URLs in stderr: %s", async (message) => {
+    const result = await runCli(["lists", "list", ...scope], [{ pathname: ACCOUNT_PATH, query: {}, status: 500, body: { success: false, errors: [{ code: 12006, message }], result: null } }]);
+    expectFailure(result, "500");
+    expect(result.stderr).not.toContain("alice");
+    expect(result.stderr).not.toContain("password");
+    expect(result.stderr).toContain("REDACTED");
+  });
+
+  it("collects cursor pages with total_pages but no explicit page index", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--all", "--per-page", "1"], [
+      metadataRoute(list("ip", 2)),
+      itemsRoute([{ id: "one", ip: "192.0.2.1" }], { total_pages: 2, cursors: { after: "next" } }, { per_page: "1" }),
+      itemsRoute([{ id: "two", ip: "192.0.2.2" }], { total_pages: 2 }, { per_page: "1", cursor: "next" }),
+    ]);
+    const output = parseSuccess(result);
+    expect(output.items).toHaveLength(2);
+    expect(output.truncated).toBe(false);
+  });
+
+  it("fails an item page larger than requested instead of exceeding its bound", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--per-page", "1"], [
+      metadataRoute(list("ip", 2)), itemsRoute([{ id: "one", ip: "192.0.2.1" }, { id: "two", ip: "192.0.2.2" }], {}, { per_page: "1" }),
+    ]);
+    expectFailure(result, /malformed/iu);
+  });
+
+  it("fails duplicate IDs across pages even when the accumulated count matches metadata", async () => {
+    const item = { id: "same", ip: "192.0.2.1" };
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--all"], [
+      metadataRoute(list("ip", 2)), itemsRoute([item], { cursors: { after: "next" } }), itemsRoute([item], {}, { per_page: "100", cursor: "next" }),
+    ]);
+    expectFailure(result, /malformed/iu);
+  });
+
+  it.each([
     ["lists", "list"], ["lists", "get"], ["lists", "items", "list"],
   ])("documents account scope and JSON in command help: %j", async (...command) => {
     const result = await runCli([...command, "--help"]);

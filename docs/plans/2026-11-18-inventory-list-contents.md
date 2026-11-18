@@ -1,7 +1,7 @@
 ---
 title: Inventory account lists and their contents
 description: Resolve Bulk Redirect and custom IP-list references through supported read-only CLI and SDK commands.
-status: in-progress
+status: done
 date: 2026-11-18
 size: feature
 specs: []
@@ -123,8 +123,8 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   reflected diagnostics as well as URL fields — upstream messages can echo a
   source/search string — cost if wrong: medium, secret-bearing text may be masked;
   ordinary URLs/prose have preservation regressions.
-- [verification] Root build/lint pass and all 817 tests pass (SDK 374, MCP 12,
-  CLI 431); JS help passes for the Lists family and all three reads. Six guide
+- [verification] Root build/lint pass and all 832 tests pass (SDK 384, MCP 12,
+  CLI 436); JS help passes for the Lists family and all three reads. Six guide
   Bash blocks pass syntax checks; eight isolated list-recipe scenarios behave as
   documented — cost if wrong: low, evidence is local and mocked, not live access.
 - [live evidence] Existing credential-status read reports keychain available but
@@ -140,11 +140,21 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
 - [resumption] Do not compare a resumed suffix against collection-wide totals —
   the earlier items were deliberately skipped — cost if wrong: low, explicit
   forward cursors and incompleteness flags still govern remaining pages.
+- [compound URLs] Check adjacent/nested URL components independently, masking
+  an ambiguous credential-bearing compound in full — a URL tokenizer must not
+  consume two adjacent URLs as one harmless path — cost if wrong: medium, some
+  non-secret context around credentials is intentionally unavailable.
+- [page integrity] Reject oversized pages and repeated item IDs, and use fetched
+  page indexes for totals when upstream omits `page` — review reproduced bound
+  violations, duplicate-masked gaps, and false complete-read failures — cost if
+  wrong: low, concurrent changes can require retry instead of yielding bad data.
 
 ## Deferred
 
-Live PBHS list/permission/entitlement evidence requires existing credentials.
-If unavailable, record access as unverified and never infer empty lists.
+Live PBHS list access, permissions and entitlements remain unverified: the
+existing credential mechanism reports all credentials missing. No live Lists
+HTTP request was attempted, and no empty list conclusion is inferred.
+Cloudflare Managed List contents remain outside the documented account Lists API.
 
 ## Tasks
 

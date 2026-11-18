@@ -168,6 +168,8 @@ reads are not an atomic snapshot; retry if concurrent changes cause a mismatch.
 Bounded reads fail if a forward cursor is blank or redaction would change it;
 retry from the beginning with `all: true` to keep that cursor internal. Resumed
 reads do not compare the suffix length to collection-wide totals.
+Pages larger than `perPage` and repeated item IDs within/across pages fail, so
+duplicate rows cannot satisfy a full-list count while masking missing items.
 
 Known empty lists return their metadata and `items: []`. Missing lists, permission
 or entitlement denials, HTTP 410, malformed responses and upstream errors throw
@@ -176,6 +178,8 @@ including scheme-less Bulk Redirect source URLs. Cloudflare Managed Lists and
 built-in datasets are not claimed as accessible through the account Lists API.
 URL fields containing legal apostrophes are parsed in full. Ordinary comments
 and descriptions preserve bare email addresses unless they match credentials.
+Ambiguous compound URL text containing credentials is conservatively masked in
+full; compound URLs without credentials remain intact.
 
 ### Redirect rules
 

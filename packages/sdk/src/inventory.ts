@@ -91,6 +91,11 @@ function credentialBearingExpression(value: string): boolean {
 }
 
 function redactUrl(candidate: string): string {
+  // Prose can put several quoted URLs next to one another without whitespace.
+  // Inspect each independently; if one bears credentials, mask the compound
+  // candidate rather than treating later URLs as part of the first URL's path.
+  const parts = candidate.split(/(?=https?:\/\/)|(?<=['"],['"])(?=[^\s"<>\\])/giu);
+  if (parts.length > 1 && parts.some((part) => redactListUrl(part) !== part)) return REDACTED;
   try {
     const url = new URL(candidate);
     let changed = false;
@@ -297,17 +302,25 @@ export class InventoryReader {
     const path = `/client/v4/accounts/${encodeURIComponent(detail.accountId)}/rules/lists/${encodeURIComponent(id)}/items`;
     const schemas = { ip: InventoryListIPItemSchema, redirect: InventoryListRedirectItemSchema, hostname: InventoryListHostnameItemSchema, asn: InventoryListASNItemSchema };
     const items: InventoryListItem[] = [];
+    const itemIds = new Set<string>();
     const seen = new Set<string>();
     let cursor = parsed.data.cursor;
+    let pagesFetched = 0;
     if (cursor) seen.add(cursor);
     for (;;) {
       const page = await this.read(path, z.array(schemas[detail.list.kind]), { cursor, per_page: parsed.data.perPage, search: parsed.data.search });
+      pagesFetched++;
+      if (page.result.length > parsed.data.perPage) throw this.malformed(path, "API returned more list items than the requested page size");
+      for (const item of page.result) {
+        if (itemIds.has(item.id)) throw this.malformed(path, "API repeated a list item ID; inventory is inconsistent or the list changed during collection");
+        itemIds.add(item.id);
+      }
       items.push(...page.result);
       const after = page.info.cursors?.after;
       if (after && seen.has(after)) throw this.malformed(path, "API repeated a pagination cursor");
       const incomplete = Boolean(after || page.info.truncated || page.info.has_more ||
         (parsed.data.cursor === undefined && page.info.total_count !== undefined && page.info.total_count > items.length) ||
-        ((parsed.data.cursor === undefined || page.info.page !== undefined) && page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
+        ((parsed.data.cursor === undefined || page.info.page !== undefined) && page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? pagesFetched)) ||
         (page.info.count !== undefined && page.info.count > page.result.length));
       if (incomplete && !after) throw this.malformed(path, "API reports more list items without a continuation cursor");
       if (!parsed.data.all && after && (!after.trim() || this.text(after) !== after)) {

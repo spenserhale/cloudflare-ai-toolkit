@@ -198,6 +198,8 @@ If redaction would alter a forward cursor, or the cursor is blank, bounded reads
 fail rather than suggest an unusable `--cursor`. Retry from the beginning with
 `--all` to follow that cursor internally. Resumed reads remain suffixes even if
 the API includes a collection-wide total.
+Oversized API pages and repeated item IDs fail instead of exceeding requested
+bounds or reporting an apparently complete collection containing duplicates.
 
 Kinds are `ip`, `redirect`, `hostname`, and `asn`. The readers preserve item IDs,
 IPs/comments, redirect URLs, status and all behavior parameters. An empty list

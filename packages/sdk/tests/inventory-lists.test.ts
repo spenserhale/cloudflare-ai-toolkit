@@ -150,7 +150,7 @@ describe("typed Lists items and pagination", () => {
     });
   });
 
-  it.each([[], [ip], [ip, ip, ip]])("fails unfiltered terminal count mismatch rather than silently completing %j", async (page) => {
+  it.each([[], [ip], [ip, { ...ip, id: "second" }, { ...ip, id: "third" }]])("fails unfiltered terminal count mismatch rather than silently completing %j", async (page) => {
     await withRoutes([metadata(), items(page)], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
   });
 
@@ -163,7 +163,7 @@ describe("typed Lists items and pagination", () => {
   });
 
   it("rejects cycles after multiple pages", async () => {
-    await withRoutes([metadata(), items([ip], { cursors: { after: "a" } }), { ...items([ip], { cursors: { after: "b" } }), query: { per_page: "100", cursor: "a" } }, { ...items([ip], { cursors: { after: "a" } }), query: { per_page: "100", cursor: "b" } }], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
+    await withRoutes([metadata({ ...list, num_items: 3 }), items([ip], { cursors: { after: "a" } }), { ...items([{ ...ip, id: "second" }], { cursors: { after: "b" } }), query: { per_page: "100", cursor: "a" } }, { ...items([{ ...ip, id: "third" }], { cursors: { after: "a" } }), query: { per_page: "100", cursor: "b" } }], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE", message: expect.stringContaining("cursor") }); });
   });
 
   it.each([{ has_more: true }, { truncated: true }, { count: 2 }, { total_count: 3 }, { total_pages: 2 }])("requires a cursor for complete collection when more is advertised: %j", async (info) => {
@@ -199,6 +199,32 @@ describe("typed Lists items and pagination", () => {
       expect(result.items).toHaveLength(2);
       expect(result.truncated).toBe(false);
       expect(JSON.stringify(result)).not.toContain("synthetic-list-token");
+    });
+  });
+
+  it("counts fetched pages when cursor responses include total_pages without a page index", async () => {
+    await withRoutes([metadata(), { ...items([ip], { total_pages: 2, cursors: { after: "next" } }), query: { per_page: "1" } }, { ...items([{ ...ip, id: "second" }], { total_pages: 2 }), query: { per_page: "1", cursor: "next" } }], async () => {
+      const result = await client().inventory.listListItems("list-1", target, { all: true, perPage: 1 });
+      expect(result.items).toHaveLength(2);
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  it.each([false, true])("rejects an oversized API item page (all=%s)", async (all) => {
+    await withRoutes([metadata(), { ...items([ip, { ...ip, id: "second" }]), query: { per_page: "1" } }], async () => {
+      await expect(client().inventory.listListItems("list-1", target, { all, perPage: 1 })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+
+  it("rejects duplicate item IDs within one page instead of trusting a matching count", async () => {
+    await withRoutes([metadata(), items([ip, ip])], async () => {
+      await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+
+  it("rejects duplicate item IDs across pages instead of masking missing contents", async () => {
+    await withRoutes([metadata(), items([ip], { cursors: { after: "next" } }), { ...items([ip]), query: { per_page: "100", cursor: "next" } }], async () => {
+      await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
     });
   });
 });
@@ -316,6 +342,29 @@ describe("Lists failures and redaction", () => {
       const ruleset = await client().inventory.getRuleset("ruleset-1", target);
       expect(ruleset.ruleset.description).toBe(comment);
       expect(ruleset.ruleset.rules[0]?.description).toBe(comment);
+    });
+  });
+
+  it.each([
+    "['https://one.example/path','https://alice:password@two.example/private']",
+    "['https://one.example/path?lang=en','https://two.example/path?token=adjacent-secret']",
+    "https://one.example/path?token=https://two.example/credential-value",
+    "['one.example/path','alice:password@two.example/private']",
+  ])("redacts credentials in compound URL diagnostics: %s", async (message) => {
+    await withRoutes([{ path: root, status: 500, body: { success: false, result: null, errors: [{ code: 1234, message }] } }], async () => {
+      try { await client().inventory.listLists(target); throw new Error("expected error"); }
+      catch (error) {
+        const text = describeError(error);
+        for (const secret of ["alice", "password", "adjacent-secret", "credential-value"]) expect(text).not.toContain(secret);
+        expect(text).toContain("REDACTED");
+      }
+    });
+  });
+
+  it("preserves compound URLs when they contain no credentials", async () => {
+    const comment = "['https://one.example/O'Brien?lang=en','https://two.example/private']";
+    await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, comment }])], async () => {
+      expect((await client().inventory.listListItems("list-1", target)).items[0]?.comment).toBe(comment);
     });
   });
 });

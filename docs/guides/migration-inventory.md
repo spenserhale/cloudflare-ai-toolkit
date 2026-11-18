@@ -187,6 +187,10 @@ For an unfiltered terminal collection from the beginning, the item count must
 match metadata `num_items`; a mismatch fails and may require retrying after
 concurrent edits. Collection is not an atomic snapshot, and same-count concurrent
 edits cannot be detected by counts alone.
+Pages exceeding the requested size and repeated item IDs fail rather than
+exceeding bounds or allowing duplicates to mask missing contents. Cursor pages
+that also report numeric totals are checked using the collection's actual start
+position and fetched-page count, not an assumed first page on every response.
 
 List/item IDs, names, kinds, comments, IP/CIDR strings, and native timestamps are
 retained. Redirects preserve `source_url`, `target_url`, `status_code`,
@@ -200,6 +204,8 @@ and in upstream diagnostics reflecting scheme-less URLs.
 Complete URL fields are parsed directly, including valid apostrophes in paths;
 bare email addresses in ordinary comments and descriptions remain unchanged
 unless they match a configured credential value.
+Adjacent or nested URL text is checked component by component; an ambiguous
+compound containing credentials is conservatively redacted in full.
 Treat redacted URLs as inventory evidence, not reusable redirect definitions.
 
 A successful empty list has metadata and `items: []`. A missing list (404),
@@ -517,8 +523,13 @@ apostrophes in URLs, bare email preservation, safe cursor round-tripping,
 internal complete collection, and resumed collection-wide totals. Eleven SDK and
 five subprocess regressions failed before the corrections; the internal
 complete-collection case guards behavior that already worked. Targeted SDK
-inventory/Lists verification passes 165 cases; CLI inventory units and Lists
-unit/subprocess verification passes 150 cases.
+inventory/Lists verification then passed 165 cases; CLI inventory units and Lists
+unit/subprocess verification passed 150 cases. A subsequent review re-check added
+ten SDK and five subprocess cases for compound URLs, numeric totals without page
+indexes, oversized pages, and duplicate IDs. Eight SDK and five subprocess
+regressions failed before those fixes; safe compound URLs and nested secret query
+values also have preservation/redaction guards. Final targeted checks pass 175
+SDK and 155 CLI cases.
 The added tests cover multiple pages, exact filters/search, scope, redirect
 parameters, all documented kinds, empty versus missing, failed later pages,
 403/404/410/5xx, malformed successes, redaction and GET-only enforcement.
@@ -526,7 +537,7 @@ parameters, all documented kinds, empty versus missing, failed later pages,
 Full local verification after both review rounds:
 
 - `bun run build`: SDK JS/types, CLI JS and MCP builds exit 0.
-- `bun run test`: SDK 374, MCP 12, CLI 431 pass, 817 total with no failures.
+- `bun run test`: SDK 384, MCP 12, CLI 436 pass, 832 total with no failures.
 - `bun run lint`: all three packages exit 0.
 - `node packages/cli/dist/bin.js lists --help` and help for `lists list`,
   `lists get`, and `lists items list` exit 0 with the documented flags.
