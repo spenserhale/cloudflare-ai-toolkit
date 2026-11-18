@@ -104,6 +104,14 @@ changeset. Existing parent plan/evidence remains historical.
   URL identity, encoding and manifest-limit regressions. Existing ancestors are
   canonicalized (macOS /tmp is a symlink); destination leaf must be new — cost if
   wrong: medium, local filesystem races require a hostile same-user process.
+- [SDK review] Numeric-only upstream codes, pinned UUID/prefix identity checks,
+  nonpaged completeness and metadata/binding validation before export are covered
+  by failing-then-passing regressions. Explicit export of unavailable modules
+  fails `SOURCE_UNAVAILABLE`; metadata-only reads remain unavailable — cost if
+  wrong: medium, unsupported Beta responses need manual inspection.
+- [URL review] Two more failing helper cases closed protocol-relative credential
+  URL leaks; helper now has 37 passing cases. SDK projections cover the same
+  form — cost if wrong: medium, conservative URL redaction hides some labels.
 
 ## Deferred
 
