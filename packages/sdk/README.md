@@ -80,6 +80,16 @@ await cf.deleteCustomHostname("<custom-hostname-id>");
 
 ### Firewall (WAF) rules
 
+`listFirewallRules` and `getFirewallRule` read the Rulesets Engine's
+`http_request_firewall_custom` phase. Rules retain native fields and one-based
+`order`, plus compatibility `filter.expression` and `paused` (inverse of
+`enabled`). Filters and numeric pagination run locally over the full entrypoint.
+The result identifies scope, phase, ruleset and explicit phase absence.
+
+The write methods below still target the **legacy Firewall Rules API**, which
+Cloudflare has retired. They are not modern Rulesets mutations; do not use a
+Rulesets read ID with these methods. Inventory never calls them.
+
 ```ts
 const { rules } = await cf.listFirewallRules({ action: "block" });
 const rule = await cf.getFirewallRule("<rule-id>");
@@ -100,6 +110,34 @@ await cf.updateFirewallRule("<rule-id>", {
 
 await cf.deleteFirewallRule("<rule-id>");
 ```
+
+### Read-only configuration inventory
+
+```ts
+const target = { scope: "zone" as const, zoneId: "<zone-id>" };
+const page = await cf.inventory.listRulesets(target, { perPage: 50 });
+const all = await cf.inventory.listRulesets(target, { all: true });
+const phase = await cf.inventory.getPhaseEntrypoint("http_request_origin", target);
+const detail = await cf.inventory.getRuleset("<ruleset-id>", target);
+const account = { scope: "account" as const, accountId: "<account-id>" };
+const managed = await cf.inventory.getRuleset("<managed-ruleset-id>", account, "latest");
+const ssl = await cf.inventory.getZoneSetting("ssl", "<zone-id>");
+const bots = await cf.inventory.getBotManagement("<zone-id>");
+const routes = await cf.inventory.listWorkerRoutes("<zone-id>");
+const domains = await cf.inventory.listWorkerDomains({ accountId: "<account-id>", zoneId: "<zone-filter>" });
+const pageRules = await cf.inventory.listPageRules("<zone-id>");
+const transforms = await cf.inventory.getManagedTransforms("<zone-id>");
+const normalization = await cf.inventory.getUrlNormalization("<zone-id>");
+```
+
+The reader reuses the client's authentication and validates success envelopes and
+resource shapes. Unknown product fields survive, rule-array order and execute
+overrides remain intact, and credential-bearing output is redacted. Rulesets list
+uses cursor pagination (`resultInfo.cursors.after`, `truncated`); details contain
+all rules. Only a structured phase-entrypoint not-found 404 becomes
+`status: "absent"`, with the original diagnostic. HTML/ambiguous or explicit
+entitlement-denied 404s remain errors. A ruleset-ID 404 can mean missing resource or managed entitlement and
+remains an error. See the [inventory guide](../../docs/guides/migration-inventory.md).
 
 ### Redirect rules
 

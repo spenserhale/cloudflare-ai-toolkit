@@ -36,6 +36,17 @@ describe("describeError", () => {
     expect(text).not.toContain("error code");
   });
 
+  it("explains 403 as permission or entitlement failure", () => {
+    const text = describeError(new CloudflareError("Forbidden", "10000", 403));
+    expect(text).toContain("entitlement");
+  });
+
+  it("explains retired APIs without suggesting permission changes", () => {
+    const text = describeError(new CloudflareError("Gone", "1000", 410, { requiredPermissions: ["Firewall Services Read"], requestMethod: "GET", requestPath: "/client/v4/zones/z/firewall/rules" }));
+    expect(text).toContain("retired");
+    expect(text).not.toContain("Required permission");
+  });
+
   it("points to the dashboard when the account has no default registrant", () => {
     const err = new CloudflareError(
       "No registrant contact provided and no default address book entry found for this account.",

@@ -95,7 +95,7 @@ commit carries its documentation; the final guide adds verified evidence.
 - [compatibility] Keep retired WAF write operations unchanged, clearly labeled — the
   user requested inventory only — cost if wrong: medium; modern read IDs must not
   be used for legacy mutations.
-- [absence] Only phase-entrypoint 404 is absent; generic Ruleset 404 remains failed
+- [absence] Only structured phase-entrypoint not-found 404 is absent; generic Ruleset 404 remains failed
   and may mean entitlement — matches official docs — cost if wrong: medium; API
   may mask access as absence, so absence is endpoint evidence, not access proof.
 - [settings] Use individual settings GETs, not deprecated settings collection —
@@ -106,6 +106,13 @@ commit carries its documentation; the final guide adds verified evidence.
   SDK 203, MCP 12, CLI 228; fast WAF/read CLI tests 18 pass. No existing failures.
 - [docs] No contribution guide or feature-spec map exists; follow existing plans,
   decisions, README, Changesets, and package scripts — cost if wrong: low.
+- [execution] T3's disjoint process-test file was drafted while T1 was in flight;
+  its red run used the old built SDK and proved the exact retired-endpoint bug.
+  Green verification waits for the new SDK build — cost if wrong: low.
+- [redaction] Preserve ordinary transform headers and cache-key cookie-name
+  configuration while redacting sensitive values — inventory must remain useful
+  for configuration comparisons — cost if wrong: medium; regression tests cover
+  normal and credential-bearing shapes.
 
 ## Deferred
 
@@ -138,7 +145,7 @@ flowchart LR
 **Owns:** `packages/sdk/src/inventory.ts`, `packages/sdk/src/client.ts`,
 `packages/sdk/src/types.ts`, `packages/sdk/src/index.ts`, `packages/sdk/src/errors.ts`,
 `packages/sdk/tests/inventory.test.ts`, `packages/sdk/tests/firewall-rules.test.ts`,
-`packages/sdk/tests/explanatory-errors.test.ts`.
+`packages/sdk/tests/describe-error.test.ts`.
 **Depends on:** none.
 **Consumes:** authenticated GET callback to existing `requestRaw` transport.
 **Produces:** public `CloudflareClient.inventory: InventoryReader`; methods

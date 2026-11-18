@@ -130,6 +130,7 @@ import {
   CloudflareNotFoundError,
 } from "./errors.js";
 import { flattenTokenPolicies } from "./token-permissions.js";
+import { InventoryReader } from "./inventory.js";
 import { z } from "zod";
 
 type QueryValue = string | number | boolean | readonly string[] | undefined;
@@ -323,9 +324,87 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
   },
   {
     method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/rulesets(?:\/|$)/u,
+    requiredPermissions: ["Account Rulesets Read", "Account WAF Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets\/phases\/http_request_firewall_(?:custom|managed)\/entrypoint$/u,
+    requiredPermissions: ["Zone WAF Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/phases/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets\/phases\/http_request_origin\/entrypoint$/u,
+    requiredPermissions: ["Origin Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/phases/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets\/phases\/http_request_cache_settings\/entrypoint$/u,
+    requiredPermissions: ["Cache Settings Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/phases/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets\/phases\/http_request_dynamic_redirect\/entrypoint$/u,
+    requiredPermissions: ["Dynamic URL Redirects Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/phases/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets\/phases\/http_(?:request_transform|request_late_transform|response_headers_transform)\/entrypoint$/u,
+    requiredPermissions: ["Zone Transform Rules Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/phases/methods/get/",
+  },
+  {
+    method: "GET",
     pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets(\/|\?|$)/u,
-    requiredPermissions: ["Rulesets Read", "Rulesets Edit"],
-    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+    requiredPermissions: ["Zone WAF Read", "Origin Read", "Cache Settings Read", "Dynamic URL Redirects Read", "Zone Transform Rules Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/settings\/[^/]+$/u,
+    requiredPermissions: ["Zone Settings Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/zones/subresources/settings/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/bot_management$/u,
+    requiredPermissions: ["Bot Management Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/bot_management/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/workers\/routes$/u,
+    requiredPermissions: ["Workers Routes Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/workers/subresources/routes/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/workers\/domains$/u,
+    requiredPermissions: ["Workers Scripts Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/pagerules$/u,
+    requiredPermissions: ["Page Rules Read", "Zone Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/page_rules/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/managed_headers$/u,
+    requiredPermissions: ["Managed headers Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/managed_transforms/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/zones\/[^/]+\/url_normalization$/u,
+    requiredPermissions: ["Zone Transform Rules Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/url_normalization/methods/get/",
   },
   {
     method: "POST",
@@ -369,9 +448,18 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
 
 export class CloudflareClient {
   private readonly config: CloudflareConfig;
+  public readonly inventory: InventoryReader;
 
   constructor(config: CloudflareConfig) {
     this.config = CloudflareConfigSchema.parse(config);
+    const credentials = this.config.auth.type === "apiToken"
+      ? [this.config.auth.token]
+      : [this.config.auth.apiKey, this.config.auth.email];
+    this.inventory = new InventoryReader(
+      (path, query) => this.requestRaw("GET", path, { query }),
+      { zoneId: this.config.zoneId, accountId: this.config.accountId },
+      credentials
+    );
   }
 
   getAuthType(): CloudflareAuth["type"] {
@@ -402,13 +490,17 @@ export class CloudflareClient {
   private parseCloudflareError(
     body: unknown,
     fallbackMessage: string
-  ): { message: string; code: string } {
-    const cloudflare = CloudflareResponseSchema(z.unknown()).safeParse(body);
+  ): { message: string; code: string; apiResponse?: boolean } {
+    const cloudflare = z.object({
+      success: z.boolean(),
+      errors: z.array(z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string() })),
+    }).safeParse(body);
     if (cloudflare.success && cloudflare.data.errors.length > 0) {
       const first = cloudflare.data.errors[0];
       return {
         message: first?.message ?? fallbackMessage,
         code: String(first?.code ?? "UNKNOWN"),
+        apiResponse: true,
       };
     }
 
@@ -486,10 +578,11 @@ export class CloudflareClient {
       const parsedError = this.parseCloudflareError(body, `HTTP ${res.status}`);
       const permissionHint = this.findRoutePermissionHint(method, path);
       const errorOptions = {
-        requiredPermissions: permissionHint?.requiredPermissions,
+        requiredPermissions: res.status === 410 ? undefined : permissionHint?.requiredPermissions,
         docsUrl: permissionHint?.docsUrl,
         requestMethod: method,
         requestPath: path,
+        apiResponse: parsedError.apiResponse,
       };
 
       if (res.status === 401) {
@@ -1325,57 +1418,39 @@ export class CloudflareClient {
     zoneId?: string
   ): Promise<ListFirewallRulesResult> {
     const parsedParams = ListFirewallRulesParamsSchema.parse(params);
-    const resolvedZoneId = this.resolveZoneId(zoneId);
-
-    const body = await this.requestRaw<unknown>(
-      "GET",
-      `/client/v4/zones/${resolvedZoneId}/firewall/rules`,
-      {
-        query: {
-          id: parsedParams.id,
-          action: parsedParams.action,
-          description: parsedParams.description,
-          paused: parsedParams.paused,
-          page: parsedParams.page,
-          per_page: parsedParams.perPage,
-        },
-      }
+    const entrypoint = await this.inventory.getPhaseEntrypoint("http_request_firewall_custom", { scope: "zone", zoneId });
+    if (entrypoint.scope !== "zone") throw new CloudflareError("Expected a zone entrypoint", "CONFIG_ERROR");
+    const page = parsedParams.page ?? 1;
+    const perPage = parsedParams.perPage ?? 100;
+    const allRules: FirewallRule[] = entrypoint.status === "absent" ? [] : entrypoint.ruleset.rules.map((rule) => ({
+      ...rule,
+      scope: "zone" as const, zoneId: entrypoint.zoneId, phase: entrypoint.phase, rulesetId: entrypoint.ruleset.id,
+      filter: rule.expression === undefined ? undefined : { expression: rule.expression },
+      paused: !rule.enabled,
+    }));
+    const description = parsedParams.description?.toLowerCase();
+    const matchingRules = allRules.filter((rule) =>
+      (parsedParams.id === undefined || rule.id === parsedParams.id) &&
+      (parsedParams.action === undefined || rule.action === parsedParams.action) &&
+      (description === undefined || rule.description?.toLowerCase().includes(description)) &&
+      (parsedParams.paused === undefined || rule.paused === parsedParams.paused)
     );
-
-    const parsedResponse = CloudflareResponseSchema(
-      z.array(FirewallRuleSchema)
-    ).safeParse(body);
-    if (!parsedResponse.success) {
-      throw new CloudflareError(
-        "Unexpected firewall rules response shape",
-        "INVALID_RESPONSE"
-      );
-    }
-
-    if (!parsedResponse.data.success) {
-      const first = parsedResponse.data.errors[0];
-      throw new CloudflareError(
-        first?.message ?? "Firewall rules request failed",
-        String(first?.code ?? "API_ERROR")
-      );
-    }
-
-    const info = ResultInfoSchema.safeParse(parsedResponse.data.result_info);
-
+    const rules = matchingRules.slice((page - 1) * perPage, page * perPage);
     return {
-      rules: parsedResponse.data.result,
-      resultInfo: info.success ? info.data : undefined,
+      scope: "zone", zoneId: entrypoint.zoneId, phase: entrypoint.phase, status: entrypoint.status,
+      ...(entrypoint.status === "present" ? { rulesetId: entrypoint.ruleset.id } : { diagnostic: entrypoint.diagnostic }),
+      rules,
+      resultInfo: { page, per_page: perPage, count: rules.length, total_count: matchingRules.length, total_pages: Math.ceil(matchingRules.length / perPage) },
+      truncated: page * perPage < matchingRules.length,
     };
   }
 
   async getFirewallRule(ruleId: string, zoneId?: string): Promise<FirewallRule> {
-    const resolvedZoneId = this.resolveZoneId(zoneId);
-    const result = await this.requestResult<unknown>(
-      "GET",
-      `/client/v4/zones/${resolvedZoneId}/firewall/rules/${encodeURIComponent(ruleId)}`
-    );
-
-    return FirewallRuleSchema.parse(result);
+    if (!ruleId.trim()) throw new CloudflareError("Rule ID is required and must not be empty.", "CONFIG_ERROR");
+    const result = await this.listFirewallRules({ id: ruleId }, zoneId);
+    const rule = result.rules[0];
+    if (!rule) throw new CloudflareNotFoundError("WAF custom rule", ruleId);
+    return rule;
   }
 
   async createFirewallRule(

@@ -210,7 +210,7 @@ describe("Rulesets inventory commands", () => {
     expect(output.stdout).toBe("");
     expect(output.stderr).toContain(failure.message);
     if (failure instanceof CloudflareError) expect(output.stderr).toContain(failure.code);
-    if (failure instanceof CloudflareError && failure.statusCode === 403) expect(output.stderr).toContain("credentials are valid");
+    if (failure instanceof CloudflareError && failure.statusCode === 403) expect(output.stderr).toContain("entitlement");
   });
 });
 

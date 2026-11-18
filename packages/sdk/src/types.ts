@@ -80,6 +80,145 @@ export const ResultInfoSchema = z
 export type ResultInfo = z.infer<typeof ResultInfoSchema>;
 
 // ---------------------------------------------------------------------------
+// Read-only migration inventory. Keep native fields for migration planning.
+// These schemas are deliberately separate from redirect-specific rulesets.
+// ---------------------------------------------------------------------------
+
+export const InventoryTargetSchema = z.object({
+  scope: z.enum(["zone", "account"]),
+  zoneId: z.string().trim().min(1).optional(),
+  accountId: z.string().trim().min(1).optional(),
+}).superRefine((target, context) => {
+  if ((target.scope === "zone" && target.accountId !== undefined) ||
+      (target.scope === "account" && target.zoneId !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide only the ID matching the explicit scope" });
+  }
+});
+
+export type InventoryTarget = z.infer<typeof InventoryTargetSchema>;
+export type InventoryScope = { scope: "zone"; zoneId: string } | { scope: "account"; accountId: string };
+
+export const InventoryRuleSchema = z.object({
+  id: z.string().min(1),
+  action: z.string().min(1),
+  expression: z.string().optional(),
+  description: z.string().optional(),
+  enabled: z.boolean().default(true),
+  action_parameters: z.record(z.unknown()).optional(),
+  ref: z.string().optional(),
+  version: z.string().optional(),
+  last_updated: z.string().optional(),
+}).passthrough();
+
+export type InventoryRule = z.infer<typeof InventoryRuleSchema> & { order: number };
+
+export const InventoryRulesetMetadataSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  kind: z.string().optional(),
+  phase: z.string().optional(),
+  version: z.string().optional(),
+  last_updated: z.string().optional(),
+}).passthrough();
+
+export type InventoryRulesetMetadata = z.infer<typeof InventoryRulesetMetadataSchema>;
+export const InventoryRulesetSchema = InventoryRulesetMetadataSchema.extend({ rules: z.array(InventoryRuleSchema) });
+export type InventoryRuleset = InventoryRulesetMetadata & { rules: InventoryRule[] };
+
+export const InventoryCursorResultInfoSchema = z.object({
+  cursors: z.object({ after: z.string().optional(), before: z.string().optional() }).passthrough().optional(),
+}).passthrough();
+export type InventoryCursorResultInfo = z.infer<typeof InventoryCursorResultInfoSchema>;
+export type ListInventoryRulesetsOptions = { cursor?: string; perPage?: number; all?: boolean };
+export type ListInventoryRulesetsResult = InventoryScope & {
+  rulesets: InventoryRulesetMetadata[];
+  resultInfo: InventoryCursorResultInfo;
+  truncated: boolean;
+};
+export type GetInventoryRulesetResult = InventoryScope & { ruleset: InventoryRuleset };
+export type InventoryAbsentDiagnostic = { statusCode: 404; code: string; message: string };
+export type GetInventoryPhaseEntrypointResult = InventoryScope & { phase: string } & (
+  { status: "present"; ruleset: InventoryRuleset } |
+  { status: "absent"; diagnostic: InventoryAbsentDiagnostic }
+);
+
+export const InventoryZoneSettingSchema = z.object({
+  id: z.string().min(1), value: z.unknown(),
+}).passthrough().refine((setting) => Object.hasOwn(setting, "value"), "Setting value is required");
+export type InventoryZoneSetting = z.infer<typeof InventoryZoneSettingSchema>;
+export type GetInventoryZoneSettingResult = { scope: "zone"; zoneId: string; setting: InventoryZoneSetting };
+
+const InventoryBotManagementFields = {
+  fight_mode: z.boolean().optional(),
+  enable_js: z.boolean().optional(),
+  auto_update_model: z.boolean().optional(),
+  optimize_wordpress: z.boolean().optional(),
+  suppress_session_score: z.boolean().optional(),
+  using_latest_model: z.boolean().optional(),
+  ai_bots_migration_opt_out: z.boolean().optional(),
+  bot_preference_sync_enabled: z.boolean().optional(),
+  is_robots_txt_managed: z.boolean().optional(),
+  jsd_api_results_enabled: z.boolean().optional(),
+  sbfm_static_resource_protection: z.boolean().optional(),
+  sbfm_definitely_automated: z.string().optional(),
+  sbfm_likely_automated: z.string().optional(),
+  sbfm_verified_bots: z.string().optional(),
+  ai_bots_protection: z.string().optional(),
+  ai_search: z.string().optional(),
+  ai_training: z.string().optional(),
+  ai_user: z.string().optional(),
+  content_bots_protection: z.string().optional(),
+  crawler_protection: z.string().optional(),
+  cf_robots_variant: z.string().optional(),
+  ai_agents: z.record(z.string()).optional(),
+  stale_zone_configuration: z.record(z.unknown()).optional(),
+};
+export const InventoryBotManagementSchema = z.object(InventoryBotManagementFields).passthrough()
+  .refine((settings) => Object.keys(InventoryBotManagementFields).some((key) => settings[key] !== undefined), "Bot Management settings are required");
+export type InventoryBotManagement = z.infer<typeof InventoryBotManagementSchema>;
+export type GetInventoryBotManagementResult = { scope: "zone"; zoneId: string; settings: InventoryBotManagement };
+
+export const InventoryWorkerRouteSchema = z.object({
+  id: z.string().min(1), pattern: z.string().min(1), script: z.string().optional(),
+}).passthrough();
+export type InventoryWorkerRoute = z.infer<typeof InventoryWorkerRouteSchema>;
+export type ListInventoryWorkerRoutesResult = { scope: "zone"; zoneId: string; routes: InventoryWorkerRoute[] };
+
+export const InventoryWorkerDomainSchema = z.object({
+  id: z.string().min(1), hostname: z.string().min(1), service: z.string().min(1),
+  environment: z.string().min(1), zone_id: z.string().min(1), zone_name: z.string().optional(),
+}).passthrough();
+export type InventoryWorkerDomain = z.infer<typeof InventoryWorkerDomainSchema>;
+export type ListInventoryWorkerDomainsOptions = { accountId?: string; zoneId?: string };
+export type ListInventoryWorkerDomainsResult = { scope: "account"; accountId: string; zoneId?: string; domains: InventoryWorkerDomain[] };
+
+export const InventoryPageRuleSchema = z.object({
+  id: z.string().min(1), priority: z.number(), status: z.enum(["active", "disabled"]),
+  actions: z.array(z.object({ id: z.string().min(1), value: z.unknown().optional() }).passthrough()),
+  targets: z.array(z.object({ target: z.string().min(1), constraint: z.object({ operator: z.string().min(1), value: z.string() }).passthrough() }).passthrough()),
+}).passthrough();
+export type InventoryPageRule = z.infer<typeof InventoryPageRuleSchema> & { order: number };
+export type ListInventoryPageRulesResult = { scope: "zone"; zoneId: string; rules: InventoryPageRule[] };
+
+export const InventoryManagedTransformSchema = z.object({
+  id: z.string().min(1), enabled: z.boolean(), has_conflict: z.boolean().optional(), conflicts_with: z.array(z.string()).optional(),
+}).passthrough();
+export const InventoryManagedTransformsSchema = z.object({
+  managed_request_headers: z.array(InventoryManagedTransformSchema),
+  managed_response_headers: z.array(InventoryManagedTransformSchema),
+}).passthrough();
+export type InventoryManagedTransform = z.infer<typeof InventoryManagedTransformSchema>;
+export type InventoryManagedTransforms = z.infer<typeof InventoryManagedTransformsSchema>;
+export type GetInventoryManagedTransformsResult = { scope: "zone"; zoneId: string; settings: InventoryManagedTransforms };
+
+export const InventoryUrlNormalizationSchema = z.object({
+  scope: z.enum(["incoming", "both", "none"]).optional(), type: z.enum(["cloudflare", "rfc3986"]).optional(),
+}).passthrough().refine((settings) => settings.scope !== undefined || settings.type !== undefined, "URL normalization settings are required");
+export type InventoryUrlNormalization = z.infer<typeof InventoryUrlNormalizationSchema>;
+export type GetInventoryUrlNormalizationResult = { scope: "zone"; zoneId: string; settings: InventoryUrlNormalization };
+
+// ---------------------------------------------------------------------------
 // Legacy scaffold resource schemas
 // ---------------------------------------------------------------------------
 
@@ -848,13 +987,21 @@ export type FirewallFilter = z.infer<typeof FirewallFilterSchema>;
 export const FirewallRuleSchema = z
   .object({
     id: z.string().optional(),
-    action: FirewallRuleActionSchema.optional(),
+    action: z.string().optional(),
     description: z.string().optional(),
     filter: FirewallFilterSchema.optional(),
     paused: z.boolean().optional(),
     priority: z.number().optional(),
     products: z.array(FirewallRuleProductSchema).optional(),
     ref: z.string().optional(),
+    expression: z.string().optional(),
+    enabled: z.boolean().optional(),
+    action_parameters: z.record(z.unknown()).optional(),
+    order: z.number().int().positive().optional(),
+    scope: z.literal("zone").optional(),
+    zoneId: z.string().optional(),
+    phase: z.string().optional(),
+    rulesetId: z.string().optional(),
   })
   .passthrough();
 
@@ -862,7 +1009,7 @@ export type FirewallRule = z.infer<typeof FirewallRuleSchema>;
 
 export const ListFirewallRulesParamsSchema = z.object({
   id: z.string().optional(),
-  action: FirewallRuleActionSchema.optional(),
+  action: z.string().min(1).optional(),
   description: z.string().optional(),
   paused: z.boolean().optional(),
   page: z.number().int().positive().optional(),
@@ -874,6 +1021,13 @@ export type ListFirewallRulesParams = z.infer<typeof ListFirewallRulesParamsSche
 export const ListFirewallRulesResultSchema = z.object({
   rules: z.array(FirewallRuleSchema),
   resultInfo: ResultInfoSchema.optional(),
+  scope: z.literal("zone").optional(),
+  zoneId: z.string().optional(),
+  phase: z.string().optional(),
+  status: z.enum(["present", "absent"]).optional(),
+  rulesetId: z.string().optional(),
+  diagnostic: z.object({ statusCode: z.literal(404), code: z.string(), message: z.string() }).optional(),
+  truncated: z.boolean().optional(),
 });
 
 export type ListFirewallRulesResult = z.infer<typeof ListFirewallRulesResultSchema>;

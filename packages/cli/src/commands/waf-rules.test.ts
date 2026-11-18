@@ -116,7 +116,7 @@ describe("runListFirewallRules", () => {
   it("prints phase absence without presenting it as no matching rules", async () => {
     const listFirewallRules = vi.fn(async () => ({
       scope: "zone" as const, zoneId: "z", phase: "http_request_firewall_custom", status: "absent" as const, rules: [], resultInfo: {},
-      truncated: false, diagnostic: { statusCode: 404, code: "10003", message: "entrypoint not found" },
+      truncated: false, diagnostic: { statusCode: 404 as const, code: "10003", message: "entrypoint not found" },
     }));
     const { log, deps } = makeDeps({ listFirewallRules });
     await runListFirewallRules({ json: false }, deps);
@@ -141,7 +141,7 @@ describe("runListFirewallRules", () => {
 describe("runGetFirewallRule", () => {
   it("shows native source and parameter details", async () => {
     const getFirewallRule = vi.fn(async () => ({
-      ...rule, expression: "true", enabled: false, order: 3, scope: "zone", zoneId: "z",
+      ...rule, expression: "true", enabled: false, order: 3, scope: "zone" as const, zoneId: "z",
       phase: "http_request_firewall_custom", rulesetId: "rs",
       action_parameters: { ruleset: "current" },
     }));
