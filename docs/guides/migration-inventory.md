@@ -562,6 +562,57 @@ hashes/handlers rather than source; this implementation uses the documented Beta
 module API instead. Failed Beta access remains unresolved; it never falls back
 to an unpinned download labeled as that version.
 
+## Worker inspection verification evidence
+
+Verified on 2026-11-18 against parent head
+`e1cc1a152ccc2566259707cad99ee181f30d23d6` (now preserved in main by parent PR #14
+merge `b90442bd12252ebc988b26342c657281b9ab052b`). This feature targets main and
+does not publish a release or merge its own PR. The parent's pending changeset
+remains unchanged for the later release process.
+
+- Baseline frozen install, build/lint and 614 tests passed: SDK 283/MCP 12/CLI 319.
+- Final `bun run build` and `bun run lint` exit 0 across all packages.
+- Final `bun run test`: SDK 372, MCP 12, CLI 357; **741 tests pass**, zero failures.
+- New coverage: 37 private-source cases, 52 mocked Worker HTTP cases, 38 Worker
+  subprocess cases. Existing inventory/WAF/DNS/redirect tests remain green.
+- Worker tests were written before implementation. Missing methods/commands
+  failed first; additional failing regressions drove MIME/URL redaction,
+  malformed-response, pinned identity, export preflight and unavailable-source
+  corrections. Tests use synthetic fixtures and disable real keychain access.
+- Final review found and reproduced Node cancellation of a cloned oversized
+  source stream and contradictory pagination totals. Two built-Node subprocess
+  regressions and three SDK regressions fail before the fixes and pass after.
+  Source is consumed once with metadata validation before export; inconsistent
+  totals now fail. The full suite above was rerun after these changes.
+- Source package review approved the artifact implementation; a fresh recheck
+  approved both final-review fixes with 89 SDK/source tests and both Node export
+  regressions passing. No blocking review findings remain.
+- Root reran 123 SDK inventory cases and 93 relevant CLI subprocess cases against
+  a rebuilt SDK. Process mocks reject non-GET, unexpected requests and wrong
+  scopes/queries. Source tests verify exact module bytes, private permissions,
+  generated filenames, bounded JSON, and no code/credential values on stdout.
+- Eight Node JS-build help checks pass: Worker group, five new readers and both
+  existing assignment readers. No locally compiled macOS binary was tested.
+- Worker collection recipe passes Bash syntax and isolated mocked execution:
+  deduplication, numeric continuation, both serving version IDs in split
+  deployments, empty assignments and failed assignment reads were checked.
+
+The built Bun CLI's `auth list --json` again reported `keychain_status: "ok"`
+and all three credential entries had `keychain: "missing"` and
+`active_source: "missing"`. No values were printed or copied. Four built-CLI
+assignment attempts (zone routes for all three PBHS zones, account custom domains)
+each exited 1 with **zero stdout** and this exact diagnostic:
+
+```text
+Error: No Cloudflare credentials configured. Store a token in the OS keychain with `cloudflare auth set api-token`, or set CLOUDFLARE_API_TOKEN (or both CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL) in the environment or a .env file. Set CLOUDFLARE_ACCOUNT_ID too for account-level commands.
+```
+
+A fetch guard confirmed **zero HTTP attempts**; credential resolution stopped
+every read. No Worker names were learned, so targeted PBHS source/settings/version
+reads could not run. Actual assignments, source, bindings, permissions and Beta
+availability remain **unverified**, never empty. No live writes, Worker deployment,
+secret changes, migration, firewall repair, release or PR merge occurred.
+
 ## Parent inventory verification evidence
 
 Baseline before implementation: `bun install --frozen-lockfile`, `bun run build`,

@@ -1,7 +1,7 @@
 ---
 title: Inspect assigned Worker source and bindings
 description: Extend migration assignments into supported account-scoped Worker inspection with private source artifacts.
-status: in-progress
+status: done
 date: 2026-11-18
 size: architectural
 specs: []
@@ -118,6 +118,11 @@ changeset. Existing parent plan/evidence remains historical.
   before export; numeric totals must be consistent. Node subprocess and SDK
   regressions fail before and pass after — cost if wrong: medium, malformed
   upstream responses now fail conservatively instead of exporting partial data.
+- [verification] Final build/lint pass; SDK 372/MCP 12/CLI 357 tests pass (741).
+  Fresh recheck approves both review fixes; source package review also approved.
+  Eight Node JS help checks and the mocked guide recipe pass. Four guarded PBHS
+  assignment attempts exit 1 with zero stdout and zero HTTP because credentials
+  remain missing — cost if wrong: low, live data/access remains unverified.
 
 ## Deferred
 
@@ -217,3 +222,12 @@ execution; credential status without values and conditional GET-only smoke.
 **Review:** yes — fresh final reviewer reads base..HEAD and task requirements.
 **Docs:** D3 and verification evidence.
 **Commit:** `docs(inventory): document and verify Worker inspection workflow`.
+
+## Completion
+
+All implementation, documentation and local verification tasks are complete.
+The PR targets main after the explicitly authorized parent merge; delivery is a
+draft because authenticated PBHS validation cannot run without credentials.
+The guide records the exact missing-credential diagnostic and command workflow.
+Source artifacts were tested using synthetic fixtures only. No release, Worker
+deployment, live configuration change, firewall repair or feature PR merge ran.
