@@ -1,0 +1,209 @@
+---
+title: Inventory account lists and their contents
+description: Resolve Bulk Redirect and custom IP-list references through supported read-only CLI and SDK commands.
+status: in-progress
+date: 2026-11-18
+size: feature
+specs: []
+---
+
+## Intent
+
+Extend the migration inventory in open PR #14, based on
+`e1cc1a152ccc2566259707cad99ee181f30d23d6`. Deliver a separate PR against
+`fix/migration-inventory`; do not release, merge, or modify live configuration.
+The parent exposes list references but cannot resolve their contents.
+
+## Acceptance criteria
+
+- GET-only readers expose account list metadata and typed list items, preserving
+  identity, comments, redirect parameters, and forward-compatible fields.
+- Explicit account scope, exact metadata name/kind filters, bounded local metadata
+  paging, item search/cursor paging, and opt-in complete collection are supported.
+- Empty lists remain successful; missing/denied/retired/malformed/upstream reads
+  fail without partial success output. Credentials and URL secrets are redacted.
+- SDK HTTP tests and CLI process tests prove paths, filters, multiple pages,
+  parameters, errors, JSON streams, exits, redaction, and GET-only enforcement.
+- Help, README, agent reference, guide, and changeset describe installation and
+  reference resolution from parent snapshots. Live access is checked only with
+  existing credentials, without putting live contents into repository artifacts.
+
+## Non-goals
+
+No writes, bulk jobs, migrations, release, merge, live repairs, or new MCP tools.
+Do not duplicate existing DNS, redirect, WAF, or Rulesets commands. Cloudflare
+Managed Lists and built-in datasets are not claimed as exportable account lists.
+
+## Design
+
+Extend `InventoryReader` with `listLists(target, options)`, `getList(id, target)`,
+and `listListItems(id, target, options)`. All require `scope: "account"`, reject
+explicit zone IDs, and use only the selected account's configured default.
+The existing transport, envelope validation, credential redaction, and
+`describeError` remain authoritative.
+
+Official reference checked on 2026-11-18: metadata collection is
+`GET /accounts/{account_id}/rules/lists`, detail appends `/{list_id}`, items append
+`/{list_id}/items`. Metadata has no server pagination/filter contract. Filter
+locally by exact `name` and `kind`, then page locally (default 100, maximum 500,
+`page` default 1); `all` returns all matches and conflicts with page > 1.
+Reject advertised upstream incompleteness instead of guessing query parameters.
+Items accept `cursor`, `per_page` (1–500, default 100), and `search`; follow
+`result_info.cursors.after` with `all`, detect repeated cursors, and fail if later
+pages fail or more data is reported without a usable cursor. `all` with a cursor
+collects the remaining suffix, not earlier pages.
+
+Read metadata before items so every result includes list identity and kind,
+including an empty list. Validate items according to the actual kind. Support all
+four documented kinds (`ip`, `redirect`, `hostname`, `asn`) rather than misreading
+hostname/ASN lists as empty. Preserve API array order but do not invent list-item
+evaluation priority. Unfiltered collection from the beginning cross-checks the
+metadata item count; mismatches are incomplete/inconsistent reads, never empty
+success. Filtered and resumed results are explicitly documented as subsets.
+
+Expose `lists list`, `lists get <list-id>`, `lists items list <list-id>` with
+required `--scope account`, optional `--account-id`, and `--json`. Metadata list
+flags: `--name`, `--kind`, `--page`, `--per-page`, `--all`. Item flags: `--search`,
+`--cursor`, `--per-page`, `--all`. Results include `scope`, `accountId`, `lists`
+or `list`/`items`, `resultInfo` and `truncated` on collections. Diagnostics use
+stderr; API/configuration errors exit 1 without JSON stdout. Parser failures are
+nonzero. Keep existing JSON conventions rather than expanding output formats.
+
+Alternative: separate Bulk Redirect/IP command families would duplicate the same
+API and hide kinds; a single typed account Lists family is smaller and composable.
+
+## Spec delta
+
+The existing guide and package READMEs are the behavior reference.
+
+- D1 ADDED: Account-scoped metadata/detail/items readers and CLI contracts above.
+- D2 ADDED: Pagination, strict error, item-kind validation and redaction contracts.
+- D3 MODIFIED: Bulk Redirect and custom IP-list contents are covered; built-in
+  Managed Lists, Worker code/bindings and other excluded datasets remain unresolved.
+- D4 ADDED: Exact branch installation, snapshot reference-resolution recipes,
+  official contracts/permissions and credential-gated live evidence.
+
+## Docs impact
+
+Update root, SDK and CLI README, `cloudflare-cli/SKILL.md`, inventory guide and
+one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
+
+## Decisions
+
+- [0003: Account list inventory](../decisions/0003-account-list-inventory.md)
+  extends [0002](../decisions/0002-read-only-migration-inventory.md).
+
+## Rulings
+
+- [pagination] Page metadata locally after exact filtering — upstream has no
+  documented pagination — cost if wrong: medium, a future API change must fail
+  visibly rather than silently omitting lists.
+- [coverage] Include hostname/ASN items alongside required IP/redirect items —
+  same documented read contracts — cost if wrong: low, small validation surface.
+- [docs] Follow existing docs/guides, docs/plans, docs/decisions and Changesets —
+  no separate contribution guide/spec map exists — cost if wrong: low, files move.
+- [baseline] Fresh worktree required `bun install --frozen-lockfile`; then root
+  build, test (SDK 283, MCP 12, CLI 319) and lint pass — cost if wrong: low.
+- [isolation] Harness already provides clean feature worktree at parent SHA;
+  reuse it — cost if wrong: low, no base-branch mutations.
+- [sources] Configured Cloudflare Docs MCP is not exposed; use official API
+  reference and product docs directly — cost if wrong: low, sources are linked.
+
+## Deferred
+
+Live PBHS list/permission/entitlement evidence requires existing credentials.
+If unavailable, record access as unverified and never infer empty lists.
+
+## Tasks
+
+Coordinator commits; implementers use TDD and never change git state.
+**Goal:** Resolve inventory list references with supported reads.
+**Architecture:** Extend GET-only SDK; thin CLI commands; subprocess verification.
+**Tech stack:** TypeScript, Zod, Bun, Stricli, Vitest.
+**Detail:** contracts.
+**Verify:** SDK `bun test packages/sdk/tests/inventory.test.ts`; CLI
+`bun run --filter '@cloudflare-ai-toolkit/cli' test -- src/commands/inventory.e2e.test.ts`;
+full `bun run build`, `bun run test`, `bun run lint` (baseline checked).
+**Global constraints:** Prefix shell commands with `rtk`; no credentials/live data
+in tests/artifacts; tests disable keychain; no writes/releases/merges/compiled smoke.
+
+```mermaid
+flowchart LR
+  T1[SDK list contracts] --> T3[CLI subprocess verification]
+  T2[CLI commands] --> T3
+  T3 --> T4[Guide and delivery]
+```
+
+### T1: SDK list contracts · design · standard model
+
+**Owns:** `packages/sdk/src/inventory.ts`, `packages/sdk/src/types.ts`,
+`packages/sdk/src/index.ts`, `packages/sdk/src/client.ts`,
+`packages/sdk/src/errors.ts`, new `packages/sdk/tests/inventory-lists.test.ts`,
+`packages/sdk/README.md`; may add focused list schema/reader module.
+**Depends on:** none.
+**Consumes:** Existing InventoryTarget and GET-only transport/redactor.
+**Produces:** `listLists(target,{name?,kind?,page?,perPage?,all?})` returns
+`{scope:"account",accountId,lists,resultInfo:{page,per_page,count,total_count,total_pages},truncated}`;
+`getList(id,target)` returns `{scope:"account",accountId,list}`;
+`listListItems(id,target,{search?,cursor?,perPage?,all?})` returns
+`{scope:"account",accountId,list,items,resultInfo:{cursors?},truncated}`.
+Example: empty IP list returns `list:{id:"l",name:"office",kind:"ip",num_items:0}`,
+`items:[],resultInfo:{},truncated:false`.
+**Tests:** GET-only mocked HTTP, exact paths and options; local metadata filtering
+before paging; all four kinds; multiple item pages; redirect booleans/status/URLs;
+403/404/410/500/HTML 524; failed later pages; malformed envelope/item/kind/cursor;
+count mismatch, repeated cursors, redaction including scheme-less source URLs.
+**Review:** yes, pagination and credentials.
+**Docs:** SDK README adds three methods and bounded/default/complete semantics (D1/D2).
+**Decision:** 0003.
+**Commit:** `feat(sdk): inventory account lists and typed contents`.
+
+### T2: CLI command surface · design · standard model
+
+**Owns:** new `packages/cli/src/commands/lists.ts`, new
+`packages/cli/src/commands/lists.test.ts`, `packages/cli/src/app.ts`,
+`packages/cli/README.md`, `cloudflare-cli/SKILL.md`, `README.md`.
+**Depends on:** none; SDK contract above is complete and can be faked.
+**Consumes:** T1's three SDK methods and output examples.
+**Produces:** Commands/flags in Design; parseable JSON and stderr diagnostics.
+**Tests:** scoped dispatch and filters; reject zone/conflicting scope, page sizes
+0/501/fraction, invalid kind; truncation diagnostics and error exits; JSON only
+stdout; help includes read-only/default/continuation behavior.
+**Review:** yes, CLI/SDK seam.
+**Docs:** All owned references add exact command shapes and distinguish single
+redirects from Bulk Redirect lists (D1/D2).
+**Decision:** 0003.
+**Commit:** `feat(cli): expose read-only account list inventory`.
+
+### T3: Subprocess contract verification · design · standard model
+
+**Owns:** new `packages/cli/src/commands/lists.e2e.test.ts`.
+**Depends on:** T1, T2.
+**Consumes:** Actual CLI and built SDK; synthetic GET-only fetch preload.
+**Produces:** Process-level evidence with exact requests, consumed-route checks,
+temporary cwd and keychain disabled, no real credential inheritance.
+**Tests:** metadata filters/paging/all/detail, both requested kinds and full redirect
+parameters, cursor/search/all, empty/missing, scope parser, 403/404/410/5xx,
+malformed successes, repeated/no cursor, later failure, redaction of result/error
+and diagnostic streams, JSON and nonzero exits. Existing readers remain covered.
+**Review:** yes, end-to-end failures.
+**Docs:** Coordinator guide verification evidence (D2/D4) and changeset.
+**Decision:** 0003.
+**Commit:** `test(cli): verify list inventory through mocked HTTP`.
+
+### T4: Guide and delivery · design · standard model
+
+**Owns:** `docs/guides/migration-inventory.md`,
+`.changeset/account-list-inventory.md`, this plan.
+**Depends on:** T3.
+**Consumes:** Verified final command behavior and credential status.
+**Produces:** Local branch installation/verification, reference-resolution recipe
+from phase/definition snapshots, permissions/limitations and honest smoke report.
+**Tests:** Bash syntax and isolated mocked execution of guide recipe, full suite,
+Node JS help; credential status without values, then GET-only live checks only if
+configured. Independent final review; target parent branch PR, no merge/release.
+**Review:** yes, safety and claims.
+**Docs:** Apply D3/D4, one minor SDK/CLI changeset; link official metadata/detail/
+items and product references; no live contents in artifacts.
+**Decision:** 0003.
+**Commit:** `docs(inventory): document list reference collection and verification`.
