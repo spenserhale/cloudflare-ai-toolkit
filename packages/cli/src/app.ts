@@ -57,6 +57,7 @@ import {
 } from "./commands/registrar.js";
 import { listTunnelsCommand, tunnelInfoCommand } from "./commands/tunnels.js";
 import { authRoutes } from "./commands/auth.js";
+import { listsRoutes } from "./commands/lists.js";
 import { upgradeCommand } from "./commands/upgrade.js";
 import { getZoneCommand, listZonesCommand } from "./commands/zones.js";
 import {
@@ -343,6 +344,7 @@ const routes = buildRouteMap({
     dns: dnsRoutes,
     waf: wafRoutes,
     rulesets: rulesetsRoutes,
+    lists: listsRoutes,
     workers: workersRoutes,
     "page-rules": buildRouteMap({
       routes: { list: listPageRulesCommand },
