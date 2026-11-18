@@ -123,6 +123,18 @@ changeset. Existing parent plan/evidence remains historical.
   Eight Node JS help checks and the mocked guide recipe pass. Four guarded PBHS
   assignment attempts exit 1 with zero stdout and zero HTTP because credentials
   remain missing — cost if wrong: low, live data/access remains unverified.
+- [Opus review] Claude Opus 5.5 medium found two API-schema mismatches. Read
+  version history from `result.items`; preserve empty compatibility dates,
+  nullable tail consumers and placement targets without mode. Corrected fixtures
+  and regression tests fail before the fix and pass after; build/lint and all
+  755 tests pass (SDK 384/MCP 12/CLI 359) — cost if wrong: high, valid upstream
+  inventories would otherwise fail. Current API reference confirms the version
+  wrapper and placement variants; Opus checked OpenAPI defaults/nullability.
+- [review availability] CodeRabbit review was requested but its OSS quota blocked
+  execution; a green status is not review approval — cost if wrong: low, no bot
+  findings can be evaluated until its service permits a review.
+- [merge authorization] User subsequently authorized merging the fixed, reviewed
+  feature to main; no release or live Cloudflare writes — cost if wrong: low.
 
 ## Deferred
 
@@ -226,8 +238,11 @@ execution; credential status without values and conditional GET-only smoke.
 ## Completion
 
 All implementation, documentation and local verification tasks are complete.
-The PR targets main after the explicitly authorized parent merge; delivery is a
-draft because authenticated PBHS validation cannot run without credentials.
+The PR targets main after the explicitly authorized parent merge; initial delivery
+was a draft because authenticated PBHS validation cannot run without credentials.
 The guide records the exact missing-credential diagnostic and command workflow.
 Source artifacts were tested using synthetic fixtures only. No release, Worker
-deployment, live configuration change, firewall repair or feature PR merge ran.
+deployment, live configuration change or firewall repair ran. The user later
+requested Opus medium/CodeRabbit review and authorized feature merge after fixes;
+Opus findings are corrected and CodeRabbit execution is quota-blocked. Release
+publishing remains outside authorization.

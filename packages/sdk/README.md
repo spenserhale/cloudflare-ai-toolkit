@@ -184,6 +184,11 @@ Lists return one page with `resultInfo`, `truncated` and `nextPage`. Follow
 page. Page size defaults to 20 and accepts 1–100. Malformed or contradictory
 responses, denied/missing/retired resources and upstream errors remain failures.
 Contradictory pagination totals are malformed responses, never completeness evidence.
+The version-history API's `result.items` wrapper is normalized to `versions`;
+missing or malformed `items` is a failed read. Runtime projections preserve an
+empty compatibility date, nullable tail consumers, and documented region,
+hostname, host or targeted placement configuration, including placement without
+an explicit mode.
 
 Worker results project selected runtime settings and binding resource references
 rather than preserving arbitrary server fields. Binding names/types, KV/D1/R2

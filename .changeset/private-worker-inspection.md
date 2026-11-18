@@ -9,3 +9,5 @@ Resolve existing route and production custom-domain assignments without guessing
 legacy environments. Preserve binding resource references while hiding values;
 expose pagination, unavailable data and failed reads explicitly. Source stays in
 optional private local artifacts rather than stdout. No live writes or release.
+Parse the documented version-history items wrapper and preserve valid empty,
+nullable and targeted-placement runtime settings.

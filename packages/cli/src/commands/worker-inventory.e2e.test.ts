@@ -112,6 +112,16 @@ function failure(result: Result, pattern?: RegExp) {
 }
 
 describe("Worker implementation inventory CLI", () => {
+  it.each(["settings", "version"])("accepts documented empty/null/placement variants in %s JSON", async (kind) => {
+    const settings = { compatibility_date: "", tail_consumers: null, placement: { region: "aws:us-east-1" }, bindings: [] };
+    const output = success(await runCli(kind === "settings" ? command("settings", "get", WORKER) : command("versions", "get", WORKER, VERSION), [{
+      path: kind === "settings" ? `${PATH}/settings` : `/client/v4/accounts/${ACCOUNT}/workers/workers/${WORKER}/versions/${VERSION}`,
+      query: kind === "settings" ? {} : { include: "modules" },
+      body: envelope(kind === "settings" ? settings : { ...version(), ...settings }),
+    }]));
+    expect(output[kind]).toMatchObject({ compatibility_date: "", tail_consumers: null, placement: { region: "aws:us-east-1" } });
+    expect(output.bindingsStatus).toBe("present");
+  });
   it.each(["application/javascript", "text/html"])("Node export rejects an endless %s response without hanging or artifacts", async (contentType) => {
     const directory = mkdtempSync(join(tmpdir(), "cf-worker-node-bound-"));
     try {
@@ -230,7 +240,7 @@ describe("Worker implementation inventory CLI", () => {
   });
 
   it("reads later version pages as uploaded history without claiming deployment", async () => {
-    const output = success(await runCli(command("versions", "list", WORKER, "--page", "2", "--per-page", "1"), [{ path: `${PATH}/versions`, query: { page: "2", per_page: "1" }, body: envelope([{ id: VERSION, number: 2, metadata: { created_on: CREATED, source: "api" } }], { page: 2, per_page: 1, count: 1, total_count: 2, total_pages: 2 }) }]));
+    const output = success(await runCli(command("versions", "list", WORKER, "--page", "2", "--per-page", "1"), [{ path: `${PATH}/versions`, query: { page: "2", per_page: "1" }, body: envelope({ items: [{ id: VERSION, number: 2, metadata: { created_on: CREATED, source: "api" } }] }, { page: 2, per_page: 1, count: 1, total_count: 2, total_pages: 2 }) }]));
     expect(output).toMatchObject({ versions: [{ id: VERSION, number: 2 }], nextPage: null, truncated: false });
     expect(output.deployments).toBeUndefined();
   });
@@ -239,7 +249,7 @@ describe("Worker implementation inventory CLI", () => {
     for (const kind of ["deployments", "versions"] as const) {
       const output = success(await runCli(command(kind, "list", WORKER), [{
         path: `${PATH}/${kind}`, query: { page: "1", per_page: "20" },
-        body: envelope(kind === "deployments" ? { deployments: [] } : []),
+        body: envelope(kind === "deployments" ? { deployments: [] } : { items: [] }),
       }]));
       expect(output).toMatchObject({ [kind]: [], nextPage: null, truncated: false });
     }

@@ -36,11 +36,36 @@ function deployment() { return { id: ID, created_on: DATE, source: "api", strate
 
 describe("account Worker inventory", () => {
   it.each([
+    { compatibility_date: "" },
+    { tail_consumers: null },
+    { placement: { region: "aws:us-east-1" } },
+    { placement: { hostname: "origin.example.test" } },
+    { placement: { host: "origin.example.test:5432" } },
+    { placement: { mode: "targeted", region: "aws:us-east-1" } },
+    { placement: { mode: "targeted", target: [{ hostname: "origin.example.test" }] } },
+  ])("preserves documented settings variants in settings and pinned versions: %j", async (settings) => {
+    await mock((url) => json(url.pathname.endsWith("/settings") ? { ...settings, bindings: [] } : { ...version(), ...settings }), async () => {
+      expect((await client().inventory.getWorkerSettings(TARGET)).settings).toMatchObject(settings);
+      expect((await client().inventory.getWorkerVersion(TARGET, ID)).version).toMatchObject(settings);
+    });
+  });
+
+  it("reads the documented version result.items wrapper", async () => {
+    await mock(() => json({ items: [{ id: ID, number: 1 }] }), async () => {
+      expect(await client().inventory.listWorkerVersions(TARGET)).toMatchObject({ versions: [{ id: ID, number: 1 }], truncated: false });
+    });
+  });
+  it.each([[], {}, { items: null }, { items: [{ number: 1 }] }])("rejects malformed version result wrappers: %j", async (result) => {
+    await mock(() => json(result), async () => {
+      await expect(client().inventory.listWorkerVersions(TARGET)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+  it.each([
     { page: 1, per_page: 20, count: 2, total_count: 1, total_pages: 1 },
     { page: 1, per_page: 2, count: 2, total_pages: 0 },
     { page: 1, per_page: 2, count: 2, total_count: 2, total_pages: 2 },
   ])("rejects contradictory pagination totals: %j", async (info) => {
-    await mock(() => json([{ id: ID }, { id: ID2 }], info), async () => {
+    await mock(() => json({ items: [{ id: ID }, { id: ID2 }] }, info), async () => {
       await expect(client().inventory.listWorkerVersions(TARGET, { perPage: info.per_page })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
     });
   });
@@ -160,7 +185,7 @@ describe("account Worker inventory", () => {
       expect(url.pathname).toBe(`${BASE}/versions`);
       expect(url.searchParams.get("deployable")).toBeNull();
       expect(url.searchParams.get("page")).toBe(String(calls));
-      return json([{ id: calls === 1 ? ID : ID2, number: calls, metadata: { created_on: DATE, source: "api", author_email: "private@example.com" } }], { page: calls, per_page: 1, total_count: 2, total_pages: 2, count: 1 });
+      return json({ items: [{ id: calls === 1 ? ID : ID2, number: calls, metadata: { created_on: DATE, source: "api", author_email: "private@example.com" } }] }, { page: calls, per_page: 1, total_count: 2, total_pages: 2, count: 1 });
     }, async () => {
       const first = await client().inventory.listWorkerVersions(TARGET, { page: 1, perPage: 1 });
       expect(first).toMatchObject({ nextPage: 2, truncated: true });
@@ -171,7 +196,7 @@ describe("account Worker inventory", () => {
   });
 
   it("full pages without totals conservatively expose continuation", async () => {
-    await mock(() => json([{ id: ID }]), async () => {
+    await mock(() => json({ items: [{ id: ID }] }), async () => {
       expect(await client().inventory.listWorkerVersions(TARGET, { perPage: 1 })).toMatchObject({ nextPage: 2, truncated: true });
     });
   });
@@ -213,7 +238,7 @@ describe("account Worker inventory", () => {
   });
 
   it("rejects unsupported pagination metadata instead of inventing completeness", async () => {
-    await mock(() => json([{ id: ID }], { cursors: { after: "not-supported" } }), async () => { await expect(client().inventory.listWorkerVersions(TARGET)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
+    await mock(() => json({ items: [{ id: ID }] }, { cursors: { after: "not-supported" } }), async () => { await expect(client().inventory.listWorkerVersions(TARGET)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
   });
 
   it.each([{ page: 0 }, { perPage: 101 }, { page: 1.5 }, { perPage: 0 }])("rejects invalid page options %j before HTTP", async (options) => {

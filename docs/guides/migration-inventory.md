@@ -370,6 +370,9 @@ Vectorize, dispatch namespaces, workflows and Secrets Store references where
 returned. All plain-text/JSON values, secret values and cryptographic key material
 are hidden regardless of binding name. Unknown binding types retain identity
 but their details are unavailable. These snapshots cannot be written back.
+Runtime settings preserve empty compatibility dates, null tail consumers, and
+documented placement targets (region, hostname, host or targeted array), including
+placement without `mode`. These are valid settings, not malformed upstream data.
 
 `source get` reads the original script, never JSON-decodes it as an API envelope.
 It recognizes JavaScript and defensively parses HTTP multipart file parts without
@@ -531,7 +534,8 @@ Checked 2026-11-18:
   is `/script-settings`.
 - [Deployments](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/)
   returns `{deployments: [...]}`; [version history](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/list/)
-  returns an array. Both document numeric paging.
+  returns `{items: [...]}` inside `result`, normalized to the CLI/SDK's `versions`
+  array. Both document numeric paging.
 - [Beta pinned version detail](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/subresources/versions/methods/get/)
   accepts a Worker ID or name and `include=modules`; module objects contain
   `name`, `content_type`, `content_base64`. This Beta API may change or be unavailable.
@@ -566,14 +570,15 @@ to an unpinned download labeled as that version.
 
 Verified on 2026-11-18 against parent head
 `e1cc1a152ccc2566259707cad99ee181f30d23d6` (now preserved in main by parent PR #14
-merge `b90442bd12252ebc988b26342c657281b9ab052b`). This feature targets main and
-does not publish a release or merge its own PR. The parent's pending changeset
+merge `b90442bd12252ebc988b26342c657281b9ab052b`). This feature targets main.
+Initial delivery did not merge the PR; the user subsequently authorized review
+and merge without a release. The parent's pending changeset
 remains unchanged for the later release process.
 
 - Baseline frozen install, build/lint and 614 tests passed: SDK 283/MCP 12/CLI 319.
 - Final `bun run build` and `bun run lint` exit 0 across all packages.
-- Final `bun run test`: SDK 372, MCP 12, CLI 357; **741 tests pass**, zero failures.
-- New coverage: 37 private-source cases, 52 mocked Worker HTTP cases, 38 Worker
+- Final `bun run test`: SDK 384, MCP 12, CLI 359; **755 tests pass**, zero failures.
+- New coverage: 37 private-source cases, 64 mocked Worker HTTP cases, 40 Worker
   subprocess cases. Existing inventory/WAF/DNS/redirect tests remain green.
 - Worker tests were written before implementation. Missing methods/commands
   failed first; additional failing regressions drove MIME/URL redaction,
@@ -587,6 +592,13 @@ remains unchanged for the later release process.
 - Source package review approved the artifact implementation; a fresh recheck
   approved both final-review fixes with 89 SDK/source tests and both Node export
   regressions passing. No blocking review findings remain.
+- Subsequent Claude Opus 5.5 medium review found two API-shape errors: version
+  history fixtures incorrectly used a bare result array, and settings rejected
+  documented placement/default/null variants. Corrected reader schemas and both
+  SDK/process fixtures; new regressions failed before the correction and pass
+  after it. The full 755-test build/lint/test verification above includes those
+  fixes. CodeRabbit was requested but its OSS review quota blocked execution;
+  its successful status check must not be interpreted as an approved review.
 - Root reran 123 SDK inventory cases and 93 relevant CLI subprocess cases against
   a rebuilt SDK. Process mocks reject non-GET, unexpected requests and wrong
   scopes/queries. Source tests verify exact module bytes, private permissions,
@@ -610,8 +622,8 @@ Error: No Cloudflare credentials configured. Store a token in the OS keychain wi
 A fetch guard confirmed **zero HTTP attempts**; credential resolution stopped
 every read. No Worker names were learned, so targeted PBHS source/settings/version
 reads could not run. Actual assignments, source, bindings, permissions and Beta
-availability remain **unverified**, never empty. No live writes, Worker deployment,
-secret changes, migration, firewall repair, release or PR merge occurred.
+availability remain **unverified**, never empty. No live Cloudflare writes, Worker
+deployment, secret changes, migration, firewall repair or release occurred.
 
 ## Parent inventory verification evidence
 

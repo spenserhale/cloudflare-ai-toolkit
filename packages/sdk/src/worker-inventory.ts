@@ -45,12 +45,20 @@ const PageInfoSchema = z.object({
 }).strict();
 const ConsumerSchema = z.object({ service: Text, environment: Text.optional(), namespace: Text.optional() });
 const LimitsSchema = z.object({ cpu_ms: z.number().nonnegative().optional(), subrequests: z.number().nonnegative().optional() });
+const PlacementTargetSchema = z.union([
+  z.object({ region: Text }), z.object({ hostname: Text }), z.object({ host: Text }),
+]);
+const PlacementSchema = z.object({
+  mode: z.enum(["smart", "targeted"]).optional(),
+  region: Text.optional(), hostname: Text.optional(), host: Text.optional(),
+  target: z.array(PlacementTargetSchema).min(1).max(1).optional(),
+}).refine((placement) => placement.mode === "smart" || placement.region !== undefined || placement.hostname !== undefined || placement.host !== undefined || (placement.mode === "targeted" && placement.target !== undefined));
 const SettingsSchema = z.object({
   bindings: z.array(z.object({ name: Text, type: Text }).passthrough()).max(1000).optional(),
-  compatibility_date: Text.optional(), compatibility_flags: Strings.optional(), usage_model: z.enum(["standard", "bundled", "unbound"]).optional(),
+  compatibility_date: z.string().max(2048).optional(), compatibility_flags: Strings.optional(), usage_model: z.enum(["standard", "bundled", "unbound"]).optional(),
   logpush: z.boolean().optional(), limits: LimitsSchema.optional(),
-  tail_consumers: z.array(ConsumerSchema).max(1000).optional(),
-  placement: z.object({ mode: Text }).optional(),
+  tail_consumers: z.array(ConsumerSchema).max(1000).nullable().optional(),
+  placement: PlacementSchema.optional(),
   cache_options: z.object({ enabled: z.boolean(), cross_version_cache: z.boolean().optional() }).optional(),
 });
 const SummarySchema = z.object({
@@ -279,8 +287,8 @@ export class WorkerInventoryReader {
     const page = PageOptionsSchema.safeParse(options);
     if (!page.success) throw new CloudflareError("Worker page must be a positive integer; perPage must be an integer from 1 to 100.", "CONFIG_ERROR");
     const path = `${resolved.path}/versions`;
-    const read = await this.workerRead(path, z.array(SummarySchema).max(100), { page: page.data.page, per_page: page.data.perPage });
-    return this.bounded(this.safe({ ...resolved.metadata, versions: read.result, ...this.pagination(read.info, page.data, read.result.length, path) }));
+    const read = await this.workerRead(path, z.object({ items: z.array(SummarySchema).max(100) }), { page: page.data.page, per_page: page.data.perPage });
+    return this.bounded(this.safe({ ...resolved.metadata, versions: read.result.items, ...this.pagination(read.info, page.data, read.result.items.length, path) }));
   }
 
   async getWorkerVersion(target: InventoryWorkerTarget, version: string, options: WorkerExportOptions = {}): Promise<GetInventoryWorkerVersionResult> {
