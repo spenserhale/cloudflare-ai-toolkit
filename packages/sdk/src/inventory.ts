@@ -12,6 +12,18 @@ import {
   InventoryWorkerDomainSchema,
   InventoryWorkerRouteSchema,
   InventoryZoneSettingSchema,
+  InventoryListSchema,
+  InventoryListKindSchema,
+  InventoryListIPItemSchema,
+  InventoryListRedirectItemSchema,
+  InventoryListHostnameItemSchema,
+  InventoryListASNItemSchema,
+  type GetInventoryListResult,
+  type InventoryListItem,
+  type ListInventoryListsOptions,
+  type ListInventoryListsResult,
+  type ListInventoryListItemsOptions,
+  type ListInventoryListItemsResult,
   type GetInventoryBotManagementResult,
   type GetInventoryManagedTransformsResult,
   type GetInventoryPhaseEntrypointResult,
@@ -96,6 +108,15 @@ function redactUrls(value: string): string {
   });
 }
 
+/** Bulk Redirect source URLs may omit the scheme, unlike ordinary URL fields. */
+function redactListUrl(value: string): string {
+  const explicit = /^https?:\/\//iu.test(value);
+  const relative = value.startsWith("//");
+  const prefix = explicit ? "" : relative ? "https:" : "https://";
+  const redacted = redactUrls(`${prefix}${value}`);
+  return redacted.startsWith(prefix) ? redacted.slice(prefix.length) : redacted;
+}
+
 /** Reads native migration configuration while preserving fields added by Cloudflare. */
 export class InventoryReader {
   constructor(
@@ -137,6 +158,7 @@ export class InventoryReader {
       // Cache-key cookies list names/presence checks, never cookie contents.
       const cookieConfiguration = key === "cookie" && path.slice(-2).join(".") === "cache_key.custom_key";
       if (secretField(key) && !cookieConfiguration) return [key, REDACTED];
+      if ((key === "source_url" || key === "target_url") && typeof item === "string") return [key, this.text(redactListUrl(item))];
       if (/^(?:request_|response_)?headers$/iu.test(key)) return [key, this.headers(item)];
       // Page Rules and other APIs encode header mutations as an action ID/value pair.
       if (key === "value" && typeof object.id === "string" && /headers?/iu.test(object.id)) return [key, this.headers(item)];
@@ -210,6 +232,78 @@ export class InventoryReader {
 
   private ruleset(result: z.infer<typeof InventoryRulesetSchema>): InventoryRuleset {
     return { ...result, rules: result.rules.map((rule, index) => ({ ...rule, order: index + 1 })) };
+  }
+
+  private listTarget(target: InventoryTarget): { metadata: { scope: "account"; accountId: string }; path: string } {
+    const resolved = this.target(target);
+    if (resolved.metadata.scope !== "account") throw new CloudflareError("Lists require explicit account scope; zone scope is not supported.", "CONFIG_ERROR");
+    return { metadata: resolved.metadata, path: `${resolved.path}/rules/lists` };
+  }
+
+  async listLists(target: InventoryTarget, options: ListInventoryListsOptions = {}): Promise<ListInventoryListsResult> {
+    const resolved = this.listTarget(target);
+    const parsed = z.object({
+      name: z.string().trim().min(1).optional(), kind: InventoryListKindSchema.optional(),
+      page: z.number().int().positive().safe().default(1), perPage: z.number().int().min(1).max(500).default(100), all: z.boolean().default(false),
+    }).safeParse(options);
+    if (!parsed.success || (parsed.data.all && parsed.data.page > 1)) throw new CloudflareError("List filters require a nonempty name and kind ip|redirect|hostname|asn; page must be a positive integer, perPage 1-500, and all cannot start after page 1.", "CONFIG_ERROR");
+    const result = await this.read(resolved.path, z.array(InventoryListSchema));
+    this.complete(resolved.path, result.info, result.result.length);
+    const matches = result.result.filter((list) => (parsed.data.kind === undefined || list.kind === parsed.data.kind) && (parsed.data.name === undefined || list.name === parsed.data.name));
+    const page = parsed.data.page;
+    const perPage = parsed.data.all ? Math.max(1, matches.length) : parsed.data.perPage;
+    const offset = (page - 1) * perPage;
+    const lists = matches.slice(offset, offset + perPage);
+    return this.redact({ ...resolved.metadata, lists, resultInfo: { page, per_page: perPage, count: lists.length, total_count: matches.length, total_pages: Math.max(1, Math.ceil(matches.length / perPage)) }, truncated: offset + lists.length < matches.length });
+  }
+
+  private async listDetail(id: string, target: InventoryTarget): Promise<GetInventoryListResult> {
+    const resolved = this.listTarget(target);
+    this.segment(id, "List ID");
+    const path = `${resolved.path}/${encodeURIComponent(id)}`;
+    const result = await this.read(path, InventoryListSchema);
+    this.complete(path, result.info, 1);
+    if (result.result.id !== id) throw this.malformed(path, "response list ID does not match the requested list");
+    return { ...resolved.metadata, list: result.result };
+  }
+
+  async getList(id: string, target: InventoryTarget): Promise<GetInventoryListResult> {
+    return this.redact(await this.listDetail(id, target));
+  }
+
+  async listListItems(id: string, target: InventoryTarget, options: ListInventoryListItemsOptions = {}): Promise<ListInventoryListItemsResult> {
+    // Validate before metadata HTTP, so an invalid option never performs a read.
+    const parsed = z.object({
+      cursor: z.string().min(1).optional(), search: z.string().min(1).optional(),
+      perPage: z.number().int().min(1).max(500).default(100), all: z.boolean().default(false),
+    }).safeParse(options);
+    if (!parsed.success) throw new CloudflareError("List item cursor/search must not be empty and perPage must be an integer from 1 to 500.", "CONFIG_ERROR");
+    const detail = await this.listDetail(id, target);
+    const path = `/client/v4/accounts/${encodeURIComponent(detail.accountId)}/rules/lists/${encodeURIComponent(id)}/items`;
+    const schemas = { ip: InventoryListIPItemSchema, redirect: InventoryListRedirectItemSchema, hostname: InventoryListHostnameItemSchema, asn: InventoryListASNItemSchema };
+    const items: InventoryListItem[] = [];
+    const seen = new Set<string>();
+    let cursor = parsed.data.cursor;
+    if (cursor) seen.add(cursor);
+    for (;;) {
+      const page = await this.read(path, z.array(schemas[detail.list.kind]), { cursor, per_page: parsed.data.perPage, search: parsed.data.search });
+      items.push(...page.result);
+      const after = page.info.cursors?.after;
+      if (after && seen.has(after)) throw this.malformed(path, "API repeated a pagination cursor");
+      const incomplete = Boolean(after || page.info.truncated || page.info.has_more ||
+        (page.info.total_count !== undefined && page.info.total_count > items.length) ||
+        (page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
+        (page.info.count !== undefined && page.info.count > page.result.length));
+      if (!parsed.data.all || !after) {
+        if (parsed.data.all && incomplete) throw this.malformed(path, "API reports more list items without a continuation cursor");
+        if (!incomplete && parsed.data.cursor === undefined && parsed.data.search === undefined && items.length !== detail.list.num_items) {
+          throw this.malformed(path, "item count differs from list metadata; inventory is incomplete or the list changed during collection");
+        }
+        return this.redact({ ...detail, items, resultInfo: page.info, truncated: incomplete });
+      }
+      seen.add(after!);
+      cursor = after;
+    }
   }
 
   async listRulesets(target: InventoryTarget, options: ListInventoryRulesetsOptions = {}): Promise<ListInventoryRulesetsResult> {

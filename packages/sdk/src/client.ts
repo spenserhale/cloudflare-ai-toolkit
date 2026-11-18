@@ -324,6 +324,24 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
   },
   {
     method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/rules\/lists\/[^/]+\/items$/u,
+    requiredPermissions: ["Account Filter Lists Read", "Account Filter Lists Edit"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rules/subresources/lists/subresources/items/methods/list/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/rules\/lists\/[^/]+$/u,
+    requiredPermissions: ["Account Filter Lists Read"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rules/subresources/lists/methods/get/",
+  },
+  {
+    method: "GET",
+    pathPattern: /^\/client\/v4\/accounts\/[^/]+\/rules\/lists$/u,
+    requiredPermissions: ["Account Filter Lists Read", "Account Filter Lists Edit"],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rules/subresources/lists/methods/list/",
+  },
+  {
+    method: "GET",
     pathPattern: /^\/client\/v4\/accounts\/[^/]+\/rulesets(?:\/|$)/u,
     requiredPermissions: ["Account Rulesets Read", "Account WAF Read"],
     docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/methods/list/",

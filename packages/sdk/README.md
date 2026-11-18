@@ -128,6 +128,11 @@ const domains = await cf.inventory.listWorkerDomains({ accountId: "<account-id>"
 const pageRules = await cf.inventory.listPageRules("<zone-id>");
 const transforms = await cf.inventory.getManagedTransforms("<zone-id>");
 const normalization = await cf.inventory.getUrlNormalization("<zone-id>");
+const lists = await cf.inventory.listLists(account, { kind: "redirect", all: true });
+const namedList = await cf.inventory.listLists(account, { name: "office_ips", kind: "ip" });
+const listMetadata = await cf.inventory.getList("<list-id>", account);
+const listItems = await cf.inventory.listListItems("<list-id>", account, { all: true });
+const matchingItems = await cf.inventory.listListItems("<list-id>", account, { search: "192.0.", perPage: 100 });
 ```
 
 The reader reuses the client's authentication and validates success envelopes and
@@ -140,6 +145,31 @@ all rules. Only a structured phase-entrypoint not-found 404 becomes
 `status: "absent"`, with the original diagnostic. HTML/ambiguous or explicit
 entitlement-denied 404s remain errors. A ruleset-ID 404 can mean missing resource or managed entitlement and
 remains an error. See the [inventory guide](../../docs/guides/migration-inventory.md).
+
+Account Lists reads require explicit `scope: "account"` and reject a zone ID.
+`listLists` filters by exact `name` and `kind` locally before numeric paging:
+default `page: 1`, `perPage: 100`, maximum 500. Metadata has no upstream pagination;
+`all: true` returns every matching list and cannot be combined with `page > 1`.
+Collections include `resultInfo` and `truncated`. An empty filtered result means
+no visible match, not that a referenced Managed List is exportable.
+
+`listListItems` reads metadata first, then validates items for the actual `ip`,
+`redirect`, `hostname`, or `asn` kind. It preserves item IDs, IPs/comments, redirect
+source/target URLs, behavior flags/status, and unknown native fields. Item array
+order is retained without inventing evaluation priority. Default page size is 100
+(maximum 500); continue with `cursor: resultInfo.cursors.after` or opt into `all`.
+`all` with a starting cursor collects only the remaining suffix. `search` uses the
+API's IP-prefix, redirect/hostname-substring, and ASN-exact semantics; filtered
+and resumed results are subsets, even when `truncated` is false. A complete
+unfiltered collection cross-checks the metadata count and fails on inconsistency.
+Later-page failures never return partial success. These reads are not an atomic
+snapshot; retry if concurrent changes cause a mismatch.
+
+Known empty lists return their metadata and `items: []`. Missing lists, permission
+or entitlement denials, HTTP 410, malformed responses and upstream errors throw
+with their diagnostics. URLs with credentials or secret query values are redacted,
+including scheme-less Bulk Redirect source URLs. Cloudflare Managed Lists and
+built-in datasets are not claimed as accessible through the account Lists API.
 
 ### Redirect rules
 

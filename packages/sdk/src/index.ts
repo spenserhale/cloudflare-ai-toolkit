@@ -11,6 +11,9 @@ export type {
   ListInventoryWorkerDomainsResult, InventoryPageRule, ListInventoryPageRulesResult,
   InventoryManagedTransform, InventoryManagedTransforms, GetInventoryManagedTransformsResult,
   InventoryUrlNormalization, GetInventoryUrlNormalizationResult,
+  InventoryListKind, InventoryList, InventoryListItem, InventoryListRedirect,
+  ListInventoryListsOptions, ListInventoryListsResult, GetInventoryListResult,
+  ListInventoryListItemsOptions, ListInventoryListItemsResult,
 } from "./types.js";
 export {
   InventoryTargetSchema, InventoryRuleSchema, InventoryRulesetMetadataSchema,
@@ -18,6 +21,9 @@ export {
   InventoryBotManagementSchema, InventoryWorkerRouteSchema, InventoryWorkerDomainSchema,
   InventoryPageRuleSchema, InventoryManagedTransformSchema, InventoryManagedTransformsSchema,
   InventoryUrlNormalizationSchema,
+  InventoryListKindSchema, InventoryListSchema, InventoryListRedirectSchema,
+  InventoryListIPItemSchema, InventoryListRedirectItemSchema, InventoryListHostnameItemSchema,
+  InventoryListASNItemSchema, InventoryListItemSchema,
 } from "./types.js";
 export { loadConfig, readDotEnv, resolveConfig } from "./config.js";
 export type { DotEnvFile, Env, LoadConfigOptions, ResolveConfigOptions, ResolvedConfig } from "./config.js";
