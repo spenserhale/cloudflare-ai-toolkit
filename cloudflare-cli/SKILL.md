@@ -36,7 +36,7 @@ unavailable (for example, running under Node instead of Bun).
 
 Optional defaults so you don't have to pass IDs each time:
 
-- `CLOUDFLARE_ACCOUNT_ID` — default for `audit`, account Rulesets, and Worker domains
+- `CLOUDFLARE_ACCOUNT_ID` — default for `audit`, account Rulesets, Lists, and Worker domains
 - `CLOUDFLARE_ZONE_ID` — default for `cache`, `custom-hostnames`, `zones get`, `zones vanity-ns`, `log-explorer`, WAF, zone inventory and Worker routes; never an implicit filter for Worker domains
 
 If no credential is set, stop and ask the user which they want to configure — don't guess at one.
@@ -66,6 +66,9 @@ cloudflare waf rules delete <rule-id> --yes
 cloudflare rulesets list --scope zone|account --all    # metadata and cursor pagination
 cloudflare rulesets get <id> --scope zone|account      # all ordered rules; optional --version
 cloudflare rulesets phases get <phase> --scope zone|account
+cloudflare lists list --scope account [--kind ip|redirect|hostname|asn] [--name <exact>] [--all]
+cloudflare lists get <list-id> --scope account          # identity, kind and item count
+cloudflare lists items list <list-id> --scope account [--search <query>] [--all]
 cloudflare zones settings get <setting-id>             # SSL/security/cache setting value
 cloudflare zones managed-transforms get                # managed request/response headers
 cloudflare zones url-normalization get                 # URL normalization mode
@@ -180,6 +183,27 @@ accept individual IDs, for example `ssl` and `security_level`.
 
 The [inventory guide](../docs/guides/migration-inventory.md) gives the phase
 map, exact commands, permission alternatives, and local-install verification.
+
+Account Lists resolve Bulk Redirect list references and custom-rule IP-list
+references. Use `lists list --scope account --account-id <id> --all --json` for
+metadata, optionally narrowed by exact `--name` and `--kind`. Filtering precedes
+local numeric `--page`/`--per-page` paging. Default page size is 100, range 1–500;
+`--all` conflicts with metadata `--page` greater than 1.
+
+Use `lists get <list-id> --scope account --account-id <id> --json` for identity,
+then `lists items list <list-id> --scope account --account-id <id> --all --json`
+for contents. The item reader includes metadata and preserves IPs/comments,
+redirect source/target URLs, status, and behavior flags. Documented kinds are
+`ip`, `redirect`, `hostname`, `asn`; these commands do not export Cloudflare
+Managed Lists or built-in datasets. They require `Account Filter Lists Read`.
+
+Items default to 100 per page (range 1–500). Without `--all`, inspect `truncated`
+and continue with `--cursor` from `resultInfo.cursors.after`. `--all --cursor`
+collects only the remaining suffix. `--search` uses IP prefix,
+redirect/hostname substring, or ASN exact matching; filtered results are subsets.
+No zone scope/filter is accepted. Missing lists, denied access, malformed data,
+retired endpoints and failed pages remain failures with no successful JSON;
+never record them as empty inventories. Credential redaction still applies.
 
 ### Worker implementation inspection
 

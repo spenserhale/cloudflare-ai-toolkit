@@ -100,6 +100,9 @@ cloudflare waf rules delete <rule-id> [--zoneId <id>] [--yes]
 cloudflare rulesets list --scope zone|account [--zone-id <id>|--account-id <id>] [--cursor <c>] [--per-page 50] [--all] [--json]
 cloudflare rulesets get <ruleset-id> --scope zone|account [--version <version>] [flags]
 cloudflare rulesets phases get <phase> --scope zone|account [flags]
+cloudflare lists list --scope account [--account-id <id>] [--name <exact>] [--kind ip|redirect|hostname|asn] [--page 1] [--per-page 100] [--all] [--json]
+cloudflare lists get <list-id> --scope account [--account-id <id>] [--json]
+cloudflare lists items list <list-id> --scope account [--account-id <id>] [--search <query>] [--cursor <c>] [--per-page 100] [--all] [--json]
 cloudflare zones settings get <setting-id> [--zone-id <id>] [--json]
 cloudflare zones managed-transforms get [--zone-id <id>] [--json]
 cloudflare zones url-normalization get [--zone-id <id>] [--json]
@@ -173,13 +176,49 @@ original one-based array position, not legacy priority. `skip` and `execute`
 filters are supported. `waf rules create|update|delete` still use the retired
 legacy API and are not modern mutations; do not feed read IDs into those commands.
 
-Rulesets commands require explicit `--scope zone|account`. Lists expose cursors
+Rulesets commands require explicit `--scope zone|account`. Rulesets lists expose cursors
 and `truncated`; use `--all` or follow `--cursor`. Detail/phase reads return every
 ordered rule and preserve product parameters. A missing phase returns explicit
 `status: "absent"` with its original 404 diagnostic. Other read failures exit 1
 with stderr diagnostics and no JSON result; parser usage failures are nonzero.
 Zone settings use individual setting IDs because the collection endpoint is
 deprecated. Worker domains are account-scoped, with an optional zone filter.
+
+Account Lists inventory requires `--scope account`; `--account-id` defaults to
+`CLOUDFLARE_ACCOUNT_ID`. No zone scope/filter is accepted. `lists list` reads
+account metadata, filters exact name/kind locally, then pages locally. `--page`
+defaults to 1, `--per-page` defaults to 100 (range 1–500), and `--all` returns all
+matches (`--page` greater than 1 conflicts with `--all`). JSON has `lists`,
+numeric `resultInfo`, and `truncated`.
+
+`lists get` returns list identity and native metadata. `lists items list` first
+reads that identity, then returns `list`, `items`, `resultInfo.cursors`, and
+`truncated`. Items default to 100 per page (range 1–500); `--all` follows every
+remaining cursor and fails if any page fails. Any item page advertising more data
+without a continuation cursor fails, including bounded reads. `--all --cursor <c>`
+collects a suffix, not items before that cursor. `--search` is an upstream filter: IP prefix,
+redirect/hostname substring, ASN exact match. Filtered/resumed results are subsets.
+Truncation diagnostics go to stderr; `--json` stdout contains only JSON.
+If redaction would alter a forward cursor, or the cursor is blank, bounded reads
+fail rather than suggest an unusable `--cursor`. Retry from the beginning with
+`--all` to follow that cursor internally. Resumed reads remain suffixes even if
+the API includes a collection-wide total.
+Oversized API pages and repeated item IDs fail instead of exceeding requested
+bounds or reporting an apparently complete collection containing duplicates.
+`--all` buffers the collection and serializes it as one JSON value. Very large
+exports can exceed available memory or the runtime's string-size limit and fail;
+use bounded cursor pages saved separately for those lists. Query redaction uses
+the [SDK's documented key heuristic](../sdk/README.md#read-only-configuration-inventory),
+so review and scrub unrecognized sensitive parameters before sharing snapshots.
+
+Kinds are `ip`, `redirect`, `hostname`, and `asn`. The readers preserve item IDs,
+IPs/comments, redirect URLs, status and all behavior parameters. An empty list
+returns its metadata and `items: []`; 403/404/410/upstream errors or malformed
+responses fail with exit 1 and no successful JSON. Missing lists never become
+empty inventories. Existing credential/URL redaction applies. Read access needs
+`Account Filter Lists Read` for the selected account. Cloudflare Managed Lists
+and built-in datasets are not exported. Use `redirects` for Single Redirect rules;
+Bulk Redirect references are resolved through these account Lists commands.
 
 Worker implementation readers extend those assignments with account-scoped
 settings, binding references, original source inspection, deployment percentages,

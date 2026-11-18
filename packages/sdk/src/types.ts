@@ -143,6 +143,48 @@ export type GetInventoryPhaseEntrypointResult = InventoryScope & { phase: string
   { status: "absent"; diagnostic: InventoryAbsentDiagnostic }
 );
 
+export const InventoryListKindSchema = z.enum(["ip", "redirect", "hostname", "asn"]);
+export type InventoryListKind = z.infer<typeof InventoryListKindSchema>;
+export const InventoryListSchema = z.object({
+  id: z.string().min(1), name: z.string().min(1), kind: InventoryListKindSchema,
+  num_items: z.number().int().nonnegative().safe(),
+  num_referencing_filters: z.number().int().nonnegative().safe().optional(),
+  description: z.string().optional(), created_on: z.string().optional(), modified_on: z.string().optional(),
+}).passthrough();
+export type InventoryList = z.infer<typeof InventoryListSchema>;
+
+const InventoryListItemFields = {
+  id: z.string().min(1), comment: z.string().optional(),
+  created_on: z.string().optional(), modified_on: z.string().optional(),
+};
+export const InventoryListRedirectSchema = z.object({
+  source_url: z.string().min(1), target_url: z.string().min(1),
+  include_subdomains: z.boolean().optional(), subpath_matching: z.boolean().optional(),
+  preserve_path_suffix: z.boolean().optional(), preserve_query_string: z.boolean().optional(),
+  status_code: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]).optional(),
+}).passthrough();
+const InventoryIPAddressSchema = z.string().ip();
+const InventoryIPOrCIDRSchema = z.string().refine((value) => {
+  const [address, prefix, extra] = value.split("/");
+  if (!address || extra !== undefined || !InventoryIPAddressSchema.safeParse(address).success) return false;
+  return prefix === undefined || (/^\d+$/u.test(prefix) && Number(prefix) <= (address.includes(":") ? 128 : 32));
+}, "Expected an IPv4/IPv6 address or CIDR with a valid prefix length");
+export const InventoryListIPItemSchema = z.object({ ...InventoryListItemFields, ip: InventoryIPOrCIDRSchema }).passthrough();
+export const InventoryListRedirectItemSchema = z.object({ ...InventoryListItemFields, redirect: InventoryListRedirectSchema }).passthrough();
+export const InventoryListHostnameItemSchema = z.object({
+  ...InventoryListItemFields,
+  hostname: z.object({ url_hostname: z.string().min(1), exclude_exact_hostname: z.boolean().optional() }).passthrough(),
+}).passthrough();
+export const InventoryListASNItemSchema = z.object({ ...InventoryListItemFields, asn: z.number().int().min(0).max(4_294_967_295) }).passthrough();
+export const InventoryListItemSchema = z.union([InventoryListIPItemSchema, InventoryListRedirectItemSchema, InventoryListHostnameItemSchema, InventoryListASNItemSchema]);
+export type InventoryListItem = z.infer<typeof InventoryListItemSchema>;
+export type InventoryListRedirect = z.infer<typeof InventoryListRedirectSchema>;
+export type ListInventoryListsOptions = { name?: string; kind?: InventoryListKind; page?: number; perPage?: number; all?: boolean };
+export type ListInventoryListsResult = { scope: "account"; accountId: string; lists: InventoryList[]; resultInfo: { page: number; per_page: number; count: number; total_count: number; total_pages: number }; truncated: boolean };
+export type GetInventoryListResult = { scope: "account"; accountId: string; list: InventoryList };
+export type ListInventoryListItemsOptions = { search?: string; cursor?: string; perPage?: number; all?: boolean };
+export type ListInventoryListItemsResult = { scope: "account"; accountId: string; list: InventoryList; items: InventoryListItem[]; resultInfo: InventoryCursorResultInfo; truncated: boolean };
+
 export const InventoryZoneSettingSchema = z.object({
   id: z.string().min(1), value: z.unknown(),
 }).passthrough().refine((setting) => Object.hasOwn(setting, "value"), "Setting value is required");

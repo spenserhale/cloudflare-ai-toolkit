@@ -133,7 +133,7 @@ project `.env` files keep working and win. See the
 CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
 CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
-CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, and Worker domains
+CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, Lists, and Worker inventory
 CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
                          custom hostnames, `zones get`, `zones vanity-ns`,
                          log-explorer, WAF, zone inventory, and Worker routes)
@@ -289,6 +289,9 @@ cloudflare rulesets list --scope zone --zone-id <zone-id> --all --json
 cloudflare rulesets list --scope account --account-id <account-id> --all --json
 cloudflare rulesets phases get http_request_origin --scope zone --zone-id <zone-id> --json
 cloudflare rulesets get <ruleset-id> --scope account --account-id <account-id> --version latest --json
+cloudflare lists list --scope account --account-id <account-id> --kind redirect --all --json
+cloudflare lists get <list-id> --scope account --account-id <account-id> --json
+cloudflare lists items list <list-id> --scope account --account-id <account-id> --all --json
 cloudflare zones settings get ssl --zone-id <zone-id> --json
 cloudflare waf bot-management get --zone-id <zone-id> --json
 cloudflare workers routes list --zone-id <zone-id> --json
@@ -305,10 +308,21 @@ cloudflare zones url-normalization get --zone-id <zone-id> --json
 
 Rulesets detail preserves origin Host/SNI/DNS overrides, execute references and
 managed-WAF overrides, rate limits, redirects, cache and transform parameters.
-List results expose cursor continuation; `--all` follows it. Phase absence is
+Rulesets lists expose cursor continuation; `--all` follows it. Phase absence is
 explicit; denied or malformed reads fail. See the [migration inventory
 guide](docs/guides/migration-inventory.md) for coverage, permissions, local installation,
 and the complete read-only PBHS command set.
+
+Account `lists` commands resolve Bulk Redirect and custom IP-list references.
+Metadata supports exact `--name` and `--kind ip|redirect|hostname|asn` filters,
+followed by local `--page`/`--per-page` paging. Items preserve IPs/comments and
+redirect source/target URLs and behavior flags; item `--search` uses IP prefix,
+redirect/hostname substring, or ASN exact matching. Both collections default to
+100 results (maximum page size 500). Use `--all` for every matching list or all
+remaining item pages; `--cursor` resumes items from `resultInfo.cursors.after`.
+`truncated` and stderr diagnostics identify incomplete collections. A missing or
+failed read never means an empty list. These readers do not export Cloudflare
+Managed Lists or built-in datasets; `redirects` remains the Single Redirect reader.
 
 Worker inspection exposes binding names/types/resource references and source
 module hashes, never source or binding values on stdout. `source get` reads
