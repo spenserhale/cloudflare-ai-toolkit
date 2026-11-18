@@ -1,5 +1,37 @@
 # @cloudflare-ai-toolkit/cli
 
+## 0.12.0
+
+### Minor Changes
+
+- [#17](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/17) [`826739b`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/826739b6042317fd38c30b847ebca2dc767baa72) Thanks [@spenserhale](https://github.com/spenserhale)! - Add read-only, account-scoped list metadata and contents inventory to resolve
+  Bulk Redirect and custom IP-list references. Preserve typed items and redirect
+  parameters, expose bounded pagination and complete collection, validate failed
+  or incomplete reads, and redact credential-bearing values and URLs.
+  Reject malformed IP/CIDR data, duplicate identities, and inconsistent pagination
+  totals. Document redaction and large-export limits and verify source-snapshot
+  provenance when collecting referenced list contents.
+
+- [#16](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/16) [`ecff293`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/ecff2938767e7d54d3a437a91b167c442cb5f5fe) Thanks [@spenserhale](https://github.com/spenserhale)! - Add account-scoped read-only Worker settings, source metadata/private export,
+  deployment history, version summaries and pinned Beta version module inspection.
+  Resolve existing route and production custom-domain assignments without guessing
+  legacy environments. Preserve binding resource references while hiding values;
+  expose pagination, unavailable data and failed reads explicitly. Source stays in
+  optional private local artifacts rather than stdout. No live writes or release.
+  Parse the documented version-history items wrapper and preserve valid empty,
+  nullable and targeted-placement runtime settings.
+
+- [#14](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/14) [`56b6292`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/56b6292a81a53f95c5df967a98cbfc864494c8f0) Thanks [@spenserhale](https://github.com/spenserhale)! - Replace retired WAF list/get calls with Rulesets custom-phase reads, preserving
+  compatibility fields and exposing native rule order, parameters, and source.
+  Add scoped Rulesets and read-only zone settings, bot settings, Worker assignments,
+  Page Rules, Managed Transforms, and URL normalization inventory. Preserve read
+  failures, expose pagination and phase absence, and redact credential-bearing output.
+
+### Patch Changes
+
+- Updated dependencies [[`826739b`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/826739b6042317fd38c30b847ebca2dc767baa72), [`ecff293`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/ecff2938767e7d54d3a437a91b167c442cb5f5fe), [`56b6292`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/56b6292a81a53f95c5df967a98cbfc864494c8f0)]:
+  - @cloudflare-ai-toolkit/sdk@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes
