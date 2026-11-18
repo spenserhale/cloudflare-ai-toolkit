@@ -26,7 +26,7 @@ async function withRoutes<T>(routes: Route[], work: () => Promise<T>): Promise<T
     expect(route, `Unexpected GET ${url.pathname}`).toBeDefined();
     expect(url.pathname).toBe(route!.path);
     expect(Object.fromEntries(url.searchParams)).toEqual(route!.query ?? {});
-    return new Response(route!.raw ?? JSON.stringify(route!.body ?? envelope(route!.result, route!.info)), { status: route!.status ?? 200 });
+    return new Response(route!.raw ?? JSON.stringify(route!.body === undefined ? envelope(route!.result, route!.info) : route!.body), { status: route!.status ?? 200 });
   }) as typeof fetch;
   try {
     const result = await work();
@@ -150,8 +150,8 @@ describe("typed Lists items and pagination", () => {
     });
   });
 
-  it.each([[], [ip], [ip, { ...ip, id: "second" }, { ...ip, id: "third" }]])("fails unfiltered terminal count mismatch rather than silently completing %j", async (page) => {
-    await withRoutes([metadata(), items(page)], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
+  it.each([[[]], [[ip]], [[ip, { ...ip, id: "second" }, { ...ip, id: "third" }]]])("fails unfiltered terminal count mismatch rather than silently completing %j", async (page) => {
+    await withRoutes([metadata(), items(page)], async () => { await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE", message: expect.stringContaining("item count differs") }); });
   });
 
   it.each([{ perPage: 0 }, { perPage: 501 }, { perPage: 1.5 }, { cursor: "" }, { search: "" }])("validates item options before any request: %j", async (options) => {
@@ -335,7 +335,7 @@ describe("Lists failures and redaction", () => {
   });
 
   it("preserves bare email addresses in comments and existing Rulesets fields", async () => {
-    const comment = "Contact owner@example.test or help@example.test.";
+    const comment = "Contact owner@example.test or mailto:help@example.test.";
     await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, comment }]), { path: "/client/v4/accounts/account-1/rulesets/ruleset-1", result: { id: "ruleset-1", description: comment, rules: [{ id: "rule-1", action: "block", description: comment }] } }], async () => {
       const result = await client().inventory.listListItems("list-1", target);
       expect(result.items[0]?.comment).toBe(comment);
@@ -365,6 +365,78 @@ describe("Lists failures and redaction", () => {
     const comment = "['https://one.example/O'Brien?lang=en','https://two.example/private']";
     await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, comment }])], async () => {
       expect((await client().inventory.listListItems("list-1", target)).items[0]?.comment).toBe(comment);
+    });
+  });
+
+  it.each(["'https://alice:authority-secret@example.test:8443'", "'https://alice:authority-secret@example.test:8443'),"])("redacts quoted URL authorities when trailing punctuation invalidates parsing: %s", async (message) => {
+    await withRoutes([{ path: root, status: 500, body: { success: false, result: null, errors: [{ code: 1234, message }] } }], async () => {
+      try { await client().inventory.listLists(target); throw new Error("expected error"); }
+      catch (error) {
+        expect(describeError(error)).not.toContain("alice");
+        expect(describeError(error)).not.toContain("authority-secret");
+        expect(describeError(error)).toContain("example.test:8443");
+      }
+    });
+  });
+
+  it.each([{}, { name: "office" }, { kind: "ip" }, { page: 2, perPage: 1 }])("rejects duplicate metadata IDs before filtering or paging: %j", async (options) => {
+    await withRoutes([{ path: root, result: [list, { ...list, name: "other", kind: "redirect" }] }], async () => {
+      await expect(client().inventory.listLists(target, options)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE", message: expect.stringContaining("list ID") });
+    });
+  });
+
+  it.each([{ total_count: 3 }, { total_pages: 3 }])("retains earlier pagination evidence when the last page omits it: %j", async (info) => {
+    await withRoutes([metadata(), items([ip], { ...info, cursors: { after: "next" } }), { ...items([{ ...ip, id: "second" }]), query: { per_page: "100", cursor: "next" } }], async () => {
+      await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+
+  it("rejects inconsistent collection totals between pages", async () => {
+    await withRoutes([metadata(), items([ip], { total_count: 2, cursors: { after: "next" } }), { ...items([{ ...ip, id: "second" }], { total_count: 3 }), query: { per_page: "100", cursor: "next" } }], async () => {
+      await expect(client().inventory.listListItems("list-1", target, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE", message: expect.stringContaining("totals") });
+    });
+  });
+
+  it("finishes when earlier page totals match the completed collection", async () => {
+    await withRoutes([metadata(), items([ip], { total_count: 2, total_pages: 2, cursors: { after: "next" } }), { ...items([{ ...ip, id: "second" }]), query: { per_page: "100", cursor: "next" } }], async () => {
+      expect((await client().inventory.listListItems("list-1", target, { all: true })).truncated).toBe(false);
+    });
+  });
+
+  it.each(["not-an-ip", "999.0.0.1", "2001:db8::xyz", "192.0.2.0/33", "2001:db8::/129", "192.0.2.1/-1", "192.0.2.1/abc", "192.0.2.1/24/1"])("rejects invalid IP-list address or CIDR: %s", async (address) => {
+    await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, ip: address }])], async () => {
+      await expect(client().inventory.listListItems("list-1", target)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+
+  it.each(["192.0.2.1", "192.0.2.1/32", "0.0.0.0/0", "2001:DB8::1", "2001:db8::/128", "::/0"])("preserves valid IP-list address text: %s", async (address) => {
+    await withRoutes([metadata({ ...list, num_items: 1 }), items([{ ...ip, ip: address }])], async () => {
+      expect((await client().inventory.listListItems("list-1", target)).items[0]?.ip).toBe(address);
+    });
+  });
+
+  it.each([
+    "Invalid sources: old.example.com/docs/,alice:password@old.example.com/private",
+    "https://one.example/a,alice:password@two.example/b",
+    "Source:alice:password@localhost/x",
+    "Source:alice@localhost/x",
+    "old.example.com/path?lang=en,two.example.com/other?token=joined-secret",
+    "old.example.com/path?lang=en;two.example.com/other?access_token=joined-secret",
+  ])("fails closed on delimiter-joined credential URL text: %s", async (message) => {
+    await withRoutes([{ path: root, status: 500, body: { success: false, result: null, errors: [{ code: 1234, message }] } }], async () => {
+      try { await client().inventory.listLists(target); throw new Error("expected error"); }
+      catch (error) {
+        const text = describeError(error);
+        for (const secret of ["alice", "password", "joined-secret"]) expect(text).not.toContain(secret);
+      }
+    });
+  });
+
+  it.each([false, true])("keeps a complete filtered result separate from collection totals (all=%s)", async (all) => {
+    await withRoutes([metadata({ ...list, num_items: 5 }), { ...items([ip], { total_count: 5, total_pages: 3 }), query: { per_page: "100", search: "192.0." } }], async () => {
+      const result = await client().inventory.listListItems("list-1", target, { search: "192.0.", all });
+      expect(result.items).toEqual([ip]);
+      expect(result.truncated).toBe(false);
     });
   });
 });

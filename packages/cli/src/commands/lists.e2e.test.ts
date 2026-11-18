@@ -76,6 +76,8 @@ async function runCli(
   const preloadPath = join(tempDir, "mock-fetch.mjs");
   const reportPath = join(tempDir, "requests.json");
   writeFileSync(preloadPath, PRELOAD_SCRIPT, "utf8");
+  // Stop nearest-.env lookup here even when TMPDIR is inside a checkout.
+  writeFileSync(join(tempDir, ".env"), "", "utf8");
 
   try {
     // A fresh working directory and no inherited Cloudflare variables prevent
@@ -135,8 +137,10 @@ function parseSuccess(result: RunResult, diagnostics = false) {
   return JSON.parse(result.stdout);
 }
 
-function expectFailure(result: RunResult, message: RegExp | string) {
+function expectFailure(result: RunResult, message: RegExp | string, expectedCode: number | null = 1) {
+  expect(result.code).toBeTypeOf("number");
   expect(result.code).not.toBe(0);
+  if (expectedCode !== null) expect(result.code).toBe(expectedCode);
   expect(result.stdout).toBe("");
   if (typeof message === "string") expect(result.stderr).toContain(message);
   else expect(result.stderr).toMatch(message);
@@ -163,7 +167,7 @@ function itemsRoute(items: unknown, info?: unknown, query: Record<string, string
   return { pathname: itemsPath, query, body: envelope(items, info) };
 }
 
-describe("CLI account list inventory through mocked HTTP", () => {
+describe("CLI account list inventory through mocked HTTP", { timeout: 25_000 }, () => {
   it("reads account metadata with no invented API filters or paging parameters", async () => {
     const metadata = list("redirect", 3, { future_field: { retained: true } });
     const result = await runCli(["lists", "list", ...scope], [
@@ -342,7 +346,7 @@ describe("CLI account list inventory through mocked HTTP", () => {
     ["lists", "items", "list", "list-one", ...scope, "--cursor", ""],
   ])("rejects invalid scope/filter/paging without HTTP: %j", async (...args) => {
     const result = await runCli(args);
-    expectFailure(result, /scope|zone-id|kind|page|cursor/iu);
+    expectFailure(result, /scope|zone-id|kind|page|cursor/iu, null);
   });
 
   it("does not infer account identity from missing configuration", async () => {
@@ -586,6 +590,45 @@ describe("CLI account list inventory through mocked HTTP", () => {
       metadataRoute(list("ip", 2)), itemsRoute([item], { cursors: { after: "next" } }), itemsRoute([item], {}, { per_page: "100", cursor: "next" }),
     ]);
     expectFailure(result, /malformed/iu);
+  });
+
+  it("redacts single-quoted credential URLs ending in a port from stderr", async () => {
+    const result = await runCli(["lists", "list", ...scope], [{ pathname: ACCOUNT_PATH, query: {}, status: 500, body: { success: false, errors: [{ code: 12007, message: "Failed 'https://alice:authority-secret@example.test:8443'" }], result: null } }]);
+    expectFailure(result, "500");
+    expect(result.stderr).not.toContain("alice");
+    expect(result.stderr).not.toContain("authority-secret");
+    expect(result.stderr).toContain("example.test:8443");
+  });
+
+  it("fails invalid IP/CIDR data instead of emitting malformed inventory", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope], [metadataRoute(list("ip", 1)), itemsRoute([{ id: "one", ip: "192.0.2.0/33" }])]);
+    expectFailure(result, /malformed/iu);
+  });
+
+  it("fails duplicate metadata IDs before a filter can hide them", async () => {
+    const result = await runCli(["lists", "list", ...scope, "--kind", "ip"], [{ pathname: ACCOUNT_PATH, query: {}, body: envelope([list("ip", 0), list("redirect", 0, { name: "other" })]) }]);
+    expectFailure(result, /list ID/iu);
+  });
+
+  it("retains an earlier total when the last page omits pagination metadata", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--all"], [
+      metadataRoute(list("ip", 2)), itemsRoute([{ id: "one", ip: "192.0.2.1" }], { total_count: 3, cursors: { after: "next" } }), itemsRoute([{ id: "two", ip: "192.0.2.2" }], {}, { per_page: "100", cursor: "next" }),
+    ]);
+    expectFailure(result, /malformed/iu);
+  });
+
+  it("redacts comma-joined scheme-less authorities from stderr", async () => {
+    const result = await runCli(["lists", "list", ...scope], [{ pathname: ACCOUNT_PATH, query: {}, status: 500, body: { success: false, errors: [{ code: 12008, message: "Invalid sources: old.example.test/docs/,alice:joined-authority-secret@localhost/private" }], result: null } }]);
+    expectFailure(result, "500");
+    expect(result.stderr).not.toContain("alice");
+    expect(result.stderr).not.toContain("joined-authority-secret");
+  });
+
+  it("accepts filtered items even when the API also reports full-collection totals", async () => {
+    const result = await runCli(["lists", "items", "list", "list-one", ...scope, "--search", "192.0."], [
+      metadataRoute(list("ip", 5)), itemsRoute([{ id: "one", ip: "192.0.2.1" }], { total_count: 5, total_pages: 3 }, { per_page: "100", search: "192.0." }),
+    ]);
+    expect(parseSuccess(result)).toMatchObject({ items: [{ id: "one" }], truncated: false });
   });
 
   it.each([

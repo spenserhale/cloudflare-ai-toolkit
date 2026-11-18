@@ -69,11 +69,11 @@ Existing commands are reused rather than duplicated:
 | Capability | Reader | Notes |
 | --- | --- | --- |
 | Zone metadata and plan | `zones get <id>` | Existing reader. Plan must be compared alongside settings. |
-| DNS and SSL for SaaS | `dns records list <id>`, `custom-hostnames list|get` | Existing numeric pagination; collect every page. |
-| Single redirects | `redirects list|get` | Existing `http_request_dynamic_redirect` reader, unchanged. |
-| Account lists | `lists list|get --scope account` | IDs, names, kind, counts; exact `--name`/`--kind` filters and local numeric paging. |
+| DNS and SSL for SaaS | `dns records list <id>`, `custom-hostnames list\|get` | Existing numeric pagination; collect every page. |
+| Single redirects | `redirects list\|get` | Existing `http_request_dynamic_redirect` reader, unchanged. |
+| Account lists | `lists list\|get --scope account` | IDs, names, kind, counts; exact `--name`/`--kind` filters and local numeric paging. |
 | Bulk Redirect/custom list contents | `lists items list <list-id> --scope account` | IPs/comments, redirect URLs/parameters; hostname and ASN items also supported; cursor paging and `--all`. |
-| Rulesets metadata | `rulesets list --scope zone|account` | Cursor, maximum 50 per page, `--all` follows continuation. |
+| Rulesets metadata | `rulesets list --scope zone\|account` | Cursor, maximum 50 per page, `--all` follows continuation. |
 | Ordered rules and execute overrides | `rulesets get <id> --scope ... [--version <v>]` | Full definitions; metadata list alone is insufficient. |
 | Phase entrypoints | `rulesets phases get <phase> --scope ...` | Explicit present/absent status. |
 | SSL/security/cache zone settings | `zones settings get <setting-id>` | Individual settings; deprecated collection API is not used. |
@@ -181,6 +181,9 @@ the read fails even without `--all`; it cannot offer a continuation that works.
 Bounded reads also fail if a forward cursor is blank or credential redaction
 would change it. Retrying without `--cursor` and using `--all` keeps the original
 cursor inside the reader instead of exporting an unusable continuation.
+`--all` buffers the entire collection and serializes one JSON value. Very large
+lists can exceed memory or the runtime's string-size limit and fail; collect
+bounded cursor pages into separate files for those exports instead.
 `--search` is an IP prefix, redirect/hostname substring, or exact ASN match,
 according to the API. Filtered/resumed reads are subsets, not whole-list evidence.
 For an unfiltered terminal collection from the beginning, the item count must
@@ -199,7 +202,7 @@ retained. Redirects preserve `source_url`, `target_url`, `status_code`,
 Unknown fields survive validation; array order is retained without assigning
 rule priority to items. Source URLs can omit their scheme; see the
 [parameter reference](https://developers.cloudflare.com/rules/url-forwarding/bulk-redirects/reference/parameters/).
-URL credentials and sensitive query values are redacted even in those sources
+URL userinfo and recognized sensitive query values are redacted even in those sources
 and in upstream diagnostics reflecting scheme-less URLs.
 Complete URL fields are parsed directly, including valid apostrophes in paths;
 bare email addresses in ordinary comments and descriptions remain unchanged
@@ -207,6 +210,11 @@ unless they match a configured credential value.
 Adjacent or nested URL text is checked component by component; an ambiguous
 compound containing credentials is conservatively redacted in full.
 Treat redacted URLs as inventory evidence, not reusable redirect definitions.
+Query matching uses the [SDK's documented key heuristic](../../packages/sdk/README.md#read-only-configuration-inventory).
+Unrecognized parameters such as `access` can still contain credentials; review
+and scrub them before sharing an export. Generic names such as `key` can be
+redacted even when harmless. Redacting a URL may also normalize unrelated query
+encoding and bare flags. Ordinary `mailto:` links are retained.
 
 A successful empty list has metadata and `items: []`. A missing list (404),
 permission/entitlement denial (403), retired endpoint (410), upstream failure,
@@ -437,9 +445,19 @@ lists as `$name` inside expressions. Match either reference to metadata `.name`,
 then read items using `.id`. Do not confuse these lists with Single Redirect
 rules returned by `redirects list`.
 
-The following Bash recipe reuses `OUT`, `ACCOUNT_ID`, `capture`, and `failed`
-from the collection above. Set `OUT` to an existing snapshot directory and
-redefine `capture` from that recipe if continuing in a new shell. It collects
+The following Bash recipe uses `OUT`, `ACCOUNT_ID`, and `capture` from above.
+In a new shell, restore `OUT` to the source snapshot directory, restore the
+matching `ACCOUNT_ID` (PBHS: `b6228b68442dde92d0cea47c06752c74`), and redefine
+`capture`. Do not reset the prior failure state blindly: the recipe reconstructs
+it from the latest manifest entry for each source read, verifies every required
+phase read from the PBHS collection, and follows nested execute-definition
+references. A recorded successful absent phase is accepted; a failed or missing
+read remains a gap. Account-scoped snapshots must match `ACCOUNT_ID`.
+
+Each attempt writes to a fresh `list-contents-*` directory under the source
+directory. A subshell keeps the source `OUT` unchanged; use the printed new
+directory for list artifacts. Old catalogs, indexes, and item snapshots cannot
+appear as the current attempt's successful output. The recipe collects
 every API-visible account list, including unreferenced lists, so resolving
 expression references never depends on a complete rules-language parser.
 It also builds a conservative name index from successful phase/execute-definition
@@ -448,6 +466,94 @@ review candidates against the original rule. Redacted expressions and unresolved
 or managed references are flagged, never treated as empty lists.
 
 ```bash
+(
+: "${OUT:?Restore the source snapshot directory}" "${ACCOUNT_ID:?Restore its account ID}"
+SOURCE_OUT=$OUT
+[ -r "$SOURCE_OUT/manifest.tsv" ] || { printf 'Source manifest missing.\n' >&2; exit 1; }
+OUT=$(mktemp -d "$SOURCE_OUT/list-contents-XXXXXXXX") || exit 1
+printf 'exit\tread\n' > "$OUT/manifest.tsv"
+failed=0
+
+# Only the latest result for a named read is current, including failed refreshes.
+if ! awk -F '\t' '
+  NR == 1 { if ($1 != "exit" || $2 != "read") exit 1; next }
+  NF != 2 || $1 !~ /^[0-9]+$/ || $2 == "" { exit 1 }
+  { codes[$2] = $1; rows++ }
+  END { if (!rows) exit 1; for (name in codes) if (codes[name] != "0") exit 1 }
+' "$SOURCE_OUT/manifest.tsv"; then
+  failed=1
+fi
+prior_read_ok() {
+  awk -F '\t' -v name="$1" 'NR > 1 && $2 == name { found=1; code=$1 }
+    END { exit (!found || code != "0") }' "$SOURCE_OUT/manifest.tsv"
+}
+PHASES='http_request_firewall_custom http_request_firewall_managed http_ratelimit
+http_request_sbfm ddos_l7 http_request_origin http_request_dynamic_redirect
+http_request_redirect http_request_cache_settings http_config_settings
+http_request_transform http_request_late_transform http_response_headers_transform
+http_response_compression http_response_firewall_managed'
+snapshots=()
+for owner in account pbhspreprod.com pbhsstaging.com pbhsnetwork.com; do
+  scope=zone
+  [ "$owner" != account ] || scope=account
+  for phase in $PHASES; do
+    name="$owner-phase-$phase"
+    file="$SOURCE_OUT/$name.json"
+    if prior_read_ok "$name" && [ -r "$file" ] && jq -e \
+        --arg phase "$phase" --arg scope "$scope" --arg account "$ACCOUNT_ID" '
+        .phase == $phase and .scope == $scope and
+        (if $scope == "account" then .accountId == $account
+         else (.zoneId | type) == "string" and (.zoneId | length) > 0 end) and
+        ((.status == "absent" and .diagnostic.statusCode == 404) or
+         (.status == "present" and (.ruleset.rules | type) == "array"))
+      ' "$file" > /dev/null; then
+      snapshots+=( "$file" )
+    else
+      printf 'Failed or missing source phase: %s\n' "$name" >&2
+      failed=1
+    fi
+  done
+done
+
+# Reconstruct the execute queue, so a missing definition cannot disappear from a glob.
+QUEUE="$OUT/execute-references.tsv"
+: > "$QUEUE"
+execute_refs() {
+  jq -r '.ruleset.rules[]? | select(.action == "execute") |
+    [.action_parameters.id, (.action_parameters.version // "latest")] | @tsv' "$@"
+}
+if [ "${#snapshots[@]}" -gt 0 ]; then
+  execute_refs "${snapshots[@]}" > "$QUEUE" || failed=1
+fi
+seen=' '
+while IFS=$'\t' read -r ruleset_id version; do
+  if [[ ! "$ruleset_id" =~ ^[[:xdigit:]]{32}$ ]] || \
+     [[ ! "$version" =~ ^([0-9]+|latest)$ ]]; then
+    printf 'Invalid source execute reference.\n' >&2
+    failed=1
+    continue
+  fi
+  key="$ruleset_id-$version"
+  case "$seen" in *" $key "*) continue ;; esac
+  seen="$seen$key "
+  name="account-definition-$key"
+  file="$SOURCE_OUT/$name.json"
+  if prior_read_ok "$name" && [ -r "$file" ] && jq -e \
+      --arg id "$ruleset_id" --arg account "$ACCOUNT_ID" '
+      .scope == "account" and .accountId == $account and
+      .ruleset.id == $id and (.ruleset.rules | type) == "array"
+    ' "$file" > /dev/null; then
+    snapshots+=( "$file" )
+    execute_refs "$file" >> "$QUEUE" || failed=1
+  else
+    printf 'Failed or missing source definition: %s\n' "$name" >&2
+    failed=1
+  fi
+done < "$QUEUE"
+source_complete=$((1 - failed))
+printf '%s\tsource-inventory-validation\n' "$failed" >> "$OUT/manifest.tsv"
+: > "$OUT/list-snapshots.jsonl"
+
 if capture account-lists lists list --scope account --account-id "$ACCOUNT_ID" --all; then
   if jq -r '.lists[].id' "$OUT/account-lists.json" > "$OUT/list-ids.txt"; then
     while IFS= read -r list_id; do
@@ -456,34 +562,39 @@ if capture account-lists lists list --scope account --account-id "$ACCOUNT_ID" -
         failed=1
         continue
       fi
-      capture "account-list-$list_id" lists items list "$list_id" \
-        --scope account --account-id "$ACCOUNT_ID" --all --per-page 500 || :
+      if capture "account-list-$list_id" lists items list "$list_id" \
+          --scope account --account-id "$ACCOUNT_ID" --all --per-page 500; then
+        jq -nc --arg id "$list_id" --arg snapshot "account-list-$list_id.json" \
+          '{id: $id, snapshot: $snapshot}' >> "$OUT/list-snapshots.jsonl" || failed=1
+      fi
     done < "$OUT/list-ids.txt"
   else
     failed=1
   fi
 
-  shopt -s nullglob
-  snapshots=( "$OUT"/*-phase-*.json "$OUT"/account-definition-*.json )
   if [ "${#snapshots[@]}" -eq 0 ]; then
     printf 'No successful rule snapshots; reference resolution unverified.\n' >&2
     failed=1
-  elif jq -s --slurpfile catalog "$OUT/account-lists.json" '
+  elif jq -s --slurpfile catalog "$OUT/account-lists.json" \
+      --slurpfile saved "$OUT/list-snapshots.jsonl" --arg source "$SOURCE_OUT" \
+      --argjson complete "$source_complete" '
     [ .[] | .ruleset.rules[]? ] as $rules |
     {
+      source_directory: $source,
+      source_inventory_complete: ($complete == 1),
       redacted_expression_count: ([$rules[] | select(.expression == "[REDACTED]")] | length),
       references: ([
         $rules[] |
         (.action_parameters.from_list.name? | strings),
-        (.expression? | strings | scan("\\$([A-Za-z_][A-Za-z0-9_.]*)") | .[0])
+        (.expression? | strings | scan("\\$([A-Za-z0-9_][A-Za-z0-9_.]*)") | .[0])
       ] | unique | map(. as $name | {
         name: $name,
-        matches: [$catalog[0].lists[] | select(.name == $name) |
-          {id, kind, snapshot: ("account-list-" + .id + ".json")}]
+        matches: [$catalog[0].lists[] | select(.name == $name) | . as $list |
+          {id, kind, snapshot: ([$saved[] | select(.id == $list.id) | .snapshot][0] // null)}]
       }))
     }' "${snapshots[@]}" > "$OUT/account-list-references.json"; then
-    if ! jq -e '.redacted_expression_count == 0 and
-      all(.references[]; (.matches | length) == 1)' \
+    if ! jq -e '.source_inventory_complete and .redacted_expression_count == 0 and
+      all(.references[]; (.matches | length) == 1 and .matches[0].snapshot != null)' \
       "$OUT/account-list-references.json" > /dev/null; then
       printf 'Redacted or unresolved list references; inspect reference index.\n' >&2
       failed=1
@@ -494,7 +605,9 @@ if capture account-lists lists list --scope account --account-id "$ACCOUNT_ID" -
 fi
 
 cat "$OUT/manifest.tsv"
+printf 'List inventory directory: %s\n' "$OUT"
 test "$failed" -eq 0
+)
 ```
 
 The manifest must show successful reads for each referenced `snapshot` file;
@@ -528,25 +641,35 @@ unit/subprocess verification passed 150 cases. A subsequent review re-check adde
 ten SDK and five subprocess cases for compound URLs, numeric totals without page
 indexes, oversized pages, and duplicate IDs. Eight SDK and five subprocess
 regressions failed before those fixes; safe compound URLs and nested secret query
-values also have preservation/redaction guards. Final targeted checks pass 175
-SDK and 155 CLI cases.
+values also have preservation/redaction guards. Those targeted checks passed 175
+SDK and 155 CLI cases. Claude Opus 5.5 at medium effort subsequently approved
+`fb93be4`, with a non-blocking URL-normalization documentation note. CodeRabbit
+then identified additional response-integrity, redaction, isolation and recipe
+gaps. Eighteen SDK regressions failed before corrections. The follow-up adds
+24 SDK cases, four process cases, and 14 executable guide cases; SDK targeted
+inventory checks pass 199 cases. The source manifest, fresh-attempt artifacts,
+and digit-leading reference name are exercised directly from this guide.
 The added tests cover multiple pages, exact filters/search, scope, redirect
 parameters, all documented kinds, empty versus missing, failed later pages,
 403/404/410/5xx, malformed successes, redaction and GET-only enforcement.
 
-Full local verification after both review rounds:
+Full local verification after external review fixes:
 
 - `bun run build`: SDK JS/types, CLI JS and MCP builds exit 0.
-- `bun run test`: SDK 384, MCP 12, CLI 436 pass, 832 total with no failures.
+- `bun run test`: SDK 408, MCP 12, CLI 454 pass, 874 total with no failures.
 - `bun run lint`: all three packages exit 0.
 - `node packages/cli/dist/bin.js lists --help` and help for `lists list`,
   `lists get`, and `lists items list` exit 0 with the documented flags.
 - `git diff --check` passes. No local compiled binary was built or smoke-tested.
+- Built Node JS CLI smoke checks with isolated GET-only HTTP mocks verify redirect
+  JSON/mailto preservation, quoted-authority error redaction, and malformed CIDR
+  rejection, including stdout/stderr and exact exit codes.
 
-All six guide Bash blocks pass `bash -n`. Isolated execution of the list recipe
-with a synthetic `cloudflare` function verifies eight scenarios: success, empty
-account, metadata failure, item failure, redacted expression, unresolved Managed
-List reference, missing snapshots, and invalid list ID. Failure cases exit 1;
+All six guide Bash blocks pass `bash -n`. The reviewed list recipe has 14 durable
+Vitest cases using a synthetic `cloudflare` function: success/absent phases and
+digit-leading names, failed item/catalog refreshes, failed/missing phase reads,
+prior failure state, wrong account, nested definitions, redacted/Managed List
+references, empty accounts, and unsafe item artifact names. Failures exit 1;
 success/empty cases exit 0. No live credentials or list contents enter fixtures.
 
 On this machine, `bun packages/cli/dist/bin.js auth list --json` reports

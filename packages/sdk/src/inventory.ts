@@ -108,7 +108,18 @@ function redactUrl(candidate: string): string {
       if (secretField(key)) { url.searchParams.set(key, REDACTED); changed = true; }
     }
     return changed ? url.toString() : candidate;
-  } catch { return candidate; }
+  } catch {
+    // A closing prose quote is not part of a port/authority. Only strip it
+    // after parsing fails, so legal apostrophes inside paths stay intact.
+    const punctuation = candidate.match(/[')\],.]+$/u)?.[0];
+    if (punctuation) {
+      const trimmed = candidate.slice(0, -punctuation.length);
+      const redacted = redactUrl(trimmed);
+      if (redacted !== trimmed) return redacted + punctuation;
+    }
+    // Never echo userinfo from an invalid authority that cannot be parsed.
+    return /^https?:\/\/[^/?#]*@/iu.test(candidate) ? REDACTED : candidate;
+  }
 }
 
 function redactUrls(value: string): string {
@@ -130,11 +141,44 @@ function redactOmittedSchemeUrls(value: string): string {
   return value.replace(
     /(^|[\s"'(<=>])((?:\/\/)?(?:[^\s"<>\\/?#@]+@)?(?:(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\[[a-f\d:.]+\])(?::\d+)?(?:[/?#][^\s"<>\\]*)?)/giu,
     (_match, boundary: string, candidate: string) => {
+      if (/^mailto:/iu.test(candidate)) return boundary + candidate;
       // Bare email addresses are ordinary inventory text, not URL userinfo.
       if (/^[^:@/?#]+@[^:/?#]+$/u.test(candidate)) return boundary + candidate;
       return boundary + redactListUrl(candidate);
     },
   );
+}
+
+/** Fail closed if prose tokenization left an unambiguous credential authority. */
+function unparsedCredentialAuthority(value: string): boolean {
+  if (!value.includes("@")) return false;
+  const authorities = /(^|[\s"'(<=>,;:])((?:https?:)?\/\/)?([^/\s"<>\\?#@,;]+)@([a-z\d-]+(?:\.[a-z\d-]+)*|\[[a-f\d:.]+\])(?::(\d+))?([/?#]?)/giu;
+  for (const match of value.matchAll(authorities)) {
+    const user = (match[3] ?? "").replace(/^['([:]+/u, "");
+    if (!match[2] && /^mailto:/iu.test(user)) continue;
+    if (match[2] || user.includes(":") || match[5] || match[6]) return true;
+  }
+  return false;
+}
+
+/** Find sensitive assignments independently, even inside a later joined URL. */
+function redactUnparsedQueryValues(value: string): string {
+  let result = "";
+  let offset = 0;
+  for (const match of value.matchAll(/[?&]([^=?&#\s"<>\\]+)=/gu)) {
+    let key = match[1]!;
+    try { key = decodeURIComponent(key.replace(/\+/gu, " ")); } catch { /* Inspect malformed keys conservatively as text. */ }
+    if (!secretField(key)) continue;
+    const start = match.index! + match[0].length;
+    if (start < offset) continue;
+    const boundary = value.slice(start).search(/[&#\s"<>\\]/u);
+    const end = boundary < 0 ? value.length : start + boundary;
+    const original = value.slice(start, end);
+    if (original === REDACTED || original.toUpperCase() === encodeURIComponent(REDACTED).toUpperCase()) continue;
+    result += value.slice(offset, start) + encodeURIComponent(REDACTED);
+    offset = end;
+  }
+  return result + value.slice(offset);
 }
 
 /** Reads native migration configuration while preserving fields added by Cloudflare. */
@@ -150,6 +194,8 @@ export class InventoryReader {
     // literal without a parser could leave another copy of the credential.
     if (credentialBearingExpression(value)) return REDACTED;
     let result = redactOmittedSchemeUrls(redactUrls(value));
+    if (unparsedCredentialAuthority(result)) return REDACTED;
+    result = redactUnparsedQueryValues(result);
     for (const secret of this.credentialValues) {
       if (secret) result = result.split(secret).join(REDACTED);
     }
@@ -268,6 +314,11 @@ export class InventoryReader {
     }).safeParse(options);
     if (!parsed.success || (parsed.data.all && parsed.data.page > 1)) throw new CloudflareError("List filters require a nonempty name and kind ip|redirect|hostname|asn; page must be a positive integer, perPage 1-500, and all cannot start after page 1.", "CONFIG_ERROR");
     const result = await this.read(resolved.path, z.array(InventoryListSchema));
+    const ids = new Set<string>();
+    for (const list of result.result) {
+      if (ids.has(list.id)) throw this.malformed(resolved.path, "API repeated a list ID");
+      ids.add(list.id);
+    }
     this.complete(resolved.path, result.info, result.result.length);
     const matches = result.result.filter((list) => (parsed.data.kind === undefined || list.kind === parsed.data.kind) && (parsed.data.name === undefined || list.name === parsed.data.name));
     const page = parsed.data.page;
@@ -305,11 +356,20 @@ export class InventoryReader {
     const itemIds = new Set<string>();
     const seen = new Set<string>();
     let cursor = parsed.data.cursor;
-    let pagesFetched = 0;
+    let pagePosition: number | undefined = cursor === undefined ? 0 : undefined;
+    let reportedTotalCount: number | undefined;
+    let reportedTotalPages: number | undefined;
+    const fromStart = parsed.data.cursor === undefined && parsed.data.search === undefined;
     if (cursor) seen.add(cursor);
     for (;;) {
       const page = await this.read(path, z.array(schemas[detail.list.kind]), { cursor, per_page: parsed.data.perPage, search: parsed.data.search });
-      pagesFetched++;
+      pagePosition = page.info.page ?? (pagePosition === undefined ? undefined : pagePosition + 1);
+      if (parsed.data.search === undefined && ((reportedTotalCount !== undefined && page.info.total_count !== undefined && reportedTotalCount !== page.info.total_count) ||
+          (reportedTotalPages !== undefined && page.info.total_pages !== undefined && reportedTotalPages !== page.info.total_pages))) {
+        throw this.malformed(path, "API pagination totals changed during collection; retry the read");
+      }
+      reportedTotalCount ??= page.info.total_count;
+      reportedTotalPages ??= page.info.total_pages;
       if (page.result.length > parsed.data.perPage) throw this.malformed(path, "API returned more list items than the requested page size");
       for (const item of page.result) {
         if (itemIds.has(item.id)) throw this.malformed(path, "API repeated a list item ID; inventory is inconsistent or the list changed during collection");
@@ -319,15 +379,18 @@ export class InventoryReader {
       const after = page.info.cursors?.after;
       if (after && seen.has(after)) throw this.malformed(path, "API repeated a pagination cursor");
       const incomplete = Boolean(after || page.info.truncated || page.info.has_more ||
-        (parsed.data.cursor === undefined && page.info.total_count !== undefined && page.info.total_count > items.length) ||
-        ((parsed.data.cursor === undefined || page.info.page !== undefined) && page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? pagesFetched)) ||
+        (fromStart && reportedTotalCount !== undefined && reportedTotalCount > items.length) ||
+        (parsed.data.search === undefined && pagePosition !== undefined && reportedTotalPages !== undefined && reportedTotalPages > pagePosition) ||
         (page.info.count !== undefined && page.info.count > page.result.length));
       if (incomplete && !after) throw this.malformed(path, "API reports more list items without a continuation cursor");
       if (!parsed.data.all && after && (!after.trim() || this.text(after) !== after)) {
         throw this.malformed(path, "continuation cursor cannot be safely reused; retry without --cursor and use --all to collect items internally");
       }
       if (!parsed.data.all || !after) {
-        if (!incomplete && parsed.data.cursor === undefined && parsed.data.search === undefined && items.length !== detail.list.num_items) {
+        if (!incomplete && fromStart && reportedTotalCount !== undefined && items.length !== reportedTotalCount) {
+          throw this.malformed(path, "item count differs from reported API pagination totals");
+        }
+        if (!incomplete && fromStart && items.length !== detail.list.num_items) {
           throw this.malformed(path, "item count differs from list metadata; inventory is incomplete or the list changed during collection");
         }
         return this.redact({ ...detail, items, resultInfo: page.info, truncated: incomplete });

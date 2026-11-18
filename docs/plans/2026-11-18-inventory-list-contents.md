@@ -12,8 +12,10 @@ specs: []
 Extend the migration inventory from PR #14, based on
 `e1cc1a152ccc2566259707cad99ee181f30d23d6`. The parent was merged into `main`
 as `b90442bd12252ebc988b26342c657281b9ab052b` during this task. Per the user's
-updated instruction, deliver a separate PR against `main`; do not release, merge,
-or modify live configuration. Preserve the pending parent changeset.
+updated instruction, deliver a separate PR against `main`. After delivery, the
+user explicitly authorized Claude Opus medium and CodeRabbit review, fixes, then
+merging this feature PR into `main`. Do not publish a release, merge the version
+PR, or modify live configuration. Preserve the pending parent changeset.
 The parent exposes list references but cannot resolve their contents.
 
 ## Acceptance criteria
@@ -32,7 +34,7 @@ The parent exposes list references but cannot resolve their contents.
 
 ## Non-goals
 
-No writes, bulk jobs, migrations, release, merge, live repairs, or new MCP tools.
+No writes, bulk jobs, migrations, release, version-PR merge, live repairs, or new MCP tools.
 Do not duplicate existing DNS, redirect, WAF, or Rulesets commands. Cloudflare
 Managed Lists and built-in datasets are not claimed as exportable account lists.
 
@@ -123,9 +125,9 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   reflected diagnostics as well as URL fields — upstream messages can echo a
   source/search string — cost if wrong: medium, secret-bearing text may be masked;
   ordinary URLs/prose have preservation regressions.
-- [verification] Root build/lint pass and all 832 tests pass (SDK 384, MCP 12,
-  CLI 436); JS help passes for the Lists family and all three reads. Six guide
-  Bash blocks pass syntax checks; eight isolated list-recipe scenarios behave as
+- [verification] Root build/lint pass and all 874 tests pass (SDK 408, MCP 12,
+  CLI 454); JS help and three mocked Node JS data/error smoke checks pass. Six guide
+  Bash blocks pass syntax checks; 14 durable list-recipe cases behave as
   documented — cost if wrong: low, evidence is local and mocked, not live access.
 - [live evidence] Existing credential-status read reports keychain available but
   token/key/email missing from all active sources; no live Lists HTTP attempted —
@@ -151,6 +153,27 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
 - [decision numbering] Renumber this branch's ADR 0003 to 0004 before pushing —
   concurrent PR #16 introduced `0003-private-worker-inspection.md` — cost if
   wrong: low, the renumber commit maps earlier commit-body references to 0004.
+- [external review] Claude Opus 5.5 at medium effort approved `fb93be4`; address
+  CodeRabbit's reproduced correctness, privacy, isolation and guide findings,
+  then merge per the user's explicit follow-up — cost if wrong: low, merge is
+  gated on tested fixes and the current base, without publishing a release.
+- [artifact freshness] Each list collection attempt gets a fresh directory and
+  an index linking only current successful item reads; validate all prerequisite
+  phase/execute reads from the source manifest — cost if wrong: medium, a failed
+  or missing source read must never look like complete reference coverage.
+- [large exports] Retain buffered, fail-before-output collection for this change;
+  defer a streaming serializer/backpressure design and document the memory and
+  runtime string limits with bounded cursor collection as the supported fallback —
+  cost if wrong: low, oversized `--all` reads fail explicitly instead of silently
+  returning partial inventory.
+- [Kilo review] Fail closed when credential authorities remain in unparsed prose,
+  including comma/colon joins and single-label hosts; scan sensitive assignments
+  independently and keep filtered totals separate from whole-list counts — cost
+  if wrong: medium, ambiguous credential-bearing text can be entirely masked.
+- [null contracts] Keep optional-string comments/descriptions per the current
+  official Lists reference; a nullable DNS field is not evidence about Lists —
+  cost if wrong: medium, an undocumented null response would fail explicitly
+  until supported by actual Lists evidence rather than appearing empty.
 
 ## Deferred
 
@@ -158,6 +181,9 @@ Live PBHS list access, permissions and entitlements remain unverified: the
 existing credential mechanism reports all credentials missing. No live Lists
 HTTP request was attempted, and no empty list conclusion is inferred.
 Cloudflare Managed List contents remain outside the documented account Lists API.
+Streaming serialization for exceptionally large `--all` output remains deferred;
+bounded cursor pages are supported. URL redaction is heuristic and can normalize
+query encoding; review unrecognized sensitive parameters before sharing exports.
 
 ## Tasks
 

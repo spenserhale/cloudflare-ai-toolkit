@@ -163,7 +163,13 @@ export const InventoryListRedirectSchema = z.object({
   preserve_path_suffix: z.boolean().optional(), preserve_query_string: z.boolean().optional(),
   status_code: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]).optional(),
 }).passthrough();
-export const InventoryListIPItemSchema = z.object({ ...InventoryListItemFields, ip: z.string().min(1) }).passthrough();
+const InventoryIPAddressSchema = z.string().ip();
+const InventoryIPOrCIDRSchema = z.string().refine((value) => {
+  const [address, prefix, extra] = value.split("/");
+  if (!address || extra !== undefined || !InventoryIPAddressSchema.safeParse(address).success) return false;
+  return prefix === undefined || (/^\d+$/u.test(prefix) && Number(prefix) <= (address.includes(":") ? 128 : 32));
+}, "Expected an IPv4/IPv6 address or CIDR with a valid prefix length");
+export const InventoryListIPItemSchema = z.object({ ...InventoryListItemFields, ip: InventoryIPOrCIDRSchema }).passthrough();
 export const InventoryListRedirectItemSchema = z.object({ ...InventoryListItemFields, redirect: InventoryListRedirectSchema }).passthrough();
 export const InventoryListHostnameItemSchema = z.object({
   ...InventoryListItemFields,

@@ -200,6 +200,11 @@ fail rather than suggest an unusable `--cursor`. Retry from the beginning with
 the API includes a collection-wide total.
 Oversized API pages and repeated item IDs fail instead of exceeding requested
 bounds or reporting an apparently complete collection containing duplicates.
+`--all` buffers the collection and serializes it as one JSON value. Very large
+exports can exceed available memory or the runtime's string-size limit and fail;
+use bounded cursor pages saved separately for those lists. Query redaction uses
+the [SDK's documented key heuristic](../sdk/README.md#read-only-configuration-inventory),
+so review and scrub unrecognized sensitive parameters before sharing snapshots.
 
 Kinds are `ip`, `redirect`, `hostname`, and `asn`. The readers preserve item IDs,
 IPs/comments, redirect URLs, status and all behavior parameters. An empty list

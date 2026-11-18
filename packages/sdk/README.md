@@ -173,13 +173,28 @@ duplicate rows cannot satisfy a full-list count while masking missing items.
 
 Known empty lists return their metadata and `items: []`. Missing lists, permission
 or entitlement denials, HTTP 410, malformed responses and upstream errors throw
-with their diagnostics. URLs with credentials or secret query values are redacted,
+with their diagnostics. URL userinfo and recognized sensitive query values are redacted,
 including scheme-less Bulk Redirect source URLs. Cloudflare Managed Lists and
 built-in datasets are not claimed as accessible through the account Lists API.
 URL fields containing legal apostrophes are parsed in full. Ordinary comments
 and descriptions preserve bare email addresses unless they match credentials.
 Ambiguous compound URL text containing credentials is conservatively masked in
 full; compound URLs without credentials remain intact.
+
+Query redaction is a heuristic, not a guarantee that exports contain no secrets.
+Keys are lowercased with punctuation removed. It recognizes keys containing
+`password`, `passwd`, `secret`, `credential`, `authorization`, `cookie`, `apikey`,
+`privatekey`, `accesskey`, `apitoken`, `authtoken`, `accesstoken`, `refreshtoken`,
+or `bearertoken`; exact keys `auth`, `token`, `key`, `signature`, `sig`, `jwt`,
+`session`, `sessionid`, `sessiontoken`, `xauth`, `xauthkey`, `xauthemail`, and
+`cfclearance` are also redacted. This can mask an ordinary parameter named `key`,
+while an unrecognized credential parameter such as `access` remains visible
+unless it matches a configured credential value. Review and scrub other sensitive
+fields before sharing exports. Rebuilding a redacted URL may normalize unrelated
+query encoding (`%20` to `+`) and bare query flags (`x` to `x=`).
+
+`all: true` buffers the complete collection in memory; callers handling very large
+lists should collect bounded cursor pages into separate artifacts instead.
 
 ### Redirect rules
 

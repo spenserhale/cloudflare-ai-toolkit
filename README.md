@@ -133,7 +133,7 @@ project `.env` files keep working and win. See the
 CLOUDFLARE_API_TOKEN     preferred (Bearer auth)
 CLOUDFLARE_API_KEY       legacy fallback (Global API Key)
 CLOUDFLARE_EMAIL         required when using CLOUDFLARE_API_KEY
-CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, and Worker domains
+CLOUDFLARE_ACCOUNT_ID    default for audit, account Rulesets, Lists, and Worker domains
 CLOUDFLARE_ZONE_ID       default for zone-scoped commands/tools (DNS, cache purge,
                          custom hostnames, `zones get`, `zones vanity-ns`,
                          log-explorer, WAF, zone inventory, and Worker routes)
