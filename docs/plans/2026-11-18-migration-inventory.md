@@ -1,7 +1,7 @@
 ---
 title: Restore migration inventory readers
 description: Replace retired WAF reads and expose the minimum configuration readers needed for a WordPress VIP migration.
-status: in-progress
+status: done
 date: 2026-11-18
 size: architectural
 specs: []
@@ -113,7 +113,7 @@ commit carries its documentation; the final guide adds verified evidence.
   configuration while redacting sensitive values — inventory must remain useful
   for configuration comparisons — cost if wrong: medium; regression tests cover
   normal and credential-bearing shapes.
-- [verification] Root build/lint pass; tests pass SDK 272, MCP 12, CLI 315.
+- [verification] Root build/lint pass; tests pass SDK 283, MCP 12, CLI 319.
   Original WAF command regression fails on the old built SDK and passes on the
   replacement. Node JS help passes six checks. Guide scripts pass syntax and
   isolated mocked execution — cost if wrong: low; no live configuration evidence.
@@ -121,6 +121,16 @@ commit carries its documentation; the final guide adds verified evidence.
   missing in both worktree and original checkout. Thirty-two built-CLI attempts
   across the three zones/account exit 1 with zero stdout and the exact missing
   credential explanation — cost if wrong: low; no empty inventories inferred.
+- [final review] Closed independent review findings with eleven failing SDK
+  regression cases, then passing SDK/process tests: hide credential-bearing
+  expressions conservatively, require phase/entrypoint-specific absence evidence,
+  and honor explicit numeric-pagination incompleteness. Ordinary Host/cache
+  parameters remain visible — cost if wrong: medium; some sensitive expressions
+  are intentionally unavailable for textual comparison.
+- [route contract] Retain optional-string Worker route `script`, matching the
+  current API reference; no live evidence supports treating null as an exclusion
+  on this machine — cost if wrong: low; a divergent response fails validation
+  rather than inventing an empty assignment.
 
 ## Deferred
 

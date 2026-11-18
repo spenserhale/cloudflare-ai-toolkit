@@ -24,6 +24,40 @@ const RULESET = {
   ],
 };
 
+describe("migration inventory final review regressions", () => {
+  it.each(["Zone not found", "Account does not exist", "ruleset not found"])("keeps unrelated or ambiguous 404 as a failed read: %s", async (message) => {
+    await withFetch(() => new Response(JSON.stringify({ success: false, errors: [{ code: 10003, message }], result: null }), { status: 404 }), async () => {
+      await expect(client().inventory.getPhaseEntrypoint("http_request_origin", { scope: "zone" })).rejects.toMatchObject({ statusCode: 404, message });
+    });
+  });
+
+  it.each([{ page: 1, total_pages: 2 }, { total_pages: 2 }, { count: 2 }])("never silently completes known incomplete pagination: %j", async (info) => {
+    await withFetch(() => response([{ id: "one" }], info), async () => {
+      expect((await client().inventory.listRulesets({ scope: "zone" })).truncated).toBe(true);
+      await expect(client().inventory.listRulesets({ scope: "zone" }, { all: true })).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" });
+    });
+  });
+
+  it.each([
+    'http.request.headers["x-api-key"][0] eq "origin-shared-key"',
+    'any(http.request.headers["authorization"][*] == "Bearer origin-shared-key")',
+    'http.request.cookies["wordpress_logged_in"][0] eq "origin-shared-key"',
+    'http.request.uri.args["access_token"][0] eq "origin-shared-key"',
+    'http.request.uri.query contains "access_token=origin-shared-key"',
+  ])("redacts credential-bearing expressions through Rulesets and WAF reads: %s", async (expression) => {
+    const ruleset = { ...RULESET, phase: "http_request_firewall_custom", rules: [{ id: "secret-rule", action: "block", expression }] };
+    await withFetch(() => response(ruleset), async () => {
+      const native = await client().inventory.getPhaseEntrypoint("http_request_firewall_custom", { scope: "zone" });
+      const list = await client().listFirewallRules();
+      const rule = await client().getFirewallRule("secret-rule");
+      for (const result of [native, list, rule]) {
+        expect(JSON.stringify(result)).not.toContain("origin-shared-key");
+        expect(JSON.stringify(result)).toContain("[REDACTED]");
+      }
+    });
+  });
+});
+
 describe("migration inventory rulesets", () => {
   it("exports the reader and exposes it on the client", () => {
     expect(sdk.InventoryReader).toBeFunction();

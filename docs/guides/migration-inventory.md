@@ -118,6 +118,10 @@ enabled state, and one-based `order` from the original array. Managed definition
 may legitimately omit expressions. Credential-like fields, sensitive header
 values and credentials embedded in URLs are redacted; a redacted snapshot is not
 a write-back payload.
+Expressions that read sensitive headers or query arguments, or cookie contents,
+are conservatively replaced with `[REDACTED]` because comparisons can embed shared
+credentials. IDs, actions and order remain visible; ordinary Host/path expressions
+and non-sensitive transform parameters remain inspectable.
 
 Rulesets lists return metadata, `resultInfo.cursors.after`, and `truncated`.
 `--all` follows cursors, detects repeated cursors and fails if any page fails.
@@ -137,7 +141,7 @@ Legacy numeric priority is not synthesized; array order controls evaluation.
 outside this inventory fix. Modern read IDs are not inputs to those mutations.
 Use only the reads shown here during migration planning.
 
-Only a structured phase-entrypoint not-found 404 becomes `status: "absent"`, retaining
+Only a structured 404 explicitly identifying a missing phase/entrypoint becomes `status: "absent"`, retaining
 HTTP status, API code and message under `diagnostic`. This means the requested
 entrypoint was not returned; it is not proof of entitlement or access to every
 product. A successful empty phase has `status: "present"` and `rules: []`.
@@ -145,6 +149,7 @@ A ruleset-ID 404 remains a failed read: Cloudflare documents both missing
 resource and missing managed-ruleset entitlement as possible causes.
 Unrecognized/HTML 404s and explicit entitlement or permission denials remain
 failed reads, even for phase entrypoints.
+Wrong-zone/account and generic "ruleset not found" 404s also remain failures.
 
 Denied/entitlement errors, HTTP 410, malformed responses and upstream failures
 exit 1, print diagnostics on stderr, and emit no successful JSON result. Parser
@@ -333,8 +338,8 @@ Final implementation checks on 2026-11-18:
 
 - `bun run build`: SDK JS/types, CLI JS and MCP builds all exit 0.
 - `bun run lint`: all three packages exit 0.
-- `bun run test`: SDK 272, MCP 12, CLI 315 tests pass (599 total, no failures).
-- Targeted inventory/WAF/existing read process tests: 67 pass, including 42 new
+- `bun run test`: SDK 283, MCP 12, CLI 319 tests pass (614 total, no failures).
+- Inventory/WAF/existing read process test files: 71 pass, including 46 new
   inventory subprocess tests. Fetch mocks enforce GET-only requests, exact paths,
   query/cursor continuation and absence of retired WAF requests.
 - Before the SDK fix, the exact reported WAF command failed its regression with
@@ -343,6 +348,10 @@ Final implementation checks on 2026-11-18:
   empty, 403/410/500/HTML 524, malformed successful envelopes, redaction,
   parseable JSON, stderr and nonzero process exits. Tests disable real keychain
   access and use synthetic credentials.
+- Independent review found additional credential-expression, wrong-target 404
+  and numeric-pagination gaps. Eleven SDK regression cases failed before the
+  corrections; the full suite above passes after the fixes. Process tests also
+  cover wrong-target 404s and shared credentials embedded in WAF expressions.
 - Node JS-build help smoke checks pass for top-level and new Rulesets, settings
   and Worker-domain commands. No local compiled binary was tested.
 - Guide collection scripts passed Bash syntax checks and isolated execution

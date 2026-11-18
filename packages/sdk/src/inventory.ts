@@ -61,6 +61,23 @@ function secretField(key: string): boolean {
     /^(?:auth|token|key|signature|sig|jwt|session|sessionid|sessiontoken|xauth|xauthkey|xauthemail|cfclearance)$/u.test(normalized);
 }
 
+/** Rules language can contain shared credentials outside header-mutation objects. */
+function credentialBearingExpression(value: string): boolean {
+  const lookups = /\bhttp\.request\.(headers|cookies|uri\.args(?:\.values)?)\s*\[\s*(?:r#*)?["']([^"']+)["']#*\s*\]/giu;
+  for (const match of value.matchAll(lookups)) {
+    const field = match[1]?.toLowerCase();
+    const name = match[2];
+    if (field === "cookies" || (name && (secretField(name) || /^x[-_]?auth/iu.test(name)))) return true;
+  }
+  if (/\bhttp\.cookie\b/iu.test(value)) return true;
+  if (/\b(?:raw\.)?http\.request\.(?:uri|full_uri)\b/iu.test(value)) {
+    for (const match of value.matchAll(/(?:^|[?&\s"'(])([a-z_][-a-z0-9_.]*)=/giu)) {
+      if (match[1] && secretField(match[1])) return true;
+    }
+  }
+  return false;
+}
+
 function redactUrls(value: string): string {
   return value.replace(/https?:\/\/[^\s"'<>\\]+/giu, (candidate) => {
     try {
@@ -88,6 +105,9 @@ export class InventoryReader {
   ) {}
 
   private text(value: string): string {
+    // Conservatively hide the whole expression; rewriting a rules-language
+    // literal without a parser could leave another copy of the credential.
+    if (credentialBearingExpression(value)) return REDACTED;
     let result = redactUrls(value);
     for (const secret of this.credentialValues) {
       if (secret) result = result.split(secret).join(REDACTED);
@@ -207,7 +227,10 @@ export class InventoryReader {
       const after = page.info.cursors?.after;
       if (after && seen.has(after)) throw this.malformed(path, "API repeated a pagination cursor");
       if (!parsedOptions.data.all || !after) {
-        const incomplete = Boolean(after || page.info.truncated || page.info.has_more || (page.info.total_count !== undefined && page.info.total_count > rulesets.length));
+        const incomplete = Boolean(after || page.info.truncated || page.info.has_more ||
+          (page.info.total_count !== undefined && page.info.total_count > rulesets.length) ||
+          (page.info.total_pages !== undefined && page.info.total_pages > (page.info.page ?? 1)) ||
+          (page.info.count !== undefined && page.info.count > page.result.length));
         if (parsedOptions.data.all && incomplete) throw this.malformed(path, "API reports more rulesets without a continuation cursor");
         return this.redact({ ...resolved.metadata, rulesets, resultInfo: page.info as InventoryCursorResultInfo, truncated: incomplete });
       }
@@ -238,6 +261,8 @@ export class InventoryReader {
       // Only the phase-entrypoint endpoint documents 404 as an absent entrypoint.
       if (!(error instanceof CloudflareError) || error.statusCode !== 404 || !error.apiResponse ||
         /entitl|permission|forbid|unauthor|access deni|not allow|plan restrict/iu.test(error.message) ||
+        !/entry[ _-]?point|\bphase\b/iu.test(error.message) ||
+        /\b(?:zone|account)\b[^.:\n]*(?:not[ _-]*found|does not exist)/iu.test(error.message) ||
         !/not[ _-]*found|does not exist|could not (?:be )?find|could not be found|no (?:phase )?entrypoint|entrypoint (?:missing|absent)/iu.test(error.message)) throw error;
       return this.redact({ ...resolved.metadata, phase, status: "absent" as const, diagnostic: { statusCode: 404 as const, code: error.code, message: error.message } });
     }

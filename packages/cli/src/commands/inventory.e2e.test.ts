@@ -297,9 +297,9 @@ describe("CLI migration inventory e2e", () => {
     const args = ["rulesets", "phases", "get", phase, "--scope", "zone", "--zone-id", ZONE_ID, "--json"];
     const pathname = `${ZONE_PATH}/rulesets/phases/${phase}/entrypoint`;
     const absent = parseSuccess(await runCli(args, [{ pathname, status: 404, body: {
-      success: false, errors: [{ code: 10007, message: "Ruleset not found" }], messages: [], result: null,
+      success: false, errors: [{ code: 10007, message: "Could not find phase entrypoint" }], messages: [], result: null,
     } }]));
-    expect(absent).toMatchObject({ scope: "zone", zoneId: ZONE_ID, phase, status: "absent", diagnostic: { statusCode: 404, code: "10007", message: "Ruleset not found" } });
+    expect(absent).toMatchObject({ scope: "zone", zoneId: ZONE_ID, phase, status: "absent", diagnostic: { statusCode: 404, code: "10007", message: "Could not find phase entrypoint" } });
     expect(absent).not.toHaveProperty("ruleset");
 
     const present = parseSuccess(await runCli(args, [{ pathname, body: envelope(ruleset(phase, [])) }]));
@@ -439,11 +439,26 @@ describe("CLI migration inventory e2e", () => {
   it.each([
     { label: "HTML 404", rawBody: "<html><title>404 Not Found</title></html>" },
     { label: "entitlement 404", body: { success: false, errors: [{ code: 10007, message: "Account is not entitled to this managed ruleset" }], messages: [], result: null } },
+    { label: "wrong zone 404", body: { success: false, errors: [{ code: 10007, message: "Zone not found" }], messages: [], result: null } },
+    { label: "wrong account 404", body: { success: false, errors: [{ code: 10007, message: "Account does not exist" }], messages: [], result: null } },
+    { label: "ambiguous ruleset 404", body: { success: false, errors: [{ code: 10007, message: "Ruleset not found" }], messages: [], result: null } },
   ])("phase $label cannot become a successful empty inventory", async ({ body, rawBody }) => {
     const result = await runCli([
       "rulesets", "phases", "get", "http_request_firewall_managed", "--scope", "zone", "--zone-id", ZONE_ID, "--json",
     ], [{ pathname: `${ZONE_PATH}/rulesets/phases/http_request_firewall_managed/entrypoint`, status: 404, ...(rawBody ? { rawBody } : { body }) }]);
     expectFailure(result, "404");
+  });
+
+  it("does not print a shared credential embedded in a WAF header expression", async () => {
+    const result = await runCli([
+      "waf", "rules", "list", "--zone-id", ZONE_ID, "--json",
+    ], [{ pathname: `${ZONE_PATH}/rulesets/phases/${CUSTOM_PHASE}/entrypoint`, body: envelope(ruleset(CUSTOM_PHASE, [
+      { id: "credential-rule", action: "skip", expression: 'http.request.headers["x-api-key"][0] eq "origin-shared-key"' },
+    ])) }]);
+    const output = parseSuccess(result);
+    expect(output.rules[0]).toMatchObject({ id: "credential-rule", expression: "[REDACTED]", filter: { expression: "[REDACTED]" } });
+    expect(result.stdout).not.toContain("origin-shared-key");
+    expect(result.stderr).not.toContain("origin-shared-key");
   });
 
   it.each([

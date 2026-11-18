@@ -132,7 +132,9 @@ const normalization = await cf.inventory.getUrlNormalization("<zone-id>");
 
 The reader reuses the client's authentication and validates success envelopes and
 resource shapes. Unknown product fields survive, rule-array order and execute
-overrides remain intact, and credential-bearing output is redacted. Rulesets list
+overrides remain intact, and credential-bearing output is redacted. Expressions
+reading sensitive headers/query arguments or cookie contents are conservatively
+redacted in full so embedded shared credentials cannot leak. Rulesets list
 uses cursor pagination (`resultInfo.cursors.after`, `truncated`); details contain
 all rules. Only a structured phase-entrypoint not-found 404 becomes
 `status: "absent"`, with the original diagnostic. HTML/ambiguous or explicit
