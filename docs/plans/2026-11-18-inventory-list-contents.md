@@ -93,7 +93,7 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
 
 ## Decisions
 
-- [0003: Account list inventory](../decisions/0003-account-list-inventory.md)
+- [0004: Account list inventory](../decisions/0004-account-list-inventory.md)
   extends [0002](../decisions/0002-read-only-migration-inventory.md).
 
 ## Rulings
@@ -148,6 +148,9 @@ one SDK/CLI minor changeset. Leave parent ADR and plan as historical records.
   page indexes for totals when upstream omits `page` — review reproduced bound
   violations, duplicate-masked gaps, and false complete-read failures — cost if
   wrong: low, concurrent changes can require retry instead of yielding bad data.
+- [decision numbering] Renumber this branch's ADR 0003 to 0004 before pushing —
+  concurrent PR #16 introduced `0003-private-worker-inspection.md` — cost if
+  wrong: low, the renumber commit maps earlier commit-body references to 0004.
 
 ## Deferred
 
@@ -197,7 +200,7 @@ before paging; all four kinds; multiple item pages; redirect booleans/status/URL
 count mismatch, repeated cursors, redaction including scheme-less source URLs.
 **Review:** yes, pagination and credentials.
 **Docs:** SDK README adds three methods and bounded/default/complete semantics (D1/D2).
-**Decision:** 0003.
+**Decision:** 0004.
 **Commit:** `feat(sdk): inventory account lists and typed contents`.
 
 ### T2: CLI command surface · design · standard model
@@ -214,7 +217,7 @@ stdout; help includes read-only/default/continuation behavior.
 **Review:** yes, CLI/SDK seam.
 **Docs:** All owned references add exact command shapes and distinguish single
 redirects from Bulk Redirect lists (D1/D2).
-**Decision:** 0003.
+**Decision:** 0004.
 **Commit:** `feat(cli): expose read-only account list inventory`.
 
 ### T3: Subprocess contract verification · design · standard model
@@ -230,7 +233,7 @@ malformed successes, repeated/no cursor, later failure, redaction of result/erro
 and diagnostic streams, JSON and nonzero exits. Existing readers remain covered.
 **Review:** yes, end-to-end failures.
 **Docs:** Coordinator guide verification evidence (D2/D4) and changeset.
-**Decision:** 0003.
+**Decision:** 0004.
 **Commit:** `test(cli): verify list inventory through mocked HTTP`.
 
 ### T4: Guide and delivery · design · standard model
@@ -247,5 +250,5 @@ configured. Independent final review; target `main` PR, no merge/release.
 **Review:** yes, safety and claims.
 **Docs:** Apply D3/D4, one minor SDK/CLI changeset; link official metadata/detail/
 items and product references; no live contents in artifacts.
-**Decision:** 0003.
+**Decision:** 0004.
 **Commit:** `docs(inventory): document list reference collection and verification`.

@@ -1,5 +1,5 @@
 ---
-title: "0003: Resolve inventory references with account Lists reads"
+title: "0004: Resolve inventory references with account Lists reads"
 description: Add typed, bounded account list inventory while preserving failure and credential contracts.
 status: accepted
 date: 2026-11-18
