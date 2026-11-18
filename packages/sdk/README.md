@@ -184,6 +184,8 @@ Lists return one page with `resultInfo`, `truncated` and `nextPage`. Follow
 page. Page size defaults to 20 and accepts 1–100. Malformed or contradictory
 responses, denied/missing/retired resources and upstream errors remain failures.
 Contradictory pagination totals are malformed responses, never completeness evidence.
+Paging options whose full page window exceeds safe integer arithmetic are rejected
+as `CONFIG_ERROR` before HTTP, rather than blaming a successful upstream response.
 The version-history API's `result.items` wrapper is normalized to `versions`;
 missing or malformed `items` is a failed read. Runtime projections preserve an
 empty compatibility date, nullable tail consumers, and documented region,

@@ -322,6 +322,10 @@ describe("Worker implementation inventory CLI", () => {
     expect(result.code).not.toBe(0);
     expect(result.stderr).toMatch(/page|integer/iu);
   });
+  it.each(["deployments", "versions"])("rejects unsafe %s page arithmetic before HTTP", async (kind) => {
+    const result = await runCli(command(kind, "list", WORKER, "--page", String(Number.MAX_SAFE_INTEGER - 1), "--per-page", "100"));
+    failure(result, /safe integer/iu);
+  });
 
   it("help exposes source safety, environment limits and Beta version inspection", async () => {
     const source = await runCli(["workers", "source", "get", "--help"]);

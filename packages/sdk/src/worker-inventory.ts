@@ -32,7 +32,8 @@ const TargetSchema = z.union([
   z.object({ accountId: Identifier.optional(), script: Identifier }).strict(),
   z.object({ accountId: Identifier.optional(), service: Identifier, environment: Text }).strict(),
 ]);
-const PageOptionsSchema = z.object({ page: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1).default(1), perPage: z.number().int().min(1).max(100).default(20) }).strict();
+const PageOptionsSchema = z.object({ page: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1).default(1), perPage: z.number().int().min(1).max(100).default(20) }).strict()
+  .refine(({ page, perPage }) => Number.isSafeInteger(page * perPage));
 const ExportOptionsSchema = z.object({ outDir: z.string().min(1).max(4096).optional() }).strict();
 const EnvelopeSchema = z.object({
   success: z.boolean(), errors: z.array(z.object({ code: z.union([z.number(), z.string()]).optional(), message: z.string() })).default([]),
@@ -276,7 +277,7 @@ export class WorkerInventoryReader {
   async listWorkerDeployments(target: InventoryWorkerTarget, options: WorkerPageOptions = {}): Promise<ListInventoryWorkerDeploymentsResult> {
     const resolved = this.workerTarget(target);
     const page = PageOptionsSchema.safeParse(options);
-    if (!page.success) throw new CloudflareError("Worker page must be a positive integer; perPage must be an integer from 1 to 100.", "CONFIG_ERROR");
+    if (!page.success) throw new CloudflareError("Worker page must be a positive integer and page * perPage must fit a safe integer; perPage must be an integer from 1 to 100.", "CONFIG_ERROR");
     const path = `${resolved.path}/deployments`;
     const read = await this.workerRead(path, z.object({ deployments: z.array(DeploymentSchema).max(100) }), { page: page.data.page, per_page: page.data.perPage });
     return this.bounded(this.safe({ ...resolved.metadata, deployments: read.result.deployments, ...this.pagination(read.info, page.data, read.result.deployments.length, path) }));
@@ -285,7 +286,7 @@ export class WorkerInventoryReader {
   async listWorkerVersions(target: InventoryWorkerTarget, options: WorkerPageOptions = {}): Promise<ListInventoryWorkerVersionsResult> {
     const resolved = this.workerTarget(target);
     const page = PageOptionsSchema.safeParse(options);
-    if (!page.success) throw new CloudflareError("Worker page must be a positive integer; perPage must be an integer from 1 to 100.", "CONFIG_ERROR");
+    if (!page.success) throw new CloudflareError("Worker page must be a positive integer and page * perPage must fit a safe integer; perPage must be an integer from 1 to 100.", "CONFIG_ERROR");
     const path = `${resolved.path}/versions`;
     const read = await this.workerRead(path, z.object({ items: z.array(SummarySchema).max(100) }), { page: page.data.page, per_page: page.data.perPage });
     return this.bounded(this.safe({ ...resolved.metadata, versions: read.result.items, ...this.pagination(read.info, page.data, read.result.items.length, path) }));

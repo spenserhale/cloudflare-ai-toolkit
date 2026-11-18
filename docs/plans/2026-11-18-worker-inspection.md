@@ -135,6 +135,12 @@ changeset. Existing parent plan/evidence remains historical.
   findings can be evaluated until its service permits a review.
 - [merge authorization] User subsequently authorized merging the fixed, reviewed
   feature to main; no release or live Cloudflare writes — cost if wrong: low.
+- [Kilo review] Reject client page/perPage combinations that overflow the full
+  page window as `CONFIG_ERROR` before HTTP; do not misclassify them as malformed
+  upstream responses. SDK/process regressions fail before the guard and pass
+  after; representable boundary paging remains accepted. Build/lint and all 760
+  tests pass (SDK 387/MCP 12/CLI 361) — cost if wrong: low, extreme inputs fail
+  locally with an actionable error.
 
 ## Deferred
 

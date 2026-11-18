@@ -398,6 +398,9 @@ upstream totals, a full page conservatively requires the next page. A successful
 short/empty page ends that traversal. Each page, settings read and source read is
 a separate observation, not an atomic snapshot; preserve deployment/version IDs
 and recapture if configuration changes during collection.
+Client page options must keep the full page window within safe integer arithmetic;
+invalid combinations fail before HTTP as configuration errors. Contradictory
+upstream totals remain malformed responses.
 
 ### Private source convention
 
@@ -577,8 +580,8 @@ remains unchanged for the later release process.
 
 - Baseline frozen install, build/lint and 614 tests passed: SDK 283/MCP 12/CLI 319.
 - Final `bun run build` and `bun run lint` exit 0 across all packages.
-- Final `bun run test`: SDK 384, MCP 12, CLI 359; **755 tests pass**, zero failures.
-- New coverage: 37 private-source cases, 64 mocked Worker HTTP cases, 40 Worker
+- Final `bun run test`: SDK 387, MCP 12, CLI 361; **760 tests pass**, zero failures.
+- New coverage: 37 private-source cases, 67 mocked Worker HTTP cases, 42 Worker
   subprocess cases. Existing inventory/WAF/DNS/redirect tests remain green.
 - Worker tests were written before implementation. Missing methods/commands
   failed first; additional failing regressions drove MIME/URL redaction,
@@ -596,9 +599,13 @@ remains unchanged for the later release process.
   history fixtures incorrectly used a bare result array, and settings rejected
   documented placement/default/null variants. Corrected reader schemas and both
   SDK/process fixtures; new regressions failed before the correction and pass
-  after it. The full 755-test build/lint/test verification above includes those
-  fixes. CodeRabbit was requested but its OSS review quota blocked execution;
+  after it. All 755 tests passed after those fixes. CodeRabbit was requested but
+  its OSS review quota blocked execution;
   its successful status check must not be interpreted as an approved review.
+- Kilo's paging-overflow suggestion was reproduced with client-supplied extreme
+  page values. SDK and process regressions failed before a pre-HTTP safe-integer
+  guard and pass afterward; a representable large-page boundary remains accepted.
+  The final 760-test build/lint/test verification above includes this correction.
 - Root reran 123 SDK inventory cases and 93 relevant CLI subprocess cases against
   a rebuilt SDK. Process mocks reject non-GET, unexpected requests and wrong
   scopes/queries. Source tests verify exact module bytes, private permissions,

@@ -241,8 +241,23 @@ describe("account Worker inventory", () => {
     await mock(() => json({ items: [{ id: ID }] }, { cursors: { after: "not-supported" } }), async () => { await expect(client().inventory.listWorkerVersions(TARGET)).rejects.toMatchObject({ code: "MALFORMED_RESPONSE" }); });
   });
 
-  it.each([{ page: 0 }, { perPage: 101 }, { page: 1.5 }, { perPage: 0 }])("rejects invalid page options %j before HTTP", async (options) => {
-    await mock(() => { throw new Error("unexpected HTTP"); }, async () => { await expect(client().inventory.listWorkerVersions(TARGET, options)).rejects.toMatchObject({ code: "CONFIG_ERROR" }); });
+  it.each([{ page: 0 }, { perPage: 101 }, { page: 1.5 }, { perPage: 0 },
+    { page: Number.MAX_SAFE_INTEGER - 1 }, { page: Number.MAX_SAFE_INTEGER - 1, perPage: 100 },
+  ])("rejects invalid page options %j before HTTP", async (options) => {
+    await mock(() => { throw new Error("unexpected HTTP"); }, async () => {
+      await expect(client().inventory.listWorkerVersions(TARGET, options)).rejects.toMatchObject({ code: "CONFIG_ERROR" });
+      await expect(client().inventory.listWorkerDeployments(TARGET, options)).rejects.toMatchObject({ code: "CONFIG_ERROR" });
+    });
+  });
+
+  it("accepts a large page whose complete page window is safely representable", async () => {
+    const page = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+    await mock((url) => {
+      expect(url.searchParams.get("page")).toBe(String(page));
+      return json({ items: [] });
+    }, async () => {
+      expect(await client().inventory.listWorkerVersions(TARGET, { page, perPage: 100 })).toMatchObject({ versions: [], nextPage: null, truncated: false });
+    });
   });
 
   it("never exposes an uppercase credential disguised as an API code", async () => {
