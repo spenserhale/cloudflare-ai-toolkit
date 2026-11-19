@@ -240,6 +240,12 @@ describe("migration inventory zone and Worker configuration", () => {
     });
   });
 
+  it("accepts null errors and messages in a successful envelope", async () => {
+    await withFetch(() => new Response(JSON.stringify({ success: true, errors: null, messages: null, result: [{ id: "domain-1", hostname: "worker.example.com", service: "worker", environment: "production", zone_id: "zone-1" }] })), async () => {
+      expect(await client().inventory.listWorkerDomains({})).toMatchObject({ domains: [{ id: "domain-1", hostname: "worker.example.com" }] });
+    });
+  });
+
   it("does not use the configured zone as an implicit Worker domain filter", async () => {
     await withFetch((url) => { expect(url.searchParams.has("zone_id")).toBe(false); return response([]); }, async () => {
       expect(await client().inventory.listWorkerDomains({})).not.toHaveProperty("zoneId");
