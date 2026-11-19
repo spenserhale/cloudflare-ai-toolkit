@@ -1,5 +1,12 @@
 # @cloudflare-ai-toolkit/mcp
 
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [[`d9f889b`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/d9f889b4971664c54e2a3819ef2581166e1a9f4e)]:
+  - @cloudflare-ai-toolkit/sdk@0.12.1
+
 ## 0.12.0
 
 ### Patch Changes

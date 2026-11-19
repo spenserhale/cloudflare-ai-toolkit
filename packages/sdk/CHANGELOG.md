@@ -1,5 +1,11 @@
 # @cloudflare-ai-toolkit/sdk
 
+## 0.12.1
+
+### Patch Changes
+
+- [#18](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/18) [`d9f889b`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/d9f889b4971664c54e2a3819ef2581166e1a9f4e) Thanks [@spenserhale](https://github.com/spenserhale)! - Accept `errors: null` and `messages: null` in Cloudflare response envelopes. Some endpoints, including `GET /accounts/{id}/workers/domains`, return `null` instead of `[]` on success, so `workers domains list` failed with `Malformed Cloudflare response ... invalid envelope or result`.
+
 ## 0.12.0
 
 ### Minor Changes
