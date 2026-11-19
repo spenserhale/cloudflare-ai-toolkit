@@ -1,4 +1,8 @@
 export { CloudflareClient } from "./client.js";
+export { parseRulesetRuleUpdateBody } from "./rulesets.js";
+export type {
+  RulesetRuleSnapshot, UpdateRulesetRuleBody, UpdateRulesetRuleOptions, UpdateRulesetRuleResult,
+} from "./rulesets.js";
 export { InventoryReader } from "./inventory.js";
 export type { InventoryGet } from "./inventory.js";
 export { WorkerInventoryReader } from "./worker-inventory.js";
@@ -61,6 +65,7 @@ export {
   CloudflareNotFoundError,
   describeError,
 } from "./errors.js";
+export type { CloudflareErrorDetail } from "./errors.js";
 export {
   AUDIT_LOG_TABLE_COLUMNS,
   mapAuditLogToTableRow,

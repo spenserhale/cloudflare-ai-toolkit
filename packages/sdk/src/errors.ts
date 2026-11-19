@@ -1,3 +1,9 @@
+export interface CloudflareErrorDetail {
+  readonly code?: string | number;
+  readonly message: string;
+  readonly [key: string]: unknown;
+}
+
 export interface CloudflareErrorOptions {
   readonly requiredPermissions?: readonly string[];
   readonly docsUrl?: string;
@@ -5,6 +11,8 @@ export interface CloudflareErrorOptions {
   readonly requestPath?: string;
   /** HTTP failure came from a structured Cloudflare API error envelope. */
   readonly apiResponse?: boolean;
+  readonly errors?: readonly CloudflareErrorDetail[];
+  readonly cfRay?: string;
 }
 
 export class CloudflareError extends Error {
@@ -13,6 +21,8 @@ export class CloudflareError extends Error {
   public readonly requestMethod?: string;
   public readonly requestPath?: string;
   public readonly apiResponse?: boolean;
+  public readonly errors?: readonly CloudflareErrorDetail[];
+  public readonly cfRay?: string;
 
   constructor(
     message: string,
@@ -27,6 +37,8 @@ export class CloudflareError extends Error {
     this.requestMethod = options.requestMethod;
     this.requestPath = options.requestPath;
     this.apiResponse = options.apiResponse;
+    this.errors = options.errors;
+    this.cfRay = options.cfRay;
   }
 }
 
@@ -174,6 +186,7 @@ export function describeError(err: unknown): string {
     const status = err.statusCode === undefined ? "" : ` (HTTP ${err.statusCode})`;
     lines.push(`Request: ${err.requestMethod} ${err.requestPath}${status}`);
   }
+  if (err.cfRay) lines.push(`cf-ray: ${err.cfRay}`);
   if (err.statusCode !== 410 && err.requiredPermissions && err.requiredPermissions.length > 0) {
     lines.push(`Required permission: ${err.requiredPermissions.map((p) => `'${p}'`).join(" or ")}`);
   }

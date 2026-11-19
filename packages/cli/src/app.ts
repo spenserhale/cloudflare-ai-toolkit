@@ -84,6 +84,7 @@ import {
   listWorkerDomainsCommand,
   listWorkerRoutesCommand,
 } from "./commands/inventory.js";
+import { updateRulesetRuleCommand } from "./commands/rulesets.js";
 import {
   getWorkerSettingsCommand,
   getWorkerSourceCommand,
@@ -203,7 +204,7 @@ const firewallRuleRoutes = buildRouteMap({
     delete: deleteFirewallRuleCommand,
   },
   docs: {
-    brief: "Read modern WAF custom rules; writes use the retired legacy API",
+    brief: "Read WAF custom rules. Legacy writes use the retired API. Edit modern rules with rulesets rules update",
   },
 });
 
@@ -228,8 +229,12 @@ const rulesetsRoutes = buildRouteMap({
       routes: { get: getPhaseEntrypointCommand },
       docs: { brief: "Read Ruleset Engine phase entrypoints" },
     }),
+    rules: buildRouteMap({
+      routes: { update: updateRulesetRuleCommand },
+      docs: { brief: "Update individual Ruleset Engine rules" },
+    }),
   },
-  docs: { brief: "Read full Rulesets in an explicit zone or account scope" },
+  docs: { brief: "Read Rulesets and update individual rules in a zone or account" },
 });
 
 const workersRoutes = buildRouteMap({

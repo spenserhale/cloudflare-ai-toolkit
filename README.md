@@ -279,8 +279,33 @@ cloudflare waf rules list --zone-id <zone-id> --action skip --json
 ```
 
 Reads need an applicable Rulesets product permission, such as `Zone WAF Read`.
-`waf rules create|update|delete` still target the retired legacy Firewall Rules API;
-they are not modern Rulesets mutations. Do not pass IDs from these reads to them.
+`waf rules create|update|delete` target the retired Firewall Rules API. Use
+`rulesets rules update` with rule IDs returned by modern WAF reads.
+
+### Update a Rulesets rule
+
+```bash
+cloudflare rulesets rules update <rule-id> --scope zone --zone-id <zone-id> \
+  --ruleset-id <ruleset-id> --body patch.json --expect-ruleset-version 319 --dry-run --json
+```
+
+Set `--scope account` with `--account-id` for account rulesets. The scoped ID
+defaults to `CLOUDFLARE_ZONE_ID` or `CLOUDFLARE_ACCOUNT_ID`. Use `--body <file>` or
+pipe JSON through `--stdin`. Include every field you want the rule to retain,
+including any product-specific parameters. Include `position` only to move it.
+
+The command reads the ruleset first and checks any expected ruleset or rule
+version. These checks run before PATCH, so concurrent edits can still occur
+between the requests. Output includes the before and after snapshots, one-based
+positions, and Cloudflare request rays. With `--dry-run`, Cloudflare validates
+the PATCH and returns `after: null` in the CLI output. With `--json`, API
+failures include the upstream `errors[]` on stderr and exit nonzero.
+Use credentials with applicable read and write permissions, including for dry
+runs. [Rulesets rule update](https://developers.cloudflare.com/ruleset-engine/rulesets-api/update-rule/)
+and [dry-run validation](https://developers.cloudflare.com/ruleset-engine/rulesets-api/dry-run/).
+
+Generic Rulesets commands are available through the CLI and SDK. The MCP server
+has product-specific WAF and redirect tools.
 
 ### Configuration inventory
 

@@ -9,7 +9,7 @@ interface ZoneFlags extends OutputFlags {
   readonly zoneId?: string;
 }
 
-interface ScopedFlags extends ZoneFlags {
+export interface ScopedFlags extends ZoneFlags {
   readonly scope: "zone" | "account";
   readonly accountId?: string;
 }
@@ -68,14 +68,14 @@ function parsePerPage(value: string): number {
   return parsed;
 }
 
-const scopedFlags = {
+export const scopedFlags = {
   scope: { kind: "parsed", parse: parseScope, brief: "Required target scope (zone|account)" },
   zoneId: zoneIdFlag,
   accountId: accountIdFlag,
   json: jsonFlag,
 } as const;
 
-function validateScope(flags: ScopedFlags): void {
+export function validateScope(flags: ScopedFlags): void {
   if (flags.scope === "zone" && flags.accountId !== undefined) {
     throw new Error("--account-id conflicts with --scope zone; use --zone-id.");
   }
@@ -84,7 +84,7 @@ function validateScope(flags: ScopedFlags): void {
   }
 }
 
-function target(flags: ScopedFlags) {
+export function rulesetTarget(flags: ScopedFlags) {
   return flags.scope === "zone"
     ? { scope: "zone" as const, zoneId: flags.zoneId }
     : { scope: "account" as const, accountId: flags.accountId };
@@ -111,7 +111,7 @@ async function runRead<T>(
 
 export async function runListRulesets(flags: RulesetsListFlags, deps: InventoryDeps = defaultDeps): Promise<void> {
   await runRead(flags, "Rulesets inventory", async (inventory) => {
-    const result = await inventory.listRulesets(target(flags), {
+    const result = await inventory.listRulesets(rulesetTarget(flags), {
       cursor: flags.cursor, perPage: flags.perPage, all: flags.all,
     });
     if (result.truncated) {
@@ -148,7 +148,7 @@ export const getRulesetCommand = buildCommand({
     },
   },
   async func(this: void, flags: RulesetGetFlags, id: string) {
-    await runRead(flags, "Ruleset detail", (inventory) => inventory.getRuleset(id, target(flags), flags.version), defaultDeps, () => validateScope(flags));
+    await runRead(flags, "Ruleset detail", (inventory) => inventory.getRuleset(id, rulesetTarget(flags), flags.version), defaultDeps, () => validateScope(flags));
   },
 });
 
@@ -162,7 +162,7 @@ export const getPhaseEntrypointCommand = buildCommand({
     },
   },
   async func(this: void, flags: ScopedFlags, phase: string) {
-    await runRead(flags, `Phase entrypoint ${phase}`, (inventory) => inventory.getPhaseEntrypoint(phase, target(flags)), defaultDeps, () => validateScope(flags));
+    await runRead(flags, `Phase entrypoint ${phase}`, (inventory) => inventory.getPhaseEntrypoint(phase, rulesetTarget(flags)), defaultDeps, () => validateScope(flags));
   },
 });
 
