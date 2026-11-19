@@ -35,6 +35,12 @@ function version(modules: unknown = [{ name: "index.js", content_type: "applicat
 function deployment() { return { id: ID, created_on: DATE, source: "api", strategy: "percentage", versions: [{ version_id: ID, percentage: 25 }, { version_id: ID2, percentage: 75 }] }; }
 
 describe("account Worker inventory", () => {
+  it("accepts null errors in a successful envelope", async () => {
+    await mock(() => new Response(JSON.stringify({ success: true, errors: null, messages: null, result: { compatibility_date: "2026-01-01", bindings: [] } }), { headers: { "content-type": "application/json" } }), async () => {
+      expect((await client().inventory.getWorkerSettings(TARGET)).settings).toMatchObject({ compatibility_date: "2026-01-01" });
+    });
+  });
+
   it.each([
     { compatibility_date: "" },
     { tail_consumers: null },
