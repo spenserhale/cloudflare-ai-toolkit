@@ -1,5 +1,11 @@
 # @cloudflare-ai-toolkit/sdk
 
+## 0.13.0
+
+### Minor Changes
+
+- [#20](https://github.com/spenserhale/cloudflare-ai-toolkit/pull/20) [`44dbf8a`](https://github.com/spenserhale/cloudflare-ai-toolkit/commit/44dbf8a4a71c93e5a88a93e9836e81cfb4253933) Thanks [@spenserhale](https://github.com/spenserhale)! - Update a single zone or account Rulesets rule with `cloudflare rulesets rules update` and `CloudflareClient.updateRulesetRule`. Accept a native rule definition from a file or stdin, check expected versions, and preview validation with a server-side dry run.
+
 ## 0.12.1
 
 ### Patch Changes
