@@ -386,9 +386,14 @@ export async function runCreateFirewallRule(
   }
 }
 
+const legacyWriteDescription =
+  "This legacy command uses the retired Firewall Rules API. " +
+  "Use cloudflare rulesets rules update to edit an existing modern WAF rule.";
+
 export const createFirewallRuleCommand = buildCommand({
   docs: {
     brief: "Legacy write: create a firewall rule through the retired Firewall Rules API",
+    fullDescription: legacyWriteDescription,
     customUsage: [
       "--action block --expression 'http.request.uri.path contains \"/wp-login.php\"'",
       "--action managed_challenge --expression 'ip.src.country eq \"CN\"' --description 'Challenge CN'",
@@ -499,6 +504,7 @@ export async function runUpdateFirewallRule(
 export const updateFirewallRuleCommand = buildCommand({
   docs: {
     brief: "Legacy write: replace a firewall rule through the retired Firewall Rules API (PUT)",
+    fullDescription: legacyWriteDescription,
   },
   parameters: {
     flags: {
@@ -613,6 +619,7 @@ export async function runDeleteFirewallRule(
 export const deleteFirewallRuleCommand = buildCommand({
   docs: {
     brief: "Legacy write: delete a firewall rule through the retired Firewall Rules API",
+    fullDescription: legacyWriteDescription,
   },
   parameters: {
     flags: {

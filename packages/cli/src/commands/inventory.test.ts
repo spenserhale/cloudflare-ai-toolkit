@@ -270,6 +270,7 @@ describe("WAF read and legacy write command help", () => {
       const output = await invoke(["waf", "rules", command, "--help"]);
       expect(output.stdout).toMatch(/legacy/iu);
       expect(output.stdout).toMatch(/retired/iu);
+      expect(output.stdout).toContain("rulesets rules update");
       expect(output.stdout).not.toContain("find it with `waf rules list`");
       expect(output.stdout).not.toContain("fetch the current one with `waf rules get`");
     });

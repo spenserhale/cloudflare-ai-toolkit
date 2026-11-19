@@ -12,6 +12,8 @@ import type {
   EnableLogExplorerDatasetParams,
   FirewallRule,
   GetLogExplorerDatasetParams,
+  InventoryScope,
+  InventoryTarget,
   ListAuditLogsParams,
   ListAvailableLogExplorerDatasetsParams,
   ListCustomHostnamesParams,
@@ -69,6 +71,7 @@ import {
   AuditLogListResultSchema,
   AuditLogPaginationSchema,
   AvailableLogExplorerDatasetSchema,
+  CloudflareApiErrorSchema,
   CloudflareResponseSchema,
   CloudflareConfigSchema,
   CreateCustomHostnameParamsSchema,
@@ -81,6 +84,7 @@ import {
   EnableLogExplorerDatasetParamsSchema,
   FirewallRuleSchema,
   GetLogExplorerDatasetParamsSchema,
+  InventoryTargetSchema,
   ListAuditLogsParamsSchema,
   ListAvailableLogExplorerDatasetsParamsSchema,
   ListCustomHostnamesParamsSchema,
@@ -128,9 +132,18 @@ import {
   CloudflareError,
   CloudflareAuthError,
   CloudflareNotFoundError,
+  type CloudflareErrorOptions,
 } from "./errors.js";
 import { flattenTokenPolicies } from "./token-permissions.js";
 import { InventoryReader } from "./inventory.js";
+import {
+  checkRulesetRuleVersions,
+  parseRulesetRuleUpdateBody,
+  rulesetRuleSnapshot,
+  type UpdateRulesetRuleBody,
+  type UpdateRulesetRuleOptions,
+  type UpdateRulesetRuleResult,
+} from "./rulesets.js";
 import { z } from "zod";
 
 type QueryValue = string | number | boolean | readonly string[] | undefined;
@@ -149,7 +162,7 @@ function mergeAuditFilterQuery(
 }
 
 interface RequestOptions {
-  /** Preserve a bounded Worker response for its format-specific GET reader. */
+  /** Preserve response headers and reject redirects for format-specific readers. */
   rawResponse?: boolean;
   query?: Record<string, QueryValue>;
   body?: unknown;
@@ -162,6 +175,13 @@ interface RequestOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
 }
+
+const ApiErrorEnvelopeSchema = z.object({
+  success: z.boolean(),
+  errors: z.array(CloudflareApiErrorSchema.partial({ code: true }).passthrough()),
+});
+
+const RulesetEnvelopeSchema = z.object({ success: z.boolean(), result: z.unknown() });
 
 interface RoutePermissionHint {
   readonly method: string;
@@ -440,9 +460,9 @@ const ROUTE_PERMISSION_HINTS: readonly RoutePermissionHint[] = [
   },
   {
     method: "PATCH",
-    pathPattern: /^\/client\/v4\/zones\/[^/]+\/rulesets/u,
-    requiredPermissions: ["Rulesets Edit"],
-    docsUrl: "https://developers.cloudflare.com/rules/redirect-rules/",
+    pathPattern: /^\/client\/v4\/(?:zones|accounts)\/[^/]+\/rulesets\/[^/]+\/rules\/[^/]+$/u,
+    requiredPermissions: [],
+    docsUrl: "https://developers.cloudflare.com/api/resources/rulesets/subresources/rules/methods/edit/",
   },
   {
     method: "DELETE",
@@ -511,17 +531,15 @@ export class CloudflareClient {
   private parseCloudflareError(
     body: unknown,
     fallbackMessage: string
-  ): { message: string; code: string; apiResponse?: boolean } {
-    const cloudflare = z.object({
-      success: z.boolean(),
-      errors: z.array(z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string() })),
-    }).safeParse(body);
+  ): { message: string; code: string } & CloudflareErrorOptions {
+    const cloudflare = ApiErrorEnvelopeSchema.safeParse(body);
     if (cloudflare.success && cloudflare.data.errors.length > 0) {
       const first = cloudflare.data.errors[0];
       return {
         message: first?.message ?? fallbackMessage,
         code: String(first?.code ?? "UNKNOWN"),
         apiResponse: true,
+        errors: cloudflare.data.errors,
       };
     }
 
@@ -587,41 +605,44 @@ export class CloudflareClient {
 
     if (options.rawResponse) return res as T;
 
+    return (await this.readJsonResponse(method, path, res, options.signal)) as T;
+  }
+
+  private responseError(method: string, path: string, res: Response, body: unknown): CloudflareError {
+    const fallback = res.ok ? "Cloudflare API request failed" : `HTTP ${res.status}`;
+    const parsedError = this.parseCloudflareError(body, fallback);
+    const permissionHint = this.findRoutePermissionHint(method, path);
+    const errorOptions = {
+      requiredPermissions: res.status === 410 ? undefined : permissionHint?.requiredPermissions,
+      docsUrl: permissionHint?.docsUrl,
+      requestMethod: method,
+      requestPath: path,
+      apiResponse: parsedError.apiResponse,
+      errors: parsedError.errors,
+      cfRay: res.headers.get("cf-ray") ?? undefined,
+    };
+    return res.status === 401
+      ? new CloudflareAuthError(parsedError.message, errorOptions)
+      : new CloudflareError(parsedError.message, parsedError.code, res.status, errorOptions);
+  }
+
+  private async readJsonResponse(method: string, path: string, res: Response, signal?: AbortSignal): Promise<unknown> {
     if (res.status === 204) {
-      return undefined as T;
+      return undefined;
     }
 
     const body = await res.json().catch((err: unknown) => {
       // An abort mid-body must surface as an abort, not as an empty body that
       // later reads like a malformed response or a retryable server error.
-      if (options.signal?.aborted) throw err;
+      if (signal?.aborted) throw err;
       return null;
     });
 
     if (!res.ok) {
-      const parsedError = this.parseCloudflareError(body, `HTTP ${res.status}`);
-      const permissionHint = this.findRoutePermissionHint(method, path);
-      const errorOptions = {
-        requiredPermissions: res.status === 410 ? undefined : permissionHint?.requiredPermissions,
-        docsUrl: permissionHint?.docsUrl,
-        requestMethod: method,
-        requestPath: path,
-        apiResponse: parsedError.apiResponse,
-      };
-
-      if (res.status === 401) {
-        throw new CloudflareAuthError(parsedError.message, errorOptions);
-      }
-
-      throw new CloudflareError(
-        parsedError.message,
-        parsedError.code,
-        res.status,
-        errorOptions
-      );
+      throw this.responseError(method, path, res, body);
     }
 
-    return body as T;
+    return body;
   }
 
   private async requestResult<T>(
@@ -1524,6 +1545,64 @@ export class CloudflareClient {
       "DELETE",
       `/client/v4/zones/${resolvedZoneId}/firewall/rules/${encodeURIComponent(ruleId)}`
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Rulesets
+  // -------------------------------------------------------------------------
+
+  private async requestRulesetEnvelope(method: "GET" | "PATCH", path: string, options?: RequestOptions) {
+    const response = await this.requestRaw<Response>(method, path, { ...options, rawResponse: true });
+    const body = await this.readJsonResponse(method, path, response);
+    const envelope = RulesetEnvelopeSchema.safeParse(body);
+    const request = { requestMethod: method, requestPath: path, cfRay: response.headers.get("cf-ray") ?? undefined };
+    if (!envelope.success) {
+      throw new CloudflareError("Malformed Cloudflare Rulesets response.", "MALFORMED_RESPONSE", response.status, request);
+    }
+    if (!envelope.data.success) throw this.responseError(method, path, response, body);
+    return { result: envelope.data.result, request };
+  }
+
+  /** Update one rule using a native Rulesets definition. Version guards check the preflight GET. */
+  async updateRulesetRule(
+    rulesetId: string,
+    ruleId: string,
+    body: UpdateRulesetRuleBody,
+    target: InventoryTarget,
+    options: UpdateRulesetRuleOptions = {},
+  ): Promise<UpdateRulesetRuleResult> {
+    const definition = parseRulesetRuleUpdateBody(body);
+    const { dryRun = false, ...expectedVersions } = options;
+    const parsedTarget = InventoryTargetSchema.parse(target);
+    const scope: InventoryScope = parsedTarget.scope === "zone"
+      ? { scope: "zone", zoneId: this.resolveZoneId(parsedTarget.zoneId) }
+      : { scope: "account", accountId: this.resolveAccountId(parsedTarget.accountId) };
+    const scopeId = scope.scope === "zone" ? scope.zoneId : scope.accountId;
+    if ([scopeId, rulesetId, ruleId].some((id) => !id.trim() || id === "." || id === "..")) {
+      throw new CloudflareError("Scope, ruleset, and rule IDs must be valid, nonempty path segments.", "INVALID_ARGUMENT");
+    }
+    const path = `/client/v4/${scope.scope}s/${encodeURIComponent(scopeId)}/rulesets/${encodeURIComponent(rulesetId)}`;
+    const current = await this.requestRulesetEnvelope("GET", path);
+    const before = rulesetRuleSnapshot(current.result, rulesetId, ruleId, current.request);
+    checkRulesetRuleVersions(before, expectedVersions, current.request);
+
+    const updated = await this.requestRulesetEnvelope("PATCH", `${path}/rules/${encodeURIComponent(ruleId)}`, {
+      body: definition,
+      query: dryRun ? { dry_run: true } : undefined,
+    });
+    if (dryRun && updated.result !== null) {
+      throw new CloudflareError(
+        "Cloudflare returned an unexpected dry-run result. Read the ruleset again to verify its version.",
+        "MALFORMED_RESPONSE", undefined, updated.request,
+      );
+    }
+
+    return {
+      ...scope, rulesetId, ruleId, dryRun,
+      before: { ...before, "cf-ray": current.request.cfRay ?? null },
+      after: dryRun ? null : rulesetRuleSnapshot(updated.result, rulesetId, ruleId, updated.request),
+      "cf-ray": updated.request.cfRay ?? null,
+    };
   }
 
   // -------------------------------------------------------------------------
