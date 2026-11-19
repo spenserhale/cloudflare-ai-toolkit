@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { CloudflareClient } from "../src/client.js";
 import { CloudflareAuthError, CloudflareError } from "../src/errors.js";
+import { CloudflareResponseSchema } from "../src/types.js";
+import { z } from "zod";
 
 function tokenClientConfig(overrides: Partial<{ accountId: string; zoneId: string }> = {}) {
   return {
@@ -471,5 +473,13 @@ describe("CloudflareClient", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("CloudflareResponseSchema", () => {
+  it("parses null errors and messages as empty arrays", () => {
+    const parsed = CloudflareResponseSchema(z.array(z.unknown())).parse({ success: true, errors: null, messages: null, result: [] });
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.messages).toEqual([]);
   });
 });

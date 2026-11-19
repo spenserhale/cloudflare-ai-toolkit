@@ -48,8 +48,8 @@ export const CloudflareResponseSchema = <T extends z.ZodTypeAny>(resultSchema: T
   z
     .object({
       success: z.boolean(),
-      errors: z.array(CloudflareApiErrorSchema).default([]),
-      messages: z.array(CloudflareApiMessageSchema).default([]),
+      errors: z.array(CloudflareApiErrorSchema).nullish().transform((value) => value ?? []),
+      messages: z.array(CloudflareApiMessageSchema).nullish().transform((value) => value ?? []),
       result: resultSchema,
       result_info: z.unknown().optional(),
     })

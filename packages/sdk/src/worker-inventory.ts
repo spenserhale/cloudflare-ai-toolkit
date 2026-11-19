@@ -36,7 +36,7 @@ const PageOptionsSchema = z.object({ page: z.number().int().min(1).max(Number.MA
   .refine(({ page, perPage }) => Number.isSafeInteger(page * perPage));
 const ExportOptionsSchema = z.object({ outDir: z.string().min(1).max(4096).optional() }).strict();
 const EnvelopeSchema = z.object({
-  success: z.boolean(), errors: z.array(z.object({ code: z.union([z.number(), z.string()]).optional(), message: z.string() })).default([]),
+  success: z.boolean(), errors: z.array(z.object({ code: z.union([z.number(), z.string()]).optional(), message: z.string() })).nullish().transform((value) => value ?? []),
   result: z.unknown(), result_info: z.unknown().optional(),
 });
 const PageInfoSchema = z.object({

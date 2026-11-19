@@ -49,8 +49,8 @@ export type InventoryGet = (path: string, query?: Record<string, string | number
 
 const EnvelopeSchema = z.object({
   success: z.boolean(),
-  errors: z.array(z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string() }).passthrough()).default([]),
-  messages: z.array(z.unknown()).default([]),
+  errors: z.array(z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string() }).passthrough()).nullish().transform((value) => value ?? []),
+  messages: z.array(z.unknown()).nullish().transform((value) => value ?? []),
   result: z.unknown(),
   result_info: z.unknown().optional(),
 }).passthrough();
